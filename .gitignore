@@ -21,3 +21,4 @@ backend/.env
 # Project-local backups / tooling
 _public_html.zip
 structure.txt
+.claude/
