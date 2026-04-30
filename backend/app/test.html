@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multiple Image Upload</title>
+    <style>
+        #image-container {
+            display: flex;
+            flex-wrap: wrap;
+        }
+
+        .image-placeholder {
+            width: 150px;
+            height: 150px;
+            margin: 10px;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .image-placeholder img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .delete-icon {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background-color: #fff;
+            border: 1px solid #ccc;
+            border-radius: 50%;
+            padding: 5px;
+            cursor: pointer;
+        }
+
+        input#uploadImage1[type="file"] {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+<div id="image-container">as asdfasdf asdf</div>
+
+<!-- <input type="file" id="file-input" multiple>
+<label for="file-input" class="image-placeholder">
+    <span>+</span>
+</label> -->
+<input type="file" multiple="multiple" id="uploadImage1" accept="image/x-png, image/gif, image/jpeg, image/png, image/webp, image/jpg"  name="section1_image[]">
+<label for="uploadImage1" class="image-placeholder">
+    <span>+</span>
+</label>
+<script>
+    document.getElementById('uploadImage1').addEventListener('change', handleFileSelect);
+
+function handleFileSelect(event) {
+    debugger;
+    const files = event.target.files;
+    const imageContainer = document.getElementById('image-container');
+
+    for (const file of files) {
+        const reader = new FileReader();
+
+        reader.onload = function (e) {
+            const imageElement = createImageElement(e.target.result);
+            imageContainer.appendChild(imageElement);
+        };
+
+        reader.readAsDataURL(file);
+    }
+
+}
+
+function createImageElement(src) {
+    const imageElement = document.createElement('div');
+    imageElement.classList.add('image-placeholder');
+
+    const deleteIcon = document.createElement('div');
+    deleteIcon.classList.add('delete-icon');
+    deleteIcon.innerHTML = 'x';
+    deleteIcon.addEventListener('click', function () {
+        imageElement.remove();
+    });
+
+    const image = document.createElement('img');
+    image.src = src;
+
+    imageElement.appendChild(deleteIcon);
+    imageElement.appendChild(image);
+
+    return imageElement;
+}
+    
+</script>
+
+</body>
+</html>

@@ -1,0 +1,23 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+
+# Backend (Laravel) — vendored deps + local state
+backend/vendor/
+backend/storage/framework/cache/data/*
+backend/storage/framework/sessions/*
+backend/storage/framework/views/*
+backend/storage/logs/*
+!backend/storage/**/.gitkeep
+
+# Backend secrets
+backend/.env
+
+# Project-local backups / tooling
+_public_html.zip
+structure.txt
