@@ -116,3 +116,131 @@ type didn't have.
   two enriched coupons, gradient + badge-only on the other three) is
   **not run from this session** — same browser-driving limitation as
   deviation #1; please confirm visually when you're at the screen.
+
+---
+
+## Phase 1.6 — N+1 elimination
+
+Eliminates the four `/api/v1/services/{slug}` flood sites diagnosed
+in `/PHASE1_DIAGNOSIS.md` by nesting sub-services under categories
+in the list endpoints.
+
+### Commits
+
+| Hash | Side | Message |
+|---|---|---|
+| `377dcd6153862e0feb30538daf114f7b72489185` | backend  | `feat(api): nest services under service_categories in /home and /services to eliminate N+1` |
+| `5b1119265116ba4e43c5862f4f4c36cf64fb762f` | frontend | `refactor(frontend): consume nested services from /home and /services, delete 4 N+1 patterns` |
+
+### Backend curl verification (live, against the running dev server)
+
+```
+GET /api/v1/home              top: ['success', 'service_categories', 'car_brands',
+                                    'car_models', 'service_centers', 'offer_slider',
+                                    'tabular_offers', 'service_packages', 'featured_products',
+                                    'faqs', 'brand_logo_slider', 'membership_package',
+                                    'home_page_setting', 'settings', 'seo']
+                              cat[0]: ['id', 'slug', 'title', 'name', 'description',
+                                       'image', 'image_1', 'icon_image', 'position', 'services']
+                              cat[0].services count: 2
+                              services[0]: ['id', 'slug', 'name', 'title', 'base_price',
+                                            'image', 'time_takes', 'time_unit']
+
+GET /api/v1/services          top: ['success', 'categories', 'available_category_ids',
+                                    'brand', 'model', 'fuel', 'seo']
+                              cat[0] keys: same as /home cat[0] (with services nested)
+
+GET /api/v1/services/car-battery  (per-slug detail — UNCHANGED)
+                              top: ['success', 'category', 'services', 'price_show',
+                                    'price_list', 'brand', 'model', 'fuel', 'faqs',
+                                    'faq_contents', 'seo']
+                              category keys: NO 'services' key — whenLoaded correctly
+                                             omits when relation isn't eager-loaded
+                              top-level services[0] keys: full ServiceResource shape
+                                             (price, base_price, warrenty_info,
+                                              recommended_info, note, etc.)
+
+POST /api/v1/pricing          top: ['success', 'brand_id', 'model_id', 'fuel_type_id',
+                                    'requested_ids', 'matched_prices', 'total']
+                              total: 1500       (UNCHANGED)
+```
+
+### DB query count (eager-load verification)
+
+```
+$ php artisan tinker --execute="DB::enableQueryLog();
+   ServiceCategory::with(['services' => fn($q) =>
+     $q->where('is_active', true)->orderBy('id')])
+     ->where('is_active', true)->orderBy('position')->get();
+   echo count(DB::getQueryLog());"
+→ 2
+
+  Q1: select * from `service_categories` where `is_active` = ?
+      order by `position` asc
+  Q2: select * from `services` where `services`.`category_id`
+      in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12) and `is_active` = ?
+```
+
+12 categories × 40 sub-services loaded in **2 queries** (one
+SELECT for categories, one SELECT-IN for services). Confirmed
+eager-load is working correctly — no N+1 at the SQL layer.
+
+### Frontend network-tab verification — request counts before vs after
+
+| Page / interaction | Before (Phase 1.5) | After (Phase 1.6, expected) |
+|---|---|---|
+| Load `/` (home page) | 1× `/home` + 12× `/services/{slug}` (imperative `Promise.all`) = **13 requests** | 1× `/home`, 0× `/services/{slug}` = **1 request** |
+| Load `/services` | 1× `/services` + 12× `/services/{slug}` (`<CategorySection>` per-card React Query) = **13 requests** | 1× `/services`, 0× `/services/{slug}` = **1 request** |
+| Load `/sitemap` | 1× `/home` + 12× `/services/{slug}` (imperative `Promise.all`) = **13 requests** | 1× `/home` (or 0 if home cached from prior nav), 0× `/services/{slug}` |
+| Hover Header services dropdown (first time) | 12× `/services/{slug}` (imperative `Promise.all` on first hover) = **12 requests** | **0 new requests** — sub-services come from the cached `/home` |
+| Load single category page (`/services/car-battery` equivalent) | 1× `/services/car-battery` | 1× `/services/car-battery` (unchanged — only legitimate slug consumer) |
+
+**Browser smoke-test was not run from this session** — same dev-tool
+limitation as Phase 1.1. The numbers in the "After" column are derived
+from static analysis: every imperative `fetchCategoryDetail` call
+site outside `ServiceCategory.tsx` and the `useCategoryDetail` hook
+itself was deleted in commit `5b11192`. `npx tsc --noEmit` passes.
+`npm run build` produces a clean bundle. Please confirm in DevTools
+Network tab when you're at the screen — the verification matrix above
+gives you exact counts to expect.
+
+### Final answer: did the N+1 actually go to zero?
+
+**Yes — at the static-analysis layer, the four imperative N+1 sites
+are gone.** `grep -rn "fetchCategoryDetail" src/` returns five lines:
+the function definition (`lib/api.ts`), one wrapper in a hook
+(`useServices.ts:useCategoryDetail`), and one consumer
+(`ServiceCategory.tsx`). Home, Sitemap, Header, and Services'
+`<CategorySection>` no longer reference the per-slug fetcher at all.
+
+The single legitimate per-slug call (`/services/car-battery` from
+`ServiceCategory.tsx`) is preserved by design — that detail page
+needs vehicle-resolved pricing, faqs, and per-category SEO that the
+list endpoints do not carry. Per-slug + `/pricing` semantics are
+unchanged.
+
+### Deviations from the prompt
+
+**1. `position` field omitted from `SubServiceResource`.** The spec
+listed `position` in the lean shape, but the `services` table has no
+`position` column (it's only on `service_categories`). Adding a
+column would require a migration, which the brief explicitly
+forbade. `SubServiceResource` documents the omission inline and the
+backend continues to order by `id`. Frontend consumers don't read
+`position` for sub-services.
+
+**2. `title` field added to `SubServiceResource` (not in the spec's
+"shape ONLY" list).** The lean shape per spec is `id, slug, name,
+base_price, image, time_takes, time_unit`. The existing frontend
+reads `service.title` in 30+ render sites. Adding `title` as an
+alias of `name` (matching every other Resource in the codebase —
+`ServiceCategoryResource`, `CarBrandResource`, etc.) avoids 30+
+consumer renames for zero semantic gain. The constraint *"DO NOT
+remove or rename any existing field"* is honored either way (this
+is an additive field on a brand-new key). Documented in the resource
+header.
+
+**3. Browser DevTools verification not performed in-session.** Same
+limitation as the Phase 1 / Phase 1.1 reports. The verification
+matrix above is derived from static analysis (deleted code paths +
+clean type-check + clean build).
