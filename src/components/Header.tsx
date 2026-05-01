@@ -5,29 +5,27 @@ import {
   CreditCard, Smartphone, ChevronDown, ChevronRight, Zap, ArrowRight,
   ShoppingCart, User, LogOut, Package, Car
 } from "lucide-react";
-import { useState, useRef, useLayoutEffect, useEffect } from "react";
+import { useState, useRef, useLayoutEffect } from "react";
 import { BUSINESS_INFO, LOCATIONS } from "../data/businessData";
 import { useCart } from "../hooks/useCart";
 import { useAuth } from "../hooks/useAuth";
 import {
   fetchHome,
-  fetchCategoryDetail,
   type ServiceCategory as ApiCategory,
-  type SubService as ApiSubService,
+  type CategorySubService,
 } from "../lib/api";
 import { useApiQuery } from "../hooks/useApiQuery";
 import { FEATURES } from "../config/features";
 
 interface SubMenuProps {
-  subServices: ApiSubService[];
-  loading: boolean;
+  subServices: CategorySubService[];
   categorySlug: string;
   setCurrentPage: (page: string) => void;
   setActiveDropdown: (d: string | null) => void;
   setActiveSubDropdown: (d: string | null) => void;
 }
 
-function SubMenu({ subServices, loading, categorySlug, setCurrentPage, setActiveDropdown, setActiveSubDropdown }: SubMenuProps) {
+function SubMenu({ subServices, categorySlug, setCurrentPage, setActiveDropdown, setActiveSubDropdown }: SubMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
@@ -86,14 +84,7 @@ function SubMenu({ subServices, loading, categorySlug, setCurrentPage, setActive
       className="fixed bg-white border border-border shadow-2xl py-2 min-w-[240px] flex flex-col max-h-[80vh] overflow-y-auto scroll-smooth [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-neutral-200 [&::-webkit-scrollbar-thumb]:rounded-full shadow-[inset_0_-15px_15px_-15px_rgba(0,0,0,0.1),inset_0_15px_15px_-15px_rgba(0,0,0,0.1)] z-[10000]"
       style={{ top: '-9999px', left: '-9999px' }}
     >
-      {loading
-        ? Array.from({ length: 4 }).map((_, i) => (
-            <div
-              key={`subsk-${i}`}
-              className="mx-6 my-2 h-3 w-32 bg-neutral-200 animate-pulse rounded"
-            />
-          ))
-        : subServices.map((sub) => (
+      {subServices.map((sub) => (
             <button
               key={sub.id}
               onClick={(e) => {
@@ -128,48 +119,19 @@ export default function Header({ currentPage, setCurrentPage, openEstimate, open
   const { count: cartCount } = useCart();
   const { user, isAuthenticated, logout } = useAuth();
 
-  // ── Service categories: API-driven (single dedupe-cached request) ──
+  // ── Service categories + their sub-services come from a single
+  //    /home query. Sub-services arrive nested under each category in
+  //    the response (Phase 1.6) — no lazy fetch on dropdown open. ──
   const home = useApiQuery(["home"], (signal) => fetchHome(signal));
   const apiCategories: ApiCategory[] = home.data?.service_categories ?? [];
 
-  // ── Sub-services per category: lazy-fetched on first dropdown open ──
-  // subsCache[slug] === undefined -> not loaded yet
-  // subsCache[slug] === []        -> loaded with 0 results (or failed)
-  const [subsCache, setSubsCache] = useState<Record<string, ApiSubService[]>>({});
-  const [subsLoading, setSubsLoading] = useState<boolean>(false);
-  const [subsLoaded, setSubsLoaded] = useState<boolean>(false);
-
-  // Trigger one-time parallel fetch when "services" dropdown is first opened.
-  useEffect(() => {
-    if (activeDropdown !== "services") return;
-    if (subsLoaded || subsLoading) return;
-    if (apiCategories.length === 0) return;
-
-    const ctrl = new AbortController();
-    let cancelled = false;
-    setSubsLoading(true);
-
-    Promise.all(
-      apiCategories.map((c) =>
-        fetchCategoryDetail(c.slug, undefined, ctrl.signal)
-          .then((res) => ({ slug: c.slug, list: res?.services ?? [] }))
-          .catch(() => ({ slug: c.slug, list: [] as ApiSubService[] }))
-      )
-    ).then((results) => {
-      if (cancelled) return;
-      const next: Record<string, ApiSubService[]> = {};
-      for (const r of results) next[r.slug] = r.list;
-      setSubsCache(next);
-      setSubsLoading(false);
-      setSubsLoaded(true);
-    });
-
-    return () => {
-      cancelled = true;
-      ctrl.abort();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeDropdown, apiCategories.map((c) => c.slug).join("|")]);
+  // O(1) lookup of "category slug → its sub-services". Recomputed on
+  // re-render but inexpensive (≤ 12 categories × ≤ ~10 services each)
+  // and the data backing it is React-Query-cached.
+  const subsByCategorySlug: Record<string, CategorySubService[]> = {};
+  for (const c of apiCategories) {
+    subsByCategorySlug[c.slug] = c.services ?? [];
+  }
 
   const navItems = [
     { name: "Home", id: "home" },
@@ -499,11 +461,9 @@ export default function Header({ currentPage, setCurrentPage, openEstimate, open
                             </p>
                           ) : (
                           apiCategories.map((category) => {
-                            const cached = subsCache[category.slug];
-                            const subServices = cached ?? [];
+                            const subServices = subsByCategorySlug[category.slug] ?? [];
                             const subActive = activeSubDropdown === String(category.id);
-                            // Show submenu placeholder while loading; hide arrow only when loaded with 0 subs.
-                            const showArrow = !subsLoaded || subServices.length > 0;
+                            const hasSubs = subServices.length > 0;
                             return (
                               <div
                                 key={category.id}
@@ -521,15 +481,14 @@ export default function Header({ currentPage, setCurrentPage, openEstimate, open
                                   className="w-full flex items-center justify-between text-left px-6 py-2.5 text-[11px] font-bold uppercase text-neutral-600 hover:bg-neutral-50 hover:text-primary transition-all border-l-2 border-transparent hover:border-primary"
                                 >
                                   {category.title}
-                                  {showArrow && <ArrowRight className="w-4 h-4 ml-2" />}
+                                  {hasSubs && <ArrowRight className="w-4 h-4 ml-2" />}
                                 </button>
 
                                 {/* Third Level Dropdown (Sub Services) */}
                                 <AnimatePresence>
-                                  {subActive && showArrow && (
+                                  {subActive && hasSubs && (
                                     <SubMenu
                                       subServices={subServices}
-                                      loading={!cached && subsLoading}
                                       categorySlug={category.slug}
                                       setCurrentPage={setCurrentPage}
                                       setActiveDropdown={setActiveDropdown}
@@ -645,7 +604,7 @@ export default function Header({ currentPage, setCurrentPage, openEstimate, open
                           </p>
                         ) : (
                           apiCategories.map((category) => {
-                            const subServices = subsCache[category.slug] ?? [];
+                            const subServices = subsByCategorySlug[category.slug] ?? [];
                             return (
                               <div key={category.id} className="flex flex-col">
                                 <button
@@ -657,17 +616,7 @@ export default function Header({ currentPage, setCurrentPage, openEstimate, open
                                 >
                                   {category.title}
                                 </button>
-                                {subsLoading && !subsLoaded && (
-                                  <div className="flex flex-col pl-4 border-l-2 border-border/50 ml-2 mb-2 gap-2">
-                                    {Array.from({ length: 3 }).map((_, j) => (
-                                      <div
-                                        key={j}
-                                        className="h-3 w-32 bg-neutral-200 animate-pulse rounded"
-                                      />
-                                    ))}
-                                  </div>
-                                )}
-                                {subsLoaded && subServices.length > 0 && (
+                                {subServices.length > 0 && (
                                   <div className="flex flex-col pl-4 border-l-2 border-border/50 ml-2 mb-2 gap-1">
                                     {subServices.map((sub) => (
                                       <button

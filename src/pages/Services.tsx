@@ -12,14 +12,16 @@ import {
   Clock,
   Sparkles,
 } from "lucide-react";
-import {
-  DB_SERVICE_CATEGORIES,
-  DB_SUB_SERVICES,
-} from "../data/businessData";
 import PageBanner from "../components/PageBanner";
 import BookingSidebar from "../components/BookingSidebar";
-import { useCart } from "../data/useCart";
-import { useBookingContext } from "../data/useBookingContext";
+import { useCart } from "../hooks/useCart";
+import { useBookingContext } from "../hooks/useBookingContext";
+import {
+  fetchServices,
+  type ServiceCategory as ApiServiceCategory,
+  type CategorySubService,
+} from "../lib/api";
+import { useApiQuery } from "../hooks/useApiQuery";
 
 interface ServicesProps {
   setCurrentPage: (page: string) => void;
@@ -34,14 +36,37 @@ export default function Services({ setCurrentPage }: ServicesProps) {
   const { addItem, count } = useCart();
   const { state: booking } = useBookingContext();
 
-  // Active section for the sticky horizontal nav
-  const [activeSection, setActiveSection] = useState<string>(
-    DB_SERVICE_CATEGORIES[0]?.slug || ""
+  // ---------- API: categories list (skeleton-first, never static) ----------
+  // /services takes ids (brand_id/model_id/fuel_id) per backend contract.
+  const carContext = useMemo(
+    () => ({
+      brand_id: booking.car?.brand_id ?? null,
+      model_id: booking.car?.model_id ?? null,
+      fuel_id: booking.car?.fuel_id ?? null,
+    }),
+    [booking.car]
   );
+  const servicesQuery = useApiQuery(
+    ["services", carContext],
+    (signal) => fetchServices(carContext, signal)
+  );
+  const apiCategories: ApiServiceCategory[] =
+    servicesQuery.data?.categories ?? [];
+  const isLoadingCategories = servicesQuery.isLoading;
+
+  // Active section for the sticky horizontal nav
+  const [activeSection, setActiveSection] = useState<string>("");
   const [addedFlash, setAddedFlash] = useState<string | null>(null);
 
-  // ---------- Section scroll-spy ----------
   useEffect(() => {
+    if (!activeSection && apiCategories.length > 0) {
+      setActiveSection(apiCategories[0].slug);
+    }
+  }, [apiCategories, activeSection]);
+
+  // ---------- Section scroll-spy (binds once categories arrive) ----------
+  useEffect(() => {
+    if (apiCategories.length === 0) return;
     const observer = new IntersectionObserver(
       (entries) => {
         const visible = entries
@@ -53,12 +78,12 @@ export default function Services({ setCurrentPage }: ServicesProps) {
       },
       { rootMargin: "-30% 0px -60% 0px", threshold: 0 }
     );
-    DB_SERVICE_CATEGORIES.forEach((c) => {
+    apiCategories.forEach((c) => {
       const el = document.getElementById(c.slug);
       if (el) observer.observe(el);
     });
     return () => observer.disconnect();
-  }, []);
+  }, [apiCategories]);
 
   // ---------- Helpers ----------
   const scrollToSection = (slug: string) => {
@@ -70,11 +95,21 @@ export default function Services({ setCurrentPage }: ServicesProps) {
     setActiveSection(slug);
   };
 
-  const handleAddToCart = (sub: any, categorySlug: string) => {
+  // Set of category IDs that have at least one priced service for the
+  // current vehicle. Comes from /services' `available_category_ids`,
+  // which the backend computes when brand/model/fuel are supplied.
+  // Replaces the previous per-card price_show derivation. Empty set
+  // when no vehicle is selected — matches old behaviour.
+  const availableCategoryIds = useMemo(
+    () => new Set(servicesQuery.data?.available_category_ids ?? []),
+    [servicesQuery.data?.available_category_ids]
+  );
+
+  const handleAddToCart = (sub: CategorySubService, categorySlug: string) => {
     addItem({
       serviceId: String(sub.id),
       title: sub.title,
-      price: Number(sub.price) || 0,
+      price: Number(sub.base_price) || 0,
       categorySlug,
       car: booking.car || undefined,
       location: booking.location || undefined,
@@ -103,19 +138,26 @@ export default function Services({ setCurrentPage }: ServicesProps) {
             className="flex gap-1 sm:gap-2 overflow-x-auto"
             style={{ scrollbarWidth: "none" }}
           >
-            {DB_SERVICE_CATEGORIES.map((c) => (
-              <button
-                key={c.id}
-                onClick={() => scrollToSection(c.slug)}
-                className={`text-[10px] sm:text-xs uppercase tracking-widest font-bold py-4 px-3 sm:px-5 whitespace-nowrap border-b-2 transition-colors shrink-0 ${
-                  activeSection === c.slug
-                    ? "border-primary text-primary"
-                    : "border-transparent text-neutral-500 hover:text-primary"
-                }`}
-              >
-                {c.title}
-              </button>
-            ))}
+            {isLoadingCategories
+              ? Array.from({ length: 6 }).map((_, i) => (
+                  <div
+                    key={`navsk-${i}`}
+                    className="my-4 h-3 w-28 bg-neutral-200 animate-pulse rounded shrink-0"
+                  />
+                ))
+              : apiCategories.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => scrollToSection(c.slug)}
+                    className={`text-[10px] sm:text-xs uppercase tracking-widest font-bold py-4 px-3 sm:px-5 whitespace-nowrap border-b-2 transition-colors shrink-0 ${
+                      activeSection === c.slug
+                        ? "border-primary text-primary"
+                        : "border-transparent text-neutral-500 hover:text-primary"
+                    }`}
+                  >
+                    {c.title}
+                  </button>
+                ))}
             {count > 0 && (
               <button
                 onClick={() => setCurrentPage("cart")}
@@ -180,22 +222,44 @@ export default function Services({ setCurrentPage }: ServicesProps) {
                 )}
               </section>
 
-              {/* Render each category as its own section */}
-              {DB_SERVICE_CATEGORIES.map((category) => (
-                <CategorySection
-                  key={category.id}
-                  category={category}
-                  pricesShown={booking.pricesShown}
-                  addedFlash={addedFlash}
-                  onAddToCart={(sub) => handleAddToCart(sub, category.slug)}
-                  onViewDetail={(subSlug) =>
-                    setCurrentPage(`service-${category.slug}/${subSlug}`)
-                  }
-                  onViewCategory={() =>
-                    setCurrentPage(`category-${category.slug}`)
-                  }
-                />
-              ))}
+              {/* Render each category as its own section — API-driven */}
+              {isLoadingCategories &&
+                Array.from({ length: 4 }).map((_, i) => (
+                  <section
+                    key={`cat-sk-${i}`}
+                    className="bg-white border border-border p-6 animate-pulse"
+                  >
+                    <div className="h-7 w-48 bg-neutral-200 mb-4" />
+                    <div className="h-4 w-72 bg-neutral-100 mb-6" />
+                    <div className="space-y-3">
+                      {Array.from({ length: 3 }).map((_, j) => (
+                        <div key={j} className="h-12 bg-neutral-100" />
+                      ))}
+                    </div>
+                  </section>
+                ))}
+              {!isLoadingCategories && servicesQuery.error && (
+                <div className="bg-neutral-50 border border-accent-dark/40 p-6 text-sm text-accent-dark">
+                  Could not load services: {servicesQuery.error}
+                </div>
+              )}
+              {!isLoadingCategories &&
+                apiCategories.map((category) => (
+                  <CategorySection
+                    key={category.id}
+                    category={category}
+                    pricesShown={booking.pricesShown}
+                    pricesAvailableForCategory={availableCategoryIds.has(category.id)}
+                    addedFlash={addedFlash}
+                    onAddToCart={(sub) => handleAddToCart(sub, category.slug)}
+                    onViewDetail={(subSlug) =>
+                      setCurrentPage(`service-${category.slug}/${subSlug}`)
+                    }
+                    onViewCategory={() =>
+                      setCurrentPage(`category-${category.slug}`)
+                    }
+                  />
+                ))}
 
               {/* Floating cart summary at the bottom */}
               {count > 0 && (
@@ -248,10 +312,11 @@ export default function Services({ setCurrentPage }: ServicesProps) {
 // ─────────────────── Category Section ───────────────────
 
 interface CategorySectionProps {
-  category: { id: string; slug: string; title: string; description: string };
-  pricesShown: boolean;
+  category: ApiServiceCategory;          // sub-services arrive nested via Phase 1.6
+  pricesShown: boolean;                  // user has unlocked prices via OTP
+  pricesAvailableForCategory: boolean;   // backend says this category has prices for the vehicle
   addedFlash: string | null;
-  onAddToCart: (sub: any) => void;
+  onAddToCart: (sub: CategorySubService) => void;
   onViewDetail: (subSlug: string) => void;
   onViewCategory: () => void;
 }
@@ -259,15 +324,13 @@ interface CategorySectionProps {
 const CategorySection: React.FC<CategorySectionProps> = ({
   category,
   pricesShown,
+  pricesAvailableForCategory,
   addedFlash,
   onAddToCart,
   onViewDetail,
   onViewCategory,
 }) => {
-  const subs = useMemo(
-    () => DB_SUB_SERVICES.filter((s) => s.sc_id === category.id),
-    [category.id]
-  );
+  const subs: CategorySubService[] = category.services ?? [];
 
   if (subs.length === 0) return null;
 
@@ -304,6 +367,10 @@ const CategorySection: React.FC<CategorySectionProps> = ({
 
         {subs.map((sub) => {
           const justAdded = addedFlash === String(sub.id);
+          // Pricing is API-only. Show price strictly when the user has
+          // confirmed via OTP AND the backend marks this category as
+          // priced for the chosen vehicle (available_category_ids).
+          const showPrice = pricesShown && pricesAvailableForCategory;
           return (
             <div
               key={sub.id}
@@ -316,22 +383,17 @@ const CategorySection: React.FC<CategorySectionProps> = ({
                 >
                   {sub.title}
                 </button>
-                {sub.recommended_info && (
-                  <p className="text-xs text-neutral-500 leading-relaxed line-clamp-1">
-                    {sub.recommended_info}
-                  </p>
-                )}
               </div>
 
-              {/* Price column — hidden until pricesShown */}
+              {/* Price column — only renders prices the API actually returned */}
               <div className="sm:text-right sm:w-28">
-                {pricesShown ? (
+                {showPrice ? (
                   <>
                     <p className="text-base font-black text-neutral-900">
-                      {sub.price ? `₹${sub.price}` : "Quote"}
+                      {sub.base_price ? `₹${sub.base_price}` : "Quote"}
                     </p>
                     <span className="text-[9px] uppercase tracking-widest font-bold text-neutral-400">
-                      {sub.price ? "Onwards" : "On Inspection"}
+                      {sub.base_price ? "Onwards" : "On Inspection"}
                     </span>
                   </>
                 ) : (
@@ -346,7 +408,7 @@ const CategorySection: React.FC<CategorySectionProps> = ({
 
               {/* Action column */}
               <div className="sm:w-32 sm:text-right">
-                {pricesShown ? (
+                {showPrice ? (
                   <button
                     onClick={() => onAddToCart(sub)}
                     className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition-colors w-full sm:w-auto flex items-center justify-center gap-1.5 ${

@@ -5,7 +5,13 @@ import {
   MessageCircle, Star, CheckCircle2, Play, Shield, Loader2,
   Users, Wrench, IndianRupee, FileText, Truck, Phone, MapPin, Search, Quote
 } from "lucide-react";
-import { BUSINESS_INFO, LOCATIONS, CAR_DATA, TESTIMONIALS, DB_SUB_SERVICES, DB_SERVICE_CATEGORIES } from "../data/businessData";
+import { BUSINESS_INFO, LOCATIONS, TESTIMONIALS } from "../data/businessData";
+import {
+  fetchHome,
+  type ServiceCategory as ApiCategory,
+  type CategorySubService,
+} from "../lib/api";
+import { useApiQuery } from "../hooks/useApiQuery";
 
 interface HomeProps {
   setCurrentPage: (page: string) => void;
@@ -13,6 +19,36 @@ interface HomeProps {
 }
 
 export default function Home({ setCurrentPage, openEstimate }: HomeProps) {
+  // ─── API-only data loading. No static fallback. Skeletons during load. ──
+  const home = useApiQuery(["home"], (signal) => fetchHome(signal));
+
+  // Categories list (string ids preserved for downstream filtering).
+  const serviceCategories: Array<{
+    id: string;
+    slug: string;
+    title: string;
+    description: string;
+  }> = (home.data?.service_categories ?? []).map((c: ApiCategory) => ({
+    id: String(c.id),
+    slug: c.slug,
+    title: c.title,
+    description: c.description ?? "",
+  }));
+
+  // Sub-services come nested under each category in the /home payload
+  // (Phase 1.6 — eliminates the previous N+1 of 12 /services/{slug}
+  // requests). Flattened here for the all-services carousel; each entry
+  // remembers its parent category's slug for navigation.
+  const allSubServices: Array<CategorySubService & { _categorySlug: string }> = [];
+  for (const c of home.data?.service_categories ?? []) {
+    for (const s of c.services ?? []) {
+      allSubServices.push({ ...s, _categorySlug: c.slug });
+    }
+  }
+  // The /home query owns loading + error state — no separate query needed.
+  const subsLoading = home.isLoading;
+  const subsError   = home.error;
+
   const [formData, setFormData] = useState({
     name: "",
     phone: "",
@@ -39,7 +75,7 @@ export default function Home({ setCurrentPage, openEstimate }: HomeProps) {
   const [expandedLocationIndex, setExpandedLocationIndex] = useState<number | null>(null);
   const [faqOpenIndex, setFaqOpenIndex] = useState<number | null>(0);
 
-  const categories = ["All Services", ...DB_SERVICE_CATEGORIES.map(c => c.title)];
+  const categories = ["All Services", ...serviceCategories.map(c => c.title)];
 
   const transformations = [
     {
@@ -74,10 +110,13 @@ export default function Home({ setCurrentPage, openEstimate }: HomeProps) {
     }
   ];
 
-  const filteredServices = DB_SUB_SERVICES.filter(service => {
-    const parentCat = DB_SERVICE_CATEGORIES.find(c => c.id === service.sc_id);
-    const matchesCategory = selectedCategory === "All Services" || parentCat?.title === selectedCategory;
-    const matchesSearch = service.title.toLowerCase().includes(searchQuery.toLowerCase());
+  const filteredServices = allSubServices.filter((service) => {
+    const parentCat = serviceCategories.find((c) => c.slug === service._categorySlug);
+    const matchesCategory =
+      selectedCategory === "All Services" || parentCat?.title === selectedCategory;
+    const matchesSearch = service.title
+      .toLowerCase()
+      .includes(searchQuery.toLowerCase());
     return matchesCategory && matchesSearch;
   });
 
@@ -149,6 +188,11 @@ export default function Home({ setCurrentPage, openEstimate }: HomeProps) {
 
   return (
     <div className="overflow-hidden bg-white">
+      {home.error && (
+        <div className="fixed bottom-4 right-4 z-[9999] max-w-xs bg-accent-dark text-white text-xs font-bold uppercase tracking-widest px-4 py-3 shadow-lg">
+          API: {home.error}
+        </div>
+      )}
       {/* Hero Section */}
       <section className="relative min-h-[85vh] lg:min-h-[600px] flex items-center bg-white">
         <div className="absolute inset-0 z-0">
@@ -266,7 +310,7 @@ export default function Home({ setCurrentPage, openEstimate }: HomeProps) {
                         className={`w-full bg-surface border border-border p-3 text-sm text-primary-dark focus:border-primary outline-none transition-all`}
                       >
                         <option value="">Select Service Needed</option>
-                        {DB_SERVICE_CATEGORIES.map(cat => (
+                        {serviceCategories.map(cat => (
                           <option key={cat.id} value={cat.title}>{cat.title}</option>
                         ))}
                       </select>
@@ -478,21 +522,28 @@ export default function Home({ setCurrentPage, openEstimate }: HomeProps) {
               ref={categoryScrollRef}
               className="flex-1 flex items-center gap-8 overflow-x-auto no-scrollbar scroll-smooth snap-x snap-mandatory border-b border-border pb-[14px]"
             >
-              {categories.map((cat) => (
-                <button
-                  key={cat}
-                  onClick={() => setSelectedCategory(cat)}
-                  className={`whitespace-nowrap snap-start text-sm font-bold uppercase tracking-widest transition-all relative ${selectedCategory === cat
-                    ? "text-primary"
-                    : "text-muted hover:text-primary-dark"
-                    }`}
-                >
-                  {cat}
-                  {selectedCategory === cat && (
-                    <div className="absolute -bottom-[15px] left-0 w-full h-[2px] bg-primary z-10" />
-                  )}
-                </button>
-              ))}
+              {home.isLoading
+                ? Array.from({ length: 6 }).map((_, i) => (
+                    <div
+                      key={`cat-sk-${i}`}
+                      className="h-4 w-28 bg-neutral-200 animate-pulse rounded shrink-0"
+                    />
+                  ))
+                : categories.map((cat) => (
+                    <button
+                      key={cat}
+                      onClick={() => setSelectedCategory(cat)}
+                      className={`whitespace-nowrap snap-start text-sm font-bold uppercase tracking-widest transition-all relative ${selectedCategory === cat
+                        ? "text-primary"
+                        : "text-muted hover:text-primary-dark"
+                        }`}
+                    >
+                      {cat}
+                      {selectedCategory === cat && (
+                        <div className="absolute -bottom-[15px] left-0 w-full h-[2px] bg-primary z-10" />
+                      )}
+                    </button>
+                  ))}
             </div>
 
             <button
@@ -518,12 +569,28 @@ export default function Home({ setCurrentPage, openEstimate }: HomeProps) {
               ref={scrollRef}
               className="flex-1 flex gap-6 overflow-x-auto no-scrollbar scroll-smooth snap-x snap-mandatory pt-2 pb-6"
             >
+              {(home.isLoading || subsLoading) && Array.from({ length: 4 }).map((_, i) => (
+                <div
+                  key={`svc-sk-${i}`}
+                  className="min-w-[280px] md:min-w-[320px] lg:min-w-[calc(25%-18px)] snap-start h-[360px] bg-neutral-200 animate-pulse border border-border"
+                />
+              ))}
+              {!home.isLoading && !subsLoading && subsError && (
+                <div className="min-w-[280px] md:min-w-[320px] lg:min-w-[calc(25%-18px)] snap-start h-[360px] border border-border flex items-center justify-center text-xs font-bold uppercase tracking-widest text-accent-dark p-6 text-center">
+                  Could not load services: {subsError}
+                </div>
+              )}
+              {!home.isLoading && !subsLoading && !subsError && filteredServices.length === 0 && (
+                <div className="min-w-[280px] md:min-w-[320px] lg:min-w-[calc(25%-18px)] snap-start h-[360px] border border-border flex items-center justify-center text-xs font-bold uppercase tracking-widest text-muted p-6 text-center">
+                  No services match your filters.
+                </div>
+              )}
               <AnimatePresence mode="popLayout">
-                {filteredServices.map((service) => {
-                  const parentCat = DB_SERVICE_CATEGORIES.find(c => c.id === service.sc_id);
+                {!home.isLoading && !subsLoading && filteredServices.map((service) => {
+                  const parentCat = serviceCategories.find(c => c.slug === service._categorySlug);
                   return (
                     <motion.div
-                      key={service.id}
+                      key={`${service._categorySlug}-${service.id}`}
                       layout
                       initial={{ opacity: 0, scale: 0.95 }}
                       animate={{ opacity: 1, scale: 1 }}
@@ -532,7 +599,7 @@ export default function Home({ setCurrentPage, openEstimate }: HomeProps) {
                       className="min-w-[280px] md:min-w-[320px] lg:min-w-[calc(25%-18px)] snap-start"
                     >
                       <div
-                        onClick={() => setCurrentPage(`service-${parentCat?.slug}/${service.slug}`)}
+                        onClick={() => setCurrentPage(`service-${service._categorySlug}/${service.slug}`)}
                         className="relative h-[360px] group cursor-pointer overflow-hidden border border-border shadow-sm hover:shadow-md transition-all duration-300 bg-primary-dark"
                       >
                         {/* Image */}
