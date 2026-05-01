@@ -166,6 +166,13 @@ export interface OfferCoupon {
   validUntil?: string; // YYYY-MM-DD; omit for evergreen
   priority: number;
   badge?: "best" | "new" | "popular" | "limited";
+
+  // ── Optional marketing/visual fields used by the /offers landing page.
+  //    All optional — Cart/Checkout coupon math ignores them.
+  urgencyText?: string;       // e.g. "ENDS TODAY" — small chip at top of card
+  rating?: number;            // e.g. 4.8 — yellow-star chip
+  customers?: number;         // e.g. 12500 — formatted as "12,500+" in UI
+  image?: string;             // hero photo URL; falls back to gradient when absent
 }
 
 export const OFFERS: OfferCoupon[] = [
@@ -193,6 +200,12 @@ export const OFFERS: OfferCoupon[] = [
     applicableCategorySlugs: ["car-ac-service-repair"],
     priority: 80,
     badge: "popular",
+    // Visual fields restored from the pre-7e7eefc local "AC DEEP CLEANING" entry.
+    urgencyText: "HIGH DEMAND",
+    rating: 4.9,
+    customers: 8500,
+    image:
+      "https://images.unsplash.com/photo-1563720223185-11003d516935?auto=format&fit=crop&q=80&w=800",
   },
   {
     id: "off-saver15",
@@ -216,6 +229,13 @@ export const OFFERS: OfferCoupon[] = [
     value: 250,
     applicableCategorySlugs: ["car-care-detailing"],
     priority: 70,
+    // Visual fields restored from the pre-7e7eefc local "PREMIUM CERAMIC COATING"
+    // entry — closest detailing-category match.
+    urgencyText: "ONLY 3 SLOTS LEFT",
+    rating: 4.9,
+    customers: 12000,
+    image:
+      "https://images.unsplash.com/photo-1625047509168-a7026f36de04?auto=format&fit=crop&q=80&w=800",
   },
   {
     id: "off-battery300",

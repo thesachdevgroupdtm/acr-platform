@@ -1,6 +1,6 @@
 import { motion } from "motion/react";
 import PageBanner from "../components/PageBanner";
-import { ArrowRight, AlertCircle, Tag } from "lucide-react";
+import { ArrowRight, AlertCircle, Tag, Star, Users } from "lucide-react";
 import { OFFERS, type OfferCoupon } from "../data/businessData";
 
 interface OffersProps {
@@ -25,6 +25,11 @@ function badgeLabel(c: OfferCoupon): string {
     case "limited":  return "LIMITED TIME";
     default:         return c.firstTimeOnly ? "FIRST BOOKING" : "LIMITED TIME";
   }
+}
+
+/** "12500" → "12,500+"  /  "8500" → "8,500+" */
+function formatCustomers(n: number): string {
+  return `${n.toLocaleString("en-IN")}+`;
 }
 
 export default function Offers({ setCurrentPage }: OffersProps) {
@@ -64,19 +69,43 @@ export default function Offers({ setCurrentPage }: OffersProps) {
                 transition={{ duration: 0.5, delay: i * 0.1 }}
                 className="group relative bg-white border border-border flex flex-col overflow-hidden hover:-translate-y-2 transition-all duration-300 shadow-sm hover:shadow-2xl hover:shadow-primary/10 hover:border-primary/30"
               >
-                {/* Header band — canonical-data driven */}
-                <div className="relative h-[200px] overflow-hidden bg-gradient-to-br from-primary-dark via-primary to-primary-dark/80">
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.15),transparent_60%)]" />
+                {/* Header band — uses photo when offer.image is set, else
+                    falls back to a brand-coloured gradient. */}
+                <div className="relative h-[250px] overflow-hidden bg-neutral-900">
+                  {offer.image ? (
+                    <>
+                      <img
+                        src={offer.image}
+                        alt={offer.title}
+                        className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:scale-110 group-hover:opacity-70 transition-all duration-700"
+                        referrerPolicy="no-referrer"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-neutral-900 via-neutral-900/50 to-transparent" />
+                    </>
+                  ) : (
+                    <>
+                      <div className="absolute inset-0 bg-gradient-to-br from-primary-dark via-primary to-primary-dark/80" />
+                      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.15),transparent_60%)]" />
+                    </>
+                  )}
 
-                  {/* Badge */}
-                  <div className="absolute top-4 left-4 z-10 flex items-center gap-1.5 bg-white/15 backdrop-blur-sm text-white px-3 py-1.5 text-[10px] font-black uppercase tracking-widest border border-white/20">
-                    <AlertCircle className="w-3 h-3" />
-                    {badgeLabel(offer)}
-                  </div>
+                  {/* Top-left chip: urgency text wins over generic badge label
+                      when the coupon has one (it's the time-pressure hook). */}
+                  {offer.urgencyText ? (
+                    <div className="absolute top-4 left-4 z-10 flex items-center gap-1.5 bg-red-600/90 backdrop-blur-sm text-white px-3 py-1.5 text-[10px] font-black uppercase tracking-widest animate-pulse border border-red-500">
+                      <AlertCircle className="w-3 h-3" />
+                      {offer.urgencyText}
+                    </div>
+                  ) : (
+                    <div className="absolute top-4 left-4 z-10 flex items-center gap-1.5 bg-white/15 backdrop-blur-sm text-white px-3 py-1.5 text-[10px] font-black uppercase tracking-widest border border-white/20">
+                      <AlertCircle className="w-3 h-3" />
+                      {badgeLabel(offer)}
+                    </div>
+                  )}
 
                   {/* Discount + title */}
                   <div className="absolute bottom-4 left-4 right-4 z-10">
-                    <div className="inline-block bg-white text-primary-dark px-4 py-1 mb-3 text-xs font-black uppercase tracking-widest shadow-md">
+                    <div className={`inline-block px-4 py-1 mb-3 text-xs font-black uppercase tracking-widest shadow-md ${offer.image ? "bg-primary text-white" : "bg-white text-primary-dark"}`}>
                       {formatDiscount(offer)}
                     </div>
                     <h3 className="text-2xl md:text-3xl font-black uppercase tracking-tighter text-white leading-tight">
@@ -90,6 +119,27 @@ export default function Offers({ setCurrentPage }: OffersProps) {
                     <p className="text-neutral-600 font-medium mb-6 leading-relaxed">
                       {offer.description}
                     </p>
+
+                    {/* Trust strip — rating + customers chips, only when set. */}
+                    {(offer.rating || offer.customers) && (
+                      <div className="flex items-center gap-4 text-xs font-bold text-neutral-500 uppercase tracking-widest mb-6">
+                        {offer.rating ? (
+                          <div className="flex items-center gap-1 text-yellow-500">
+                            <Star className="w-4 h-4 fill-current" />
+                            <span className="text-neutral-900">{offer.rating}</span>
+                          </div>
+                        ) : null}
+                        {offer.rating && offer.customers ? (
+                          <span className="w-1 h-1 rounded-full bg-border" />
+                        ) : null}
+                        {offer.customers ? (
+                          <div className="flex items-center gap-1.5">
+                            <Users className="w-3.5 h-3.5" />
+                            <span>Trusted by {formatCustomers(offer.customers)}</span>
+                          </div>
+                        ) : null}
+                      </div>
+                    )}
 
                     {/* Coupon code + applicability */}
                     <div className="flex items-center gap-3 mb-8 pb-6 border-b border-border">
