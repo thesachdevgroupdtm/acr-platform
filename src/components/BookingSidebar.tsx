@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   ArrowRight,
   ArrowLeft,
+  RefreshCw,
   Search,
   ChevronDown,
   MapPin,
@@ -15,9 +16,10 @@ import {
   X,
   User,
 } from "lucide-react";
-import { LOCATIONS, CAR_DATA } from "../data/businessData";
-import { useBookingContext } from "../data/useBookingContext";
-import { useAuth } from "../data/useAuth";
+import { LOCATIONS } from "../data/businessData";
+import { useBookingContext } from "../hooks/useBookingContext";
+import { useAuth } from "../hooks/useAuth";
+import { useBrands, useModels, useFuels } from "../hooks/useVehicle";
 
 /**
  * BookingSidebar — the GoMechanic-style sticky booking card.
@@ -62,9 +64,28 @@ export default function BookingSidebar({
   const [carStep, setCarStep] = useState<1 | 2 | 3>(1);
   const [pendingCar, setPendingCar] = useState<{
     brand: string;
+    brandId: number | null;
+    brandSlug: string | null;
     model: string;
-  }>({ brand: "", model: "" });
+    modelId: number | null;
+    modelSlug: string | null;
+  }>({ brand: "", brandId: null, brandSlug: null, model: "", modelId: null, modelSlug: null });
   const [carSearch, setCarSearch] = useState("");
+
+  // ── API-driven brand / model / fuel via React Query.
+  //    Each hook is `enabled` only when its prerequisites are present —
+  //    no fetch fires until the user reaches the matching step.
+  const brandsQuery = useBrands();
+  const modelsQuery = useModels(
+    showCarSelector && carStep === 2 ? pendingCar.brandId : null
+  );
+  const fuelsQuery = useFuels(
+    showCarSelector && carStep === 3 ? pendingCar.brandId : null,
+    showCarSelector && carStep === 3 ? pendingCar.modelId : null
+  );
+  const apiBrands = brandsQuery.data?.brands ?? [];
+  const apiModels = modelsQuery.data?.models ?? [];
+  const apiFuels  = fuelsQuery.data?.fuels  ?? [];
 
   // ---------- Auth: auto-fill verified phone & defaults ----------
   useEffect(() => {
@@ -97,7 +118,10 @@ export default function BookingSidebar({
     ? `${state.car.brand} ${state.car.model}, ${state.car.fuel}`
     : "";
 
-  const brandList = Object.keys(CAR_DATA);
+  // Brand list — pure API (no static fallback). Loading / error / empty
+  // states are rendered in the modal body below.
+  const brandList: { name: string; id: number | null; slug: string | null }[] =
+    apiBrands.map((b) => ({ name: b.title, id: b.id, slug: b.slug ?? null }));
 
   // ---------- Handlers ----------
   const onPhoneChange = (val: string) => {
@@ -153,26 +177,48 @@ export default function BookingSidebar({
   const openCarSelector = () => {
     setShowCarSelector(true);
     setCarStep(1);
-    setPendingCar({ brand: "", model: "" });
+    setPendingCar({ brand: "", brandId: null, brandSlug: null, model: "", modelId: null, modelSlug: null });
     setCarSearch("");
   };
   const closeCarSelector = () => {
     setShowCarSelector(false);
     setCarSearch("");
   };
-  const selectBrand = (brand: string) => {
-    setPendingCar({ brand, model: "" });
+  const selectBrand = (
+    brand: string,
+    brandId: number | null = null,
+    brandSlug: string | null = null
+  ) => {
+    setPendingCar({ brand, brandId, brandSlug, model: "", modelId: null, modelSlug: null });
     setCarStep(2);
     setCarSearch("");
   };
-  const selectModel = (model: string) => {
-    setPendingCar((p) => ({ ...p, model }));
+  const selectModel = (
+    model: string,
+    modelId: number | null = null,
+    modelSlug: string | null = null
+  ) => {
+    setPendingCar((p) => ({ ...p, model, modelId, modelSlug }));
     setCarStep(3);
     setCarSearch("");
   };
-  const selectFuel = (fuel: string) => {
+  const selectFuel = (
+    fuel: string,
+    fuelId: number | null = null,
+    fuelSlug: string | null = null
+  ) => {
     update({
-      car: { brand: pendingCar.brand, model: pendingCar.model, fuel },
+      car: {
+        brand: pendingCar.brand,
+        model: pendingCar.model,
+        fuel,
+        ...(pendingCar.brandId != null ? { brand_id: pendingCar.brandId } : {}),
+        ...(pendingCar.modelId != null ? { model_id: pendingCar.modelId } : {}),
+        ...(fuelId != null ? { fuel_id: fuelId } : {}),
+        ...(pendingCar.brandSlug ? { brand_slug: pendingCar.brandSlug } : {}),
+        ...(pendingCar.modelSlug ? { model_slug: pendingCar.modelSlug } : {}),
+        ...(fuelSlug ? { fuel_slug: fuelSlug } : {}),
+      },
     });
     if (errors.car) setErrors((e) => ({ ...e, car: "" }));
     closeCarSelector();
@@ -187,28 +233,40 @@ export default function BookingSidebar({
   const filteredBrands = useMemo(
     () =>
       brandList.filter((b) =>
-        b.toLowerCase().includes(carSearch.toLowerCase())
+        b.name.toLowerCase().includes(carSearch.toLowerCase())
       ),
     [brandList, carSearch]
   );
-  const modelList =
-    pendingCar.brand && CAR_DATA[pendingCar.brand]
-      ? CAR_DATA[pendingCar.brand]
-      : [];
+  // Models — pure API. Loading / error / empty states rendered in modal.
+  const modelList: { name: string; id: number | null; slug: string | null }[] =
+    apiModels.map((m) => ({ name: m.title, id: m.id, slug: m.slug ?? null }));
   const filteredModels = useMemo(
     () =>
       modelList.filter((m) =>
-        m.toLowerCase().includes(carSearch.toLowerCase())
+        m.name.toLowerCase().includes(carSearch.toLowerCase())
       ),
     [modelList, carSearch]
   );
 
-  const FUELS = [
-    { id: "Petrol", icon: Droplet },
-    { id: "Diesel", icon: Fuel },
-    { id: "CNG", icon: Wind },
-    { id: "Electric", icon: BatteryCharging },
-  ];
+  const fuelIconFor = (title: string) => {
+    const t = title.toLowerCase();
+    if (t.includes("diesel")) return Fuel;
+    if (t.includes("cng")) return Wind;
+    if (t.includes("electric") || t.includes("ev")) return BatteryCharging;
+    return Droplet;
+  };
+  // Fuels — pure API. No static fallback; loading / error rendered in modal.
+  const FUELS: {
+    label: string;
+    apiId: number | null;
+    apiSlug: string | null;
+    icon: typeof Droplet;
+  }[] = apiFuels.map((f) => ({
+    label: f.title,
+    apiId: f.id,
+    apiSlug: f.slug ?? null,
+    icon: fuelIconFor(f.title),
+  }));
 
   // ---------- Styles ----------
   const inputBase =
@@ -461,60 +519,116 @@ export default function BookingSidebar({
               {/* Step 1: Brand grid */}
               {carStep === 1 && (
                 <div className="flex-1 overflow-y-auto p-4">
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {filteredBrands.map((brand) => (
+                  {brandsQuery.isLoading ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {Array.from({ length: 9 }).map((_, i) => (
+                        <div
+                          key={`bsk-${i}`}
+                          className="bg-neutral-100 border border-border h-[88px] animate-pulse"
+                        />
+                      ))}
+                    </div>
+                  ) : brandsQuery.isError ? (
+                    <div className="border border-accent-dark/40 bg-accent-dark/5 p-6 text-center">
+                      <AlertCircle className="w-5 h-5 text-accent-dark mx-auto mb-2" />
+                      <p className="text-xs font-bold uppercase tracking-widest text-accent-dark mb-3">
+                        Couldn't load brands
+                      </p>
                       <button
-                        key={brand}
-                        onClick={() => selectBrand(brand)}
-                        className="bg-neutral-50 border border-border p-4 hover:border-primary hover:bg-primary/5 transition-colors flex flex-col items-center gap-2"
+                        onClick={() => brandsQuery.refetch()}
+                        className="text-[10px] font-black uppercase tracking-widest text-primary hover:underline inline-flex items-center gap-1"
                       >
-                        <div className="w-10 h-10 bg-white border border-border flex items-center justify-center text-lg font-black text-primary">
-                          {brand.charAt(0)}
+                        <RefreshCw className="w-3 h-3" /> Retry
+                      </button>
+                    </div>
+                  ) : filteredBrands.length === 0 ? (
+                    <div className="text-center py-10 text-xs font-bold uppercase tracking-widest text-neutral-500">
+                      No brands available — please contact support.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {filteredBrands.map((brand) => (
+                        <button
+                          key={brand.id ?? brand.name}
+                          onClick={() => selectBrand(brand.name, brand.id, brand.slug)}
+                          className="bg-neutral-50 border border-border p-4 hover:border-primary hover:bg-primary/5 transition-colors flex flex-col items-center gap-2"
+                        >
+                          <div className="w-10 h-10 bg-white border border-border flex items-center justify-center text-lg font-black text-primary">
+                            {brand.name.charAt(0)}
+                          </div>
+                          <p className="text-[11px] font-bold uppercase tracking-tighter text-neutral-900 text-center leading-tight">
+                            {brand.name}
+                          </p>
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => selectBrand("Other", null, null)}
+                        className="bg-white border border-dashed border-border p-4 hover:border-primary transition-colors flex flex-col items-center gap-2"
+                      >
+                        <div className="w-10 h-10 bg-neutral-50 flex items-center justify-center text-base font-black text-neutral-400">
+                          +
                         </div>
-                        <p className="text-[11px] font-bold uppercase tracking-tighter text-neutral-900 text-center leading-tight">
-                          {brand}
+                        <p className="text-[11px] font-bold uppercase tracking-tighter text-neutral-500 text-center leading-tight">
+                          Other
                         </p>
                       </button>
-                    ))}
-                    <button
-                      onClick={() => selectBrand("Other")}
-                      className="bg-white border border-dashed border-border p-4 hover:border-primary transition-colors flex flex-col items-center gap-2"
-                    >
-                      <div className="w-10 h-10 bg-neutral-50 flex items-center justify-center text-base font-black text-neutral-400">
-                        +
-                      </div>
-                      <p className="text-[11px] font-bold uppercase tracking-tighter text-neutral-500 text-center leading-tight">
-                        Other
-                      </p>
-                    </button>
-                  </div>
+                    </div>
+                  )}
                 </div>
               )}
 
               {/* Step 2: Models */}
               {carStep === 2 && pendingCar.brand !== "Other" && (
                 <div className="flex-1 overflow-y-auto p-4">
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {filteredModels.map((model) => (
+                  {modelsQuery.isLoading ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {Array.from({ length: 6 }).map((_, i) => (
+                        <div
+                          key={`msk-${i}`}
+                          className="bg-neutral-100 border border-border h-[60px] animate-pulse"
+                        />
+                      ))}
+                    </div>
+                  ) : modelsQuery.isError ? (
+                    <div className="border border-accent-dark/40 bg-accent-dark/5 p-6 text-center">
+                      <AlertCircle className="w-5 h-5 text-accent-dark mx-auto mb-2" />
+                      <p className="text-xs font-bold uppercase tracking-widest text-accent-dark mb-3">
+                        Couldn't load models
+                      </p>
                       <button
-                        key={model}
-                        onClick={() => selectModel(model)}
-                        className="bg-neutral-50 border border-border p-4 hover:border-primary hover:bg-primary/5 transition-colors text-center"
+                        onClick={() => modelsQuery.refetch()}
+                        className="text-[10px] font-black uppercase tracking-widest text-primary hover:underline inline-flex items-center gap-1"
                       >
-                        <p className="text-[11px] font-bold uppercase tracking-tighter text-neutral-900 leading-tight">
-                          {model}
+                        <RefreshCw className="w-3 h-3" /> Retry
+                      </button>
+                    </div>
+                  ) : filteredModels.length === 0 ? (
+                    <div className="text-center py-10 text-xs font-bold uppercase tracking-widest text-neutral-500">
+                      No models available for this brand — please contact support.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {filteredModels.map((model) => (
+                        <button
+                          key={model.id ?? model.name}
+                          onClick={() => selectModel(model.name, model.id, model.slug)}
+                          className="bg-neutral-50 border border-border p-4 hover:border-primary hover:bg-primary/5 transition-colors text-center"
+                        >
+                          <p className="text-[11px] font-bold uppercase tracking-tighter text-neutral-900 leading-tight">
+                            {model.name}
+                          </p>
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => selectModel("Other", null, null)}
+                        className="bg-white border border-dashed border-border p-4 hover:border-primary transition-colors text-center"
+                      >
+                        <p className="text-[11px] font-bold uppercase tracking-tighter text-neutral-500 leading-tight">
+                          Other
                         </p>
                       </button>
-                    ))}
-                    <button
-                      onClick={() => selectModel("Other")}
-                      className="bg-white border border-dashed border-border p-4 hover:border-primary transition-colors text-center"
-                    >
-                      <p className="text-[11px] font-bold uppercase tracking-tighter text-neutral-500 leading-tight">
-                        Other
-                      </p>
-                    </button>
-                  </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -533,7 +647,7 @@ export default function BookingSidebar({
                   />
                   <button
                     onClick={() =>
-                      carSearch.trim() && selectModel(carSearch.trim())
+                      carSearch.trim() && selectModel(carSearch.trim(), null, null)
                     }
                     disabled={!carSearch.trim()}
                     className="btn-ink btn-ink-primary w-full py-3 text-xs font-black uppercase tracking-widest disabled:opacity-50"
@@ -546,26 +660,85 @@ export default function BookingSidebar({
               {/* Step 3: Fuel */}
               {carStep === 3 && (
                 <div className="flex-1 overflow-y-auto p-4">
-                  <div className="grid grid-cols-2 gap-3">
-                    {FUELS.map((f) => {
-                      const Icon = f.icon;
-                      return (
-                        <button
-                          key={f.id}
-                          onClick={() => selectFuel(f.id)}
-                          className="bg-neutral-50 border border-border p-5 hover:border-primary hover:bg-primary/5 transition-colors flex flex-col items-center gap-2"
-                        >
-                          <Icon className="w-6 h-6 text-primary" />
-                          <p className="text-xs font-black uppercase tracking-tighter text-neutral-900">
-                            {f.id}
-                          </p>
-                        </button>
-                      );
-                    })}
-                  </div>
+                  {fuelsQuery.isLoading ? (
+                    <div className="grid grid-cols-2 gap-3">
+                      {Array.from({ length: 4 }).map((_, i) => (
+                        <div
+                          key={`fsk-${i}`}
+                          className="bg-neutral-100 border border-border h-[88px] animate-pulse"
+                        />
+                      ))}
+                    </div>
+                  ) : fuelsQuery.isError ? (
+                    <div className="border border-accent-dark/40 bg-accent-dark/5 p-6 text-center">
+                      <AlertCircle className="w-5 h-5 text-accent-dark mx-auto mb-2" />
+                      <p className="text-xs font-bold uppercase tracking-widest text-accent-dark mb-3">
+                        Couldn't load fuel types
+                      </p>
+                      <button
+                        onClick={() => fuelsQuery.refetch()}
+                        className="text-[10px] font-black uppercase tracking-widest text-primary hover:underline inline-flex items-center gap-1"
+                      >
+                        <RefreshCw className="w-3 h-3" /> Retry
+                      </button>
+                    </div>
+                  ) : FUELS.length === 0 ? (
+                    <div className="text-center py-10 text-xs font-bold uppercase tracking-widest text-neutral-500">
+                      No fuel options available for this vehicle.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-3">
+                      {FUELS.map((f) => {
+                        const Icon = f.icon;
+                        return (
+                          <button
+                            key={`${f.apiId ?? f.label}`}
+                            onClick={() => selectFuel(f.label, f.apiId, f.apiSlug)}
+                            className="bg-neutral-50 border border-border p-5 hover:border-primary hover:bg-primary/5 transition-colors flex flex-col items-center gap-2"
+                          >
+                            <Icon className="w-6 h-6 text-primary" />
+                            <p className="text-xs font-black uppercase tracking-tighter text-neutral-900">
+                              {f.label}
+                            </p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
 
+              {/* Loading / error / empty are rendered inline above per step
+                  — keep the footer status line for any active fetch. */}
+              {(brandsQuery.isFetching ||
+                modelsQuery.isFetching ||
+                fuelsQuery.isFetching) && (
+                <div className="px-5 py-2 text-[10px] font-bold uppercase tracking-widest text-neutral-500 border-t border-border bg-neutral-50">
+                  Loading…
+                </div>
+              )}
+              {(brandsQuery.isError ||
+                modelsQuery.isError ||
+                fuelsQuery.isError) && (
+                <div className="px-5 py-2 flex items-center justify-between gap-3 text-[10px] font-bold uppercase tracking-widest text-accent-dark border-t border-border bg-neutral-50">
+                  <span>
+                    {(brandsQuery.error as Error | null)?.message ||
+                      (modelsQuery.error as Error | null)?.message ||
+                      (fuelsQuery.error as Error | null)?.message ||
+                      "Failed to load"}
+                  </span>
+                  <button
+                    onClick={() => {
+                      if (brandsQuery.isError) brandsQuery.refetch();
+                      if (modelsQuery.isError) modelsQuery.refetch();
+                      if (fuelsQuery.isError) fuelsQuery.refetch();
+                    }}
+                    className="flex items-center gap-1 text-primary hover:underline"
+                  >
+                    <RefreshCw className="w-3 h-3" /> Retry
+                  </button>
+                </div>
+              )}
               {/* Footer crumb */}
               <div className="px-5 py-3 border-t border-border bg-neutral-50 shrink-0 text-[10px] uppercase tracking-widest font-bold text-neutral-500 truncate">
                 {pendingCar.brand && (

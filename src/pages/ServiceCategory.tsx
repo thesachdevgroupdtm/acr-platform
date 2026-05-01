@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   CheckCircle2,
@@ -19,21 +19,25 @@ import {
   Wind,
   BatteryCharging,
   AlertCircle,
+  RefreshCw,
   ShoppingCart,
   User,
   Lock,
 } from "lucide-react";
 import {
-  DB_SUB_SERVICES,
-  DB_SERVICE_CATEGORIES,
   TESTIMONIALS,
   LOCATIONS,
-  CAR_DATA,
 } from "../data/businessData";
+import { useBrands, useModels } from "../hooks/useVehicle";
 import PageBanner from "../components/PageBanner";
-import { useCart } from "../data/useCart";
-import { useAuth } from "../data/useAuth";
-import { useBookingContext } from "../data/useBookingContext";
+import { useCart } from "../hooks/useCart";
+import { useAuth } from "../hooks/useAuth";
+import { useBookingContext } from "../hooks/useBookingContext";
+import {
+  fetchCategoryDetail,
+  type SubService as ApiSubService,
+} from "../lib/api";
+import { useApiQuery } from "../hooks/useApiQuery";
 
 interface ServiceCategoryProps {
   categorySlug: string;
@@ -67,7 +71,28 @@ export default function ServiceCategory({
   setCurrentPage,
   openEstimate,
 }: ServiceCategoryProps) {
-  const category = DB_SERVICE_CATEGORIES.find((c) => c.slug === categorySlug);
+  // ---------- API: category detail (skeleton-first; no static fallback) ----------
+  const { state: bookingCtx0 } = useBookingContext();
+  // /services/{slug} takes brand/model/fuel SLUGS per backend contract.
+  const carSlugs = useMemo(
+    () => ({
+      brand: bookingCtx0.car?.brand_slug ?? null,
+      model: bookingCtx0.car?.model_slug ?? null,
+      fuel: bookingCtx0.car?.fuel_slug ?? null,
+    }),
+    [bookingCtx0.car]
+  );
+  const detailQuery = useApiQuery(
+    ["category-detail", categorySlug, carSlugs],
+    (signal) => fetchCategoryDetail(categorySlug, carSlugs, signal)
+  );
+  const apiCategory = detailQuery.data?.category ?? null;
+  const apiSubServices: ApiSubService[] = detailQuery.data?.services ?? [];
+  const priceShowFromApi = Boolean(detailQuery.data?.price_show);
+  const isLoadingDetail = detailQuery.isLoading;
+  // For sections that need a stable display object — never null in render below;
+  // skeleton path returns early when no category resolved.
+  const category = apiCategory;
 
   // ---------- Cart ----------
   const { addItem, count } = useCart();
@@ -109,9 +134,18 @@ export default function ServiceCategory({
   const [carStep, setCarStep] = useState<1 | 2 | 3>(1);
   const [pendingCar, setPendingCar] = useState<{
     brand: string;
+    brandId: number | null;
     model: string;
-  }>({ brand: "", model: "" });
+  }>({ brand: "", brandId: null, model: "" });
   const [carSearch, setCarSearch] = useState("");
+
+  // ---------- Vehicle picker — pure API via React Query ----------
+  const brandsQuery = useBrands();
+  const modelsQuery = useModels(
+    showCarSelector && carStep === 2 ? pendingCar.brandId : null
+  );
+  const apiBrandRows = brandsQuery.data?.brands ?? [];
+  const apiModelRows = modelsQuery.data?.models ?? [];
 
   // ---------- Section nav scroll spy ----------
   useEffect(() => {
@@ -164,11 +198,37 @@ export default function ServiceCategory({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bookingLocation, bookingCar, bookingPhone, otpVerified, pricesShown]);
 
-  if (!category) {
-    return <div className="p-20 text-center">Category not found.</div>;
+  if (isLoadingDetail) {
+    return (
+      <div className="pt-8 pb-24">
+        <div className="site-container">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+            <div className="lg:col-span-2 space-y-8">
+              <div className="h-8 w-1/2 bg-neutral-200 animate-pulse" />
+              <div className="bg-white border border-border p-6 space-y-3">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="h-12 bg-neutral-100 animate-pulse" />
+                ))}
+              </div>
+            </div>
+            <aside className="space-y-4">
+              <div className="bg-white border border-border p-6 h-[420px] animate-pulse" />
+            </aside>
+          </div>
+        </div>
+      </div>
+    );
   }
 
-  const subServices = DB_SUB_SERVICES.filter((s) => s.sc_id === category.id);
+  if (!category) {
+    return (
+      <div className="p-20 text-center">
+        {detailQuery.error ? `Error: ${detailQuery.error}` : "Category not found."}
+      </div>
+    );
+  }
+
+  const subServices = apiSubServices;
 
   // ---------- Derived helpers ----------
   const selectedLocationName =
@@ -178,7 +238,9 @@ export default function ServiceCategory({
     : "Select Your Car";
 
   const cityWord = "Delhi NCR";
-  const brandList = Object.keys(CAR_DATA);
+  // Brand names — pure API. Empty during initial load; the modal/list
+  // rendering branches handle skeletons explicitly.
+  const brandList = apiBrandRows.map((b) => b.title);
 
   const scrollToSection = (id: string) => {
     const el = document.getElementById(id);
@@ -189,7 +251,7 @@ export default function ServiceCategory({
   };
 
   // ---------- Add-to-cart handler with brief flash feedback ----------
-  const handleAddToCart = (sub: (typeof subServices)[number]) => {
+  const handleAddToCart = (sub: ApiSubService) => {
     addItem({
       serviceId: String(sub.id),
       title: sub.title,
@@ -256,8 +318,8 @@ export default function ServiceCategory({
     setCarStep(1);
     setCarSearch("");
   };
-  const selectBrand = (brand: string) => {
-    setPendingCar({ brand, model: "" });
+  const selectBrand = (brand: string, brandId: number | null = null) => {
+    setPendingCar({ brand, brandId, model: "" });
     setCarStep(2);
     setCarSearch("");
   };
@@ -402,11 +464,9 @@ export default function ServiceCategory({
   const filteredBrands = brandList.filter((b) =>
     b.toLowerCase().includes(carSearch.toLowerCase())
   );
-  const filteredModels = (
-    pendingCar.brand && CAR_DATA[pendingCar.brand]
-      ? CAR_DATA[pendingCar.brand]
-      : []
-  ).filter((m) => m.toLowerCase().includes(carSearch.toLowerCase()));
+  const filteredModels = apiModelRows
+    .map((m) => m.title)
+    .filter((m) => m.toLowerCase().includes(carSearch.toLowerCase()));
   const filteredFuels = FUEL_TYPES.filter((f) =>
     f.name.toLowerCase().includes(carSearch.toLowerCase())
   );
@@ -584,6 +644,9 @@ export default function ServiceCategory({
 
                   {subServices.map((sub) => {
                     const justAdded = addedFlash === String(sub.id);
+                    // Show prices ONLY when user passed OTP AND API marks
+                    // the category as priced for the chosen vehicle.
+                    const showPrice = pricesShown && priceShowFromApi;
                     return (
                       <div
                         key={sub.id}
@@ -606,9 +669,9 @@ export default function ServiceCategory({
                           </p>
                         </div>
 
-                        {/* Price column — hidden until user completes Check Price */}
+                        {/* Price column — strictly API-driven */}
                         <div className="sm:text-right sm:w-28">
-                          {pricesShown ? (
+                          {showPrice ? (
                             <>
                               <p className="text-base font-black text-neutral-900">
                                 {sub.price ? `₹${sub.price}` : "Quote"}
@@ -629,7 +692,7 @@ export default function ServiceCategory({
 
                         {/* Action column — Add to Cart only after Check Price; else CTA */}
                         <div className="sm:w-32 sm:text-right">
-                          {pricesShown ? (
+                          {showPrice ? (
                             <button
                               onClick={() => handleAddToCart(sub)}
                               className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition-colors w-full sm:w-auto flex items-center justify-center gap-1.5 ${
@@ -850,19 +913,26 @@ export default function ServiceCategory({
                   major Indian and international car brand.
                 </p>
                 <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2 sm:gap-3">
-                  {brandList.map((brand) => (
-                    <div
-                      key={brand}
-                      className="bg-white border border-border p-3 sm:p-4 flex flex-col items-center justify-center text-center hover:border-primary transition-colors aspect-square"
-                    >
-                      <div className="w-8 h-8 sm:w-10 sm:h-10 bg-primary/10 text-primary flex items-center justify-center font-black text-base sm:text-lg uppercase tracking-tighter mb-1.5">
-                        {brand.charAt(0)}
-                      </div>
-                      <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-tighter text-neutral-900 leading-tight">
-                        {brand}
-                      </span>
-                    </div>
-                  ))}
+                  {brandsQuery.isLoading
+                    ? Array.from({ length: 12 }).map((_, i) => (
+                        <div
+                          key={`bgsk-${i}`}
+                          className="bg-neutral-100 border border-border aspect-square animate-pulse"
+                        />
+                      ))
+                    : brandList.map((brand) => (
+                        <div
+                          key={brand}
+                          className="bg-white border border-border p-3 sm:p-4 flex flex-col items-center justify-center text-center hover:border-primary transition-colors aspect-square"
+                        >
+                          <div className="w-8 h-8 sm:w-10 sm:h-10 bg-primary/10 text-primary flex items-center justify-center font-black text-base sm:text-lg uppercase tracking-tighter mb-1.5">
+                            {brand.charAt(0)}
+                          </div>
+                          <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-tighter text-neutral-900 leading-tight">
+                            {brand}
+                          </span>
+                        </div>
+                      ))}
                 </div>
               </section>
 
@@ -886,13 +956,12 @@ export default function ServiceCategory({
                     on-site.
                   </p>
                   <p>
-                    Whether you drive a {brandList[0]}{" "}
-                    {CAR_DATA[brandList[0]][0]}, a {brandList[1]}{" "}
-                    {CAR_DATA[brandList[1]][0]}, or a premium European brand,
-                    our advisors share a transparent quote upfront — what
-                    you're quoted is exactly what you pay. Every job is backed
-                    by a written warranty card and a 50-point post-service
-                    quality check before delivery.
+                    Whether you drive a {brandList[0] ?? "popular Indian"}, a{" "}
+                    {brandList[1] ?? "mid-segment"}, or a premium European
+                    brand, our advisors share a transparent quote upfront —
+                    what you're quoted is exactly what you pay. Every job is
+                    backed by a written warranty card and a 50-point
+                    post-service quality check before delivery.
                   </p>
                   <p>
                     Visit any of our{" "}
@@ -1267,75 +1336,134 @@ export default function ServiceCategory({
 
               <div className="flex-1 overflow-y-auto px-5 sm:px-6 pb-5">
                 {carStep === 1 && (
-                  <div className="grid grid-cols-3 gap-3">
-                    {filteredBrands.map((brand) => (
+                  brandsQuery.isLoading ? (
+                    <div className="grid grid-cols-3 gap-3">
+                      {Array.from({ length: 9 }).map((_, i) => (
+                        <div
+                          key={`mb-sk-${i}`}
+                          className="bg-neutral-100 border border-border aspect-square animate-pulse"
+                        />
+                      ))}
+                    </div>
+                  ) : brandsQuery.isError ? (
+                    <div className="border border-accent-dark/40 bg-accent-dark/5 p-6 text-center">
+                      <AlertCircle className="w-5 h-5 text-accent-dark mx-auto mb-2" />
+                      <p className="text-xs font-bold uppercase tracking-widest text-accent-dark mb-3">
+                        Couldn't load brands
+                      </p>
                       <button
-                        key={brand}
-                        onClick={() => selectBrand(brand)}
-                        className="bg-white border border-border p-3 sm:p-4 flex flex-col items-center justify-center text-center hover:border-primary hover:bg-primary/5 transition-colors aspect-square"
+                        onClick={() => brandsQuery.refetch()}
+                        className="text-[10px] font-black uppercase tracking-widest text-primary hover:underline inline-flex items-center gap-1"
                       >
-                        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-primary/10 text-primary flex items-center justify-center font-black text-lg sm:text-xl uppercase tracking-tighter mb-2">
-                          {brand.charAt(0)}
+                        <RefreshCw className="w-3 h-3" /> Retry
+                      </button>
+                    </div>
+                  ) : apiBrandRows.length === 0 ? (
+                    <div className="text-center py-8 text-xs font-bold uppercase tracking-widest text-neutral-500">
+                      No brands available — please contact support.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-3 gap-3">
+                      {filteredBrands.map((brand) => {
+                        const row = apiBrandRows.find((b) => b.title === brand);
+                        return (
+                          <button
+                            key={brand}
+                            onClick={() => selectBrand(brand, row?.id ?? null)}
+                            className="bg-white border border-border p-3 sm:p-4 flex flex-col items-center justify-center text-center hover:border-primary hover:bg-primary/5 transition-colors aspect-square"
+                          >
+                            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-primary/10 text-primary flex items-center justify-center font-black text-lg sm:text-xl uppercase tracking-tighter mb-2">
+                              {brand.charAt(0)}
+                            </div>
+                            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-tighter text-neutral-900 leading-tight">
+                              {brand}
+                            </span>
+                          </button>
+                        );
+                      })}
+                      <button
+                        onClick={() => selectBrand("Other", null)}
+                        className="bg-white border border-dashed border-border p-3 sm:p-4 flex flex-col items-center justify-center text-center hover:border-primary hover:bg-primary/5 transition-colors aspect-square"
+                      >
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-neutral-100 text-neutral-500 flex items-center justify-center font-black text-lg sm:text-xl uppercase tracking-tighter mb-2">
+                          ?
                         </div>
                         <span className="text-[10px] sm:text-xs font-bold uppercase tracking-tighter text-neutral-900 leading-tight">
-                          {brand}
+                          Other
                         </span>
                       </button>
-                    ))}
-                    <button
-                      onClick={() => selectBrand("Other")}
-                      className="bg-white border border-dashed border-border p-3 sm:p-4 flex flex-col items-center justify-center text-center hover:border-primary hover:bg-primary/5 transition-colors aspect-square"
-                    >
-                      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-neutral-100 text-neutral-500 flex items-center justify-center font-black text-lg sm:text-xl uppercase tracking-tighter mb-2">
-                        ?
-                      </div>
-                      <span className="text-[10px] sm:text-xs font-bold uppercase tracking-tighter text-neutral-900 leading-tight">
-                        Other
-                      </span>
-                    </button>
-                    {filteredBrands.length === 0 && carSearch && (
-                      <div className="col-span-3 text-center py-8 text-sm text-neutral-400">
-                        No brands match "{carSearch}". Tap{" "}
-                        <button
-                          onClick={() => selectBrand("Other")}
-                          className="text-primary font-bold underline"
-                        >
-                          Other
-                        </button>{" "}
-                        to continue.
-                      </div>
-                    )}
-                  </div>
+                      {filteredBrands.length === 0 && carSearch && (
+                        <div className="col-span-3 text-center py-8 text-sm text-neutral-400">
+                          No brands match "{carSearch}". Tap{" "}
+                          <button
+                            onClick={() => selectBrand("Other", null)}
+                            className="text-primary font-bold underline"
+                          >
+                            Other
+                          </button>{" "}
+                          to continue.
+                        </div>
+                      )}
+                    </div>
+                  )
                 )}
 
                 {carStep === 2 && pendingCar.brand !== "Other" && (
-                  <div className="grid grid-cols-3 gap-3">
-                    {filteredModels.map((model) => (
+                  modelsQuery.isLoading ? (
+                    <div className="grid grid-cols-3 gap-3">
+                      {Array.from({ length: 6 }).map((_, i) => (
+                        <div
+                          key={`mm-sk-${i}`}
+                          className="bg-neutral-100 border border-border min-h-[110px] animate-pulse"
+                        />
+                      ))}
+                    </div>
+                  ) : modelsQuery.isError ? (
+                    <div className="border border-accent-dark/40 bg-accent-dark/5 p-6 text-center">
+                      <AlertCircle className="w-5 h-5 text-accent-dark mx-auto mb-2" />
+                      <p className="text-xs font-bold uppercase tracking-widest text-accent-dark mb-3">
+                        Couldn't load models
+                      </p>
                       <button
-                        key={model}
-                        onClick={() => selectModel(model)}
-                        className="bg-white border border-border p-3 flex flex-col items-center justify-center text-center hover:border-primary hover:bg-primary/5 transition-colors min-h-[110px]"
+                        onClick={() => modelsQuery.refetch()}
+                        className="text-[10px] font-black uppercase tracking-widest text-primary hover:underline inline-flex items-center gap-1"
                       >
-                        <div className="w-12 h-8 bg-neutral-100 mb-2 flex items-center justify-center text-[8px] font-bold uppercase text-neutral-400 tracking-widest">
-                          CAR
+                        <RefreshCw className="w-3 h-3" /> Retry
+                      </button>
+                    </div>
+                  ) : apiModelRows.length === 0 ? (
+                    <div className="text-center py-8 text-xs font-bold uppercase tracking-widest text-neutral-500">
+                      No models available for {pendingCar.brand} — please contact support.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-3 gap-3">
+                      {filteredModels.map((model) => (
+                        <button
+                          key={model}
+                          onClick={() => selectModel(model)}
+                          className="bg-white border border-border p-3 flex flex-col items-center justify-center text-center hover:border-primary hover:bg-primary/5 transition-colors min-h-[110px]"
+                        >
+                          <div className="w-12 h-8 bg-neutral-100 mb-2 flex items-center justify-center text-[8px] font-bold uppercase text-neutral-400 tracking-widest">
+                            CAR
+                          </div>
+                          <span className="text-[10px] sm:text-xs font-bold uppercase tracking-tighter text-neutral-900 leading-tight">
+                            {model}
+                          </span>
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => selectModel("Other")}
+                        className="bg-white border border-dashed border-border p-3 flex flex-col items-center justify-center text-center hover:border-primary hover:bg-primary/5 transition-colors min-h-[110px]"
+                      >
+                        <div className="w-12 h-8 bg-neutral-100 mb-2 flex items-center justify-center text-base font-black text-neutral-500">
+                          ?
                         </div>
                         <span className="text-[10px] sm:text-xs font-bold uppercase tracking-tighter text-neutral-900 leading-tight">
-                          {model}
+                          Other
                         </span>
                       </button>
-                    ))}
-                    <button
-                      onClick={() => selectModel("Other")}
-                      className="bg-white border border-dashed border-border p-3 flex flex-col items-center justify-center text-center hover:border-primary hover:bg-primary/5 transition-colors min-h-[110px]"
-                    >
-                      <div className="w-12 h-8 bg-neutral-100 mb-2 flex items-center justify-center text-base font-black text-neutral-500">
-                        ?
-                      </div>
-                      <span className="text-[10px] sm:text-xs font-bold uppercase tracking-tighter text-neutral-900 leading-tight">
-                        Other
-                      </span>
-                    </button>
-                  </div>
+                    </div>
+                  )
                 )}
 
                 {carStep === 2 && pendingCar.brand === "Other" && (

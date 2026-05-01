@@ -12,7 +12,8 @@ import {
   Check,
   AlertCircle,
 } from "lucide-react";
-import { LOCATIONS, CAR_DATA } from "../data/businessData";
+import { LOCATIONS } from "../data/businessData";
+import { useBrands, useModels } from "../hooks/useVehicle";
 
 interface EstimateProcessProps {
   onClose: () => void;
@@ -181,13 +182,17 @@ export default function EstimateProcess({
     "Mechanical Work",
   ];
 
-  // Brand list comes from the data layer (real Indian-market brands).
-  const CAR_BRANDS = Object.keys(CAR_DATA);
-  // Model list depends on the currently selected brand.
-  const availableModels =
-    formData.make && formData.make !== "Other" && CAR_DATA[formData.make]
-      ? CAR_DATA[formData.make]
-      : [];
+  // Brand list — pure API. Models are fetched only after a brand is picked
+  // (useModels is enabled only when brandId is non-null).
+  const brandsQuery = useBrands();
+  const brandRows = brandsQuery.data?.brands ?? [];
+  const CAR_BRANDS = brandRows.map((b) => b.title);
+  const selectedBrandId =
+    formData.make && formData.make !== "Other"
+      ? brandRows.find((b) => b.title === formData.make)?.id ?? null
+      : null;
+  const modelsQuery = useModels(selectedBrandId);
+  const availableModels = (modelsQuery.data?.models ?? []).map((m) => m.title);
 
   // Steps definitions for the indicator
   const personalSteps: StepDef[] = [
@@ -633,8 +638,15 @@ export default function EstimateProcess({
                         setErrors((er) => ({ ...er, make: "" }));
                     }}
                     className={`${inputBase} ${inputBorder(errors.make)}`}
+                    disabled={brandsQuery.isLoading}
                   >
-                    <option value="">Select Brand</option>
+                    <option value="">
+                      {brandsQuery.isLoading
+                        ? "Loading brands…"
+                        : brandsQuery.isError
+                        ? "Couldn't load brands — retry below"
+                        : "Select Brand"}
+                    </option>
                     {CAR_BRANDS.map((brand) => (
                       <option key={brand} value={brand}>
                         {brand}
@@ -642,13 +654,22 @@ export default function EstimateProcess({
                     ))}
                     <option value="Other">Other</option>
                   </select>
+                  {brandsQuery.isError && (
+                    <button
+                      type="button"
+                      onClick={() => brandsQuery.refetch()}
+                      className="mt-1 text-[10px] font-bold uppercase tracking-widest text-primary hover:underline"
+                    >
+                      Retry loading brands
+                    </button>
+                  )}
                 </Field>
 
                 <Field label="Car Model" required error={errors.model}>
                   {formData.make && formData.make !== "Other" ? (
                     <select
                       value={formData.model}
-                      disabled={!formData.make}
+                      disabled={!formData.make || modelsQuery.isLoading}
                       onChange={(e) => {
                         setFormData({ ...formData, model: e.target.value });
                         if (errors.model)
@@ -658,7 +679,15 @@ export default function EstimateProcess({
                         errors.model
                       )} disabled:opacity-50 disabled:cursor-not-allowed`}
                     >
-                      <option value="">Select Model</option>
+                      <option value="">
+                        {modelsQuery.isLoading
+                          ? "Loading models…"
+                          : modelsQuery.isError
+                          ? "Couldn't load models"
+                          : availableModels.length === 0
+                          ? `No models for ${formData.make}`
+                          : "Select Model"}
+                      </option>
                       {availableModels.map((m) => (
                         <option key={m} value={m}>
                           {m}
