@@ -22,7 +22,8 @@ import {
   checkPasswordStrength,
   NAME_REGEX,
   PHONE_REGEX,
-} from "../data/useAuth";
+} from "../hooks/useAuth";
+import { FEATURES } from "../config/features";
 
 type Tab = "login" | "signup";
 
@@ -58,6 +59,61 @@ export default function AuthModal({
     onClose();
     if (redirectTo) setCurrentPage(redirectTo);
   };
+
+  // Auth backend not implemented yet — render a "coming soon" panel instead
+  // of the login/signup form. Re-enable by flipping FEATURES.auth → true.
+  if (!FEATURES.auth) {
+    return (
+      <AnimatePresence>
+        {isOpen && (
+          <div
+            key="auth-modal-disabled"
+            className="fixed inset-0 z-[10000] flex items-center justify-center p-3 sm:p-5"
+          >
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={onClose}
+              className="absolute inset-0 bg-neutral-900/95 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, y: 30, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 30, scale: 0.96 }}
+              transition={{ duration: 0.25, ease: "easeOut" }}
+              className="relative w-full max-w-md bg-white border border-border shadow-2xl p-8 sm:p-12 text-center"
+            >
+              <button
+                onClick={onClose}
+                aria-label="Close"
+                className="absolute top-4 right-4 p-2 text-neutral-500 hover:text-neutral-900"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <div className="mx-auto w-14 h-14 bg-primary/10 text-primary flex items-center justify-center mb-6">
+                <Shield className="w-7 h-7" />
+              </div>
+              <h2 className="text-2xl font-black uppercase tracking-tighter text-neutral-900 mb-3">
+                Accounts <span className="text-primary">Coming Soon.</span>
+              </h2>
+              <p className="text-sm text-neutral-600 leading-relaxed mb-8">
+                Sign-up and login are being finalised. You can still browse
+                services, configure your vehicle, and request a price quote
+                without an account.
+              </p>
+              <button
+                onClick={onClose}
+                className="btn-ink btn-ink-primary w-full py-4 text-sm font-black uppercase tracking-widest"
+              >
+                Continue browsing <ArrowRight className="w-4 h-4 btn-arrow" />
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    );
+  }
 
   return (
     <AnimatePresence>

@@ -1,24 +1,33 @@
 import { motion, AnimatePresence } from "motion/react";
-import { 
-  Menu, X, Phone, MessageCircle, MapPin, 
-  Facebook, Instagram, Youtube, Linkedin, 
+import {
+  Menu, X, Phone, MessageCircle, MapPin,
+  Facebook, Instagram, Youtube, Linkedin,
   CreditCard, Smartphone, ChevronDown, ChevronRight, Zap, ArrowRight,
   ShoppingCart, User, LogOut, Package, Car
 } from "lucide-react";
-import { useState, useRef, useLayoutEffect } from "react";
-import { BUSINESS_INFO, LOCATIONS, DB_SERVICE_CATEGORIES, DB_SUB_SERVICES } from "../data/businessData";
-import { useCart } from "../data/useCart";
-import { useAuth } from "../data/useAuth";
+import { useState, useRef, useLayoutEffect, useEffect } from "react";
+import { BUSINESS_INFO, LOCATIONS } from "../data/businessData";
+import { useCart } from "../hooks/useCart";
+import { useAuth } from "../hooks/useAuth";
+import {
+  fetchHome,
+  fetchCategoryDetail,
+  type ServiceCategory as ApiCategory,
+  type SubService as ApiSubService,
+} from "../lib/api";
+import { useApiQuery } from "../hooks/useApiQuery";
+import { FEATURES } from "../config/features";
 
 interface SubMenuProps {
-  subServices: any[];
+  subServices: ApiSubService[];
+  loading: boolean;
   categorySlug: string;
   setCurrentPage: (page: string) => void;
   setActiveDropdown: (d: string | null) => void;
   setActiveSubDropdown: (d: string | null) => void;
 }
 
-function SubMenu({ subServices, categorySlug, setCurrentPage, setActiveDropdown, setActiveSubDropdown }: SubMenuProps) {
+function SubMenu({ subServices, loading, categorySlug, setCurrentPage, setActiveDropdown, setActiveSubDropdown }: SubMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
@@ -77,20 +86,27 @@ function SubMenu({ subServices, categorySlug, setCurrentPage, setActiveDropdown,
       className="fixed bg-white border border-border shadow-2xl py-2 min-w-[240px] flex flex-col max-h-[80vh] overflow-y-auto scroll-smooth [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-neutral-200 [&::-webkit-scrollbar-thumb]:rounded-full shadow-[inset_0_-15px_15px_-15px_rgba(0,0,0,0.1),inset_0_15px_15px_-15px_rgba(0,0,0,0.1)] z-[10000]"
       style={{ top: '-9999px', left: '-9999px' }}
     >
-      {subServices.map(sub => (
-        <button
-          key={sub.id}
-          onClick={(e) => {
-            e.stopPropagation();
-            setCurrentPage(`service-${categorySlug}/${sub.slug}`);
-            setActiveDropdown(null);
-            setActiveSubDropdown(null);
-          }}
-          className="w-full text-left px-6 py-2.5 text-[11px] font-bold uppercase text-neutral-600 hover:bg-neutral-50 hover:text-primary transition-all border-l-2 border-transparent hover:border-primary block"
-        >
-          {sub.title}
-        </button>
-      ))}
+      {loading
+        ? Array.from({ length: 4 }).map((_, i) => (
+            <div
+              key={`subsk-${i}`}
+              className="mx-6 my-2 h-3 w-32 bg-neutral-200 animate-pulse rounded"
+            />
+          ))
+        : subServices.map((sub) => (
+            <button
+              key={sub.id}
+              onClick={(e) => {
+                e.stopPropagation();
+                setCurrentPage(`service-${categorySlug}/${sub.slug}`);
+                setActiveDropdown(null);
+                setActiveSubDropdown(null);
+              }}
+              className="w-full text-left px-6 py-2.5 text-[11px] font-bold uppercase text-neutral-600 hover:bg-neutral-50 hover:text-primary transition-all border-l-2 border-transparent hover:border-primary block"
+            >
+              {sub.title}
+            </button>
+          ))}
     </motion.div>
   );
 }
@@ -111,6 +127,49 @@ export default function Header({ currentPage, setCurrentPage, openEstimate, open
   // Cart and auth hooks - drive the header e-commerce icons
   const { count: cartCount } = useCart();
   const { user, isAuthenticated, logout } = useAuth();
+
+  // ── Service categories: API-driven (single dedupe-cached request) ──
+  const home = useApiQuery(["home"], (signal) => fetchHome(signal));
+  const apiCategories: ApiCategory[] = home.data?.service_categories ?? [];
+
+  // ── Sub-services per category: lazy-fetched on first dropdown open ──
+  // subsCache[slug] === undefined -> not loaded yet
+  // subsCache[slug] === []        -> loaded with 0 results (or failed)
+  const [subsCache, setSubsCache] = useState<Record<string, ApiSubService[]>>({});
+  const [subsLoading, setSubsLoading] = useState<boolean>(false);
+  const [subsLoaded, setSubsLoaded] = useState<boolean>(false);
+
+  // Trigger one-time parallel fetch when "services" dropdown is first opened.
+  useEffect(() => {
+    if (activeDropdown !== "services") return;
+    if (subsLoaded || subsLoading) return;
+    if (apiCategories.length === 0) return;
+
+    const ctrl = new AbortController();
+    let cancelled = false;
+    setSubsLoading(true);
+
+    Promise.all(
+      apiCategories.map((c) =>
+        fetchCategoryDetail(c.slug, undefined, ctrl.signal)
+          .then((res) => ({ slug: c.slug, list: res?.services ?? [] }))
+          .catch(() => ({ slug: c.slug, list: [] as ApiSubService[] }))
+      )
+    ).then((results) => {
+      if (cancelled) return;
+      const next: Record<string, ApiSubService[]> = {};
+      for (const r of results) next[r.slug] = r.list;
+      setSubsCache(next);
+      setSubsLoading(false);
+      setSubsLoaded(true);
+    });
+
+    return () => {
+      cancelled = true;
+      ctrl.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeDropdown, apiCategories.map((c) => c.slug).join("|")]);
 
   const navItems = [
     { name: "Home", id: "home" },
@@ -188,8 +247,12 @@ export default function Header({ currentPage, setCurrentPage, openEstimate, open
             {/* Divider */}
             <span className="hidden sm:block w-px h-3 bg-white/20" />
 
-            {/* Auth: Login / Sign Up OR Logged-in user menu */}
-            {!isAuthenticated ? (
+            {/* Auth: Login / Sign Up OR Logged-in user menu.
+                When FEATURES.auth is off the entry buttons are hidden so
+                we don't surface controls that lead to a "coming soon" modal.
+                The user menu branch never shows because isAuthenticated is
+                gated to false in the hook. */}
+            {!FEATURES.auth ? null : !isAuthenticated ? (
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => openAuth("login")}
@@ -423,14 +486,29 @@ export default function Header({ currentPage, setCurrentPage, openEstimate, open
                     >
                       <div className="flex flex-col relative">
                         {item.id === "services" && (
-                          DB_SERVICE_CATEGORIES.map((category) => {
-                            const subServices = DB_SUB_SERVICES.filter(s => s.sc_id === category.id);
-                            const hasSubs = subServices.length > 0;
+                          home.isLoading ? (
+                            Array.from({ length: 6 }).map((_, i) => (
+                              <div
+                                key={`catsk-${i}`}
+                                className="mx-6 my-2 h-3 w-40 bg-neutral-200 animate-pulse rounded"
+                              />
+                            ))
+                          ) : home.error ? (
+                            <p className="px-6 py-3 text-[11px] font-bold uppercase tracking-widest text-accent-dark">
+                              Could not load services.
+                            </p>
+                          ) : (
+                          apiCategories.map((category) => {
+                            const cached = subsCache[category.slug];
+                            const subServices = cached ?? [];
+                            const subActive = activeSubDropdown === String(category.id);
+                            // Show submenu placeholder while loading; hide arrow only when loaded with 0 subs.
+                            const showArrow = !subsLoaded || subServices.length > 0;
                             return (
-                              <div 
-                                key={category.id} 
+                              <div
+                                key={category.id}
                                 className="relative group/sub"
-                                onMouseEnter={() => hasSubs && setActiveSubDropdown(category.id)}
+                                onMouseEnter={() => setActiveSubDropdown(String(category.id))}
                                 onMouseLeave={() => setActiveSubDropdown(null)}
                               >
                                 <button
@@ -443,15 +521,16 @@ export default function Header({ currentPage, setCurrentPage, openEstimate, open
                                   className="w-full flex items-center justify-between text-left px-6 py-2.5 text-[11px] font-bold uppercase text-neutral-600 hover:bg-neutral-50 hover:text-primary transition-all border-l-2 border-transparent hover:border-primary"
                                 >
                                   {category.title}
-                                  {hasSubs && <ArrowRight className="w-4 h-4 ml-2" />}
+                                  {showArrow && <ArrowRight className="w-4 h-4 ml-2" />}
                                 </button>
 
                                 {/* Third Level Dropdown (Sub Services) */}
                                 <AnimatePresence>
-                                  {hasSubs && activeSubDropdown === category.id && (
-                                    <SubMenu 
-                                      subServices={subServices} 
-                                      categorySlug={category.slug} 
+                                  {subActive && showArrow && (
+                                    <SubMenu
+                                      subServices={subServices}
+                                      loading={!cached && subsLoading}
+                                      categorySlug={category.slug}
                                       setCurrentPage={setCurrentPage}
                                       setActiveDropdown={setActiveDropdown}
                                       setActiveSubDropdown={setActiveSubDropdown}
@@ -461,6 +540,7 @@ export default function Header({ currentPage, setCurrentPage, openEstimate, open
                               </div>
                             );
                           })
+                          )
                         )}
                         {item.id === "service-centers" && (
                           LOCATIONS.map((loc) => (
@@ -552,38 +632,61 @@ export default function Header({ currentPage, setCurrentPage, openEstimate, open
                   {item.hasDropdown && activeDropdown === item.id && (
                     <div className="flex flex-col pl-4 border-l-2 border-primary/20 mt-2 gap-2">
                       {item.id === "services" && (
-                        DB_SERVICE_CATEGORIES.map((category) => {
-                          const subServices = DB_SUB_SERVICES.filter(s => s.sc_id === category.id);
-                          return (
-                            <div key={category.id} className="flex flex-col">
-                              <button
-                                onClick={() => {
-                                  setCurrentPage(`category-${category.slug}`);
-                                  setIsMenuOpen(false);
-                                }}
-                                className="text-left py-2 text-sm font-bold uppercase text-neutral-500 hover:text-primary transition-colors"
-                              >
-                                {category.title}
-                              </button>
-                              {subServices.length > 0 && (
-                                <div className="flex flex-col pl-4 border-l-2 border-border/50 ml-2 mb-2 gap-1">
-                                  {subServices.map(sub => (
-                                    <button
-                                      key={sub.id}
-                                      onClick={() => {
-                                        setCurrentPage(`service-${category.slug}/${sub.slug}`);
-                                        setIsMenuOpen(false);
-                                      }}
-                                      className="text-left py-1.5 text-xs font-bold uppercase text-neutral-400 hover:text-primary transition-colors"
-                                    >
-                                      {sub.title}
-                                    </button>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })
+                        home.isLoading ? (
+                          Array.from({ length: 5 }).map((_, i) => (
+                            <div
+                              key={`mcatsk-${i}`}
+                              className="my-2 h-4 w-44 bg-neutral-200 animate-pulse rounded"
+                            />
+                          ))
+                        ) : home.error ? (
+                          <p className="py-2 text-xs font-bold uppercase tracking-widest text-accent-dark">
+                            Could not load services.
+                          </p>
+                        ) : (
+                          apiCategories.map((category) => {
+                            const subServices = subsCache[category.slug] ?? [];
+                            return (
+                              <div key={category.id} className="flex flex-col">
+                                <button
+                                  onClick={() => {
+                                    setCurrentPage(`category-${category.slug}`);
+                                    setIsMenuOpen(false);
+                                  }}
+                                  className="text-left py-2 text-sm font-bold uppercase text-neutral-500 hover:text-primary transition-colors"
+                                >
+                                  {category.title}
+                                </button>
+                                {subsLoading && !subsLoaded && (
+                                  <div className="flex flex-col pl-4 border-l-2 border-border/50 ml-2 mb-2 gap-2">
+                                    {Array.from({ length: 3 }).map((_, j) => (
+                                      <div
+                                        key={j}
+                                        className="h-3 w-32 bg-neutral-200 animate-pulse rounded"
+                                      />
+                                    ))}
+                                  </div>
+                                )}
+                                {subsLoaded && subServices.length > 0 && (
+                                  <div className="flex flex-col pl-4 border-l-2 border-border/50 ml-2 mb-2 gap-1">
+                                    {subServices.map((sub) => (
+                                      <button
+                                        key={sub.id}
+                                        onClick={() => {
+                                          setCurrentPage(`service-${category.slug}/${sub.slug}`);
+                                          setIsMenuOpen(false);
+                                        }}
+                                        className="text-left py-1.5 text-xs font-bold uppercase text-neutral-400 hover:text-primary transition-colors"
+                                      >
+                                        {sub.title}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })
+                        )
                       )}
                       {item.id === "service-centers" && (
                         LOCATIONS.map((loc) => (
