@@ -94,3 +94,30 @@ export interface UpdateProfileRequest {
   name?: string;
   email?: string | null;
 }
+
+/* ───────────── Addresses (Phase 2.2) ───────────── */
+
+/**
+ * Body for POST /user/addresses and PUT /user/addresses/{id}.
+ * On POST: line1/city/state/pincode are required. On PUT all fields
+ * are optional (PATCH-style); empty body returns 422.
+ */
+export interface AddressInput {
+  label?: string;
+  line1: string;
+  line2?: string | null;
+  city: string;
+  state: string;
+  /** 6 digits, regex /^\d{6}$/ on the server. */
+  pincode: string;
+  landmark?: string | null;
+  is_default?: boolean;
+}
+
+export interface AddressesResponse {
+  addresses: AddressResource[];
+}
+
+export interface AddressResponse {
+  address: AddressResource;
+}

@@ -16,9 +16,9 @@ import {
   Tag,
 } from "lucide-react";
 import PageBanner from "../components/PageBanner";
-import { useCart, useCheckout } from "../data/useCart";
-import { useAuth } from "../data/useAuth";
-import { useBookingContext } from "../data/useBookingContext";
+import { useCart, useCheckout } from "../hooks/useCart";
+import { useAuth } from "../hooks/useAuth";
+import { useBookingContext } from "../hooks/useBookingContext";
 import {
   LOCATIONS,
   OFFERS,
@@ -41,7 +41,7 @@ const GST_PCT = 18;
 export default function Checkout({ setCurrentPage, openAuth }: CheckoutProps) {
   const { items, subtotal, count } = useCart();
   const { details, setDetails } = useCheckout();
-  const { user, isAuthenticated, setDefaults, addAddress } = useAuth();
+  const { user, isAuthenticated, setDefaults } = useAuth();
   // Pull synced booking context — gives us the car the user already chose
   // on the parent service category page, so we can save it to their profile.
   const { state: booking } = useBookingContext();
@@ -155,15 +155,11 @@ export default function Checkout({ setCurrentPage, openAuth }: CheckoutProps) {
           car: booking.car || undefined,
           location: details.serviceCenter,
         });
-        // Only save the address if it's new (not the one already on file)
-        const alreadySaved = user?.addresses?.some(
-          (a) =>
-            a.address.trim().toLowerCase() ===
-            details.address.trim().toLowerCase()
-        );
-        if (!alreadySaved && details.address.trim()) {
-          addAddress(details.address, "Service Address", true);
-        }
+        // Address persistence is gated to Phase 2.5 — the proper address
+        // picker UI lands with the order/checkout flow. The /user/addresses
+        // CRUD is live (Phase 2.2) but Checkout's free-form single-string
+        // address can't be split into the structured fields the API
+        // expects, so we no-op here until the picker is wired in.
       }
       setCurrentPage("payment");
     }

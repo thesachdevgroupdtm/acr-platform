@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\V1\ImportController;
 use App\Http\Controllers\Api\V1\PageController;
 use App\Http\Controllers\Api\V1\PricingController;
 use App\Http\Controllers\Api\V1\ServiceController;
+use App\Http\Controllers\Api\V1\User\AddressController;
 use App\Http\Controllers\Api\V1\User\ProfileController;
 use App\Http\Controllers\Api\V1\VehicleController;
 use Illuminate\Support\Facades\Route;
@@ -65,5 +66,11 @@ Route::prefix('v1')->group(function () {
         Route::post('auth/logout',  LogoutController::class)->middleware('throttle:user-write');
         Route::get('user/profile',  [ProfileController::class, 'show'])->middleware('throttle:user-read');
         Route::put('user/profile',  [ProfileController::class, 'update'])->middleware('throttle:user-write');
+
+        // Phase 2.2 — addresses (per /PHASE2_CONTRACT.md §5.2).
+        Route::get   ('user/addresses',             [AddressController::class, 'index'])  ->middleware('throttle:user-read');
+        Route::post  ('user/addresses',             [AddressController::class, 'store'])  ->middleware('throttle:user-write');
+        Route::put   ('user/addresses/{address}',   [AddressController::class, 'update']) ->middleware('throttle:user-write');
+        Route::delete('user/addresses/{address}',   [AddressController::class, 'destroy'])->middleware('throttle:user-write');
     });
 });

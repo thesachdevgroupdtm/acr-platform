@@ -300,3 +300,4 @@ Static evidence supporting these expectations:
 
 Per the brief, this report is the last step before the single
 commit. Phase 2.2 (addresses) is NOT started.
+Single commit hash: 5a2b83cfb29893cb4e4b03a16f6e6f82f78fb8ae

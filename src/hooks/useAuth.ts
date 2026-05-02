@@ -22,17 +22,23 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   ApiError,
+  deleteAddress as deleteAddressApi,
+  fetchAddresses,
   fetchProfile,
+  postAddress,
   postLeadCapture,
   postLogin,
   postLogout,
   postVerifyOtp,
+  putAddress,
   putProfile,
   getToken,
   setToken,
 } from "../lib/api";
 import { FEATURES } from "../config/features";
 import type {
+  AddressInput,
+  AddressResource,
   LeadCaptureResponse,
   LoginResponse,
   OtpChannel,
@@ -135,9 +141,32 @@ function writeDefaults(d: { defaultCar?: AcrUser["defaultCar"]; defaultLocation?
   } catch { /* swallow */ }
 }
 
-/** Maps the API UserResource (Phase 2.1) into AcrUser (consumer shape). */
-function presentUser(api: UserResource): AcrUser {
+/** Flattens an AddressResource into the legacy `SavedAddress` shape used
+ *  by Cart/Checkout/Header. The full resource is also exposed via
+ *  `useAuth().addresses` for callers that need structured access. */
+function flattenAddress(a: AddressResource): SavedAddress {
+  const lines = [a.line1, a.line2, a.city, a.state, a.pincode]
+    .filter((s): s is string => Boolean(s && s.trim().length))
+    .join(", ");
+  return {
+    id:        String(a.id),
+    label:     a.label,
+    address:   lines,
+    isDefault: a.is_default,
+  };
+}
+
+/** Maps the API UserResource (Phase 2.1) into AcrUser (consumer shape).
+ *  When the caller has loaded a fuller address list, pass `serverList`
+ *  so the consumer-facing `addresses` array reflects every row, not just
+ *  default. */
+function presentUser(api: UserResource, serverList?: AddressResource[]): AcrUser {
   const defaults = readDefaults();
+  const addresses: SavedAddress[] = serverList
+    ? serverList.map(flattenAddress)
+    : api.default_address
+      ? [flattenAddress(api.default_address)]
+      : [];
   return {
     id:             String(api.id),
     name:           api.name,
@@ -146,14 +175,7 @@ function presentUser(api: UserResource): AcrUser {
     phoneVerified:  api.is_verified_phone,
     emailVerified:  api.is_verified_email,
     bookings:       [],                            // Phase 2.5
-    addresses:      api.default_address
-      ? [{
-          id:        String(api.default_address.id),
-          label:     api.default_address.label,
-          address:   api.default_address.line1,
-          isDefault: true,
-        }]
-      : [],                                        // Phase 2.2 fully populates
+    addresses,
     defaultCar:     defaults.defaultCar,
     defaultLocation:defaults.defaultLocation,
     createdAt:      api.created_at,
@@ -341,15 +363,76 @@ export function useAuth() {
     []
   );
 
-  /* ── Address: gated to Phase 2.2 ── */
-  const addAddress = useCallback(
-    async (_address: string, _label = "Default", _makeDefault = true) => {
-      // Phase 2.2 — /user/addresses endpoint not yet shipped.
-      // Existing callers (Checkout) invoke this opportunistically; no-op
-      // here keeps them working without a flag check at the call site.
-      return;
+  /* ── Addresses (Phase 2.2) ──
+   * The consumer-facing surface mirrors the four endpoints in
+   * /PHASE2_CONTRACT.md §5.2. After a successful mutation we re-pull
+   * `/user/profile` so `default_address` on the cached UserResource
+   * stays in sync — that's what Header/Checkout read for the default. */
+
+  /** Lists all addresses from the server. Returns the raw API rows so
+   *  callers (e.g. a future address picker) can render the full set. */
+  const listAddresses = useCallback(
+    async ():
+      Promise<{ success: true; addresses: AddressResource[] } | { success: false; error: string }> => {
+      if (!FEATURES.auth) return { success: false, error: "Auth disabled." };
+      try {
+        const res = await fetchAddresses();
+        // Refresh the consumer-facing user object with the full list.
+        const profile = await fetchProfile();
+        setUser(presentUser(profile.user, res.addresses));
+        return { success: true, addresses: res.addresses };
+      } catch (e) {
+        return { success: false, error: extractError(e) };
+      }
     },
     []
+  );
+
+  /** Creates a new address. Caller passes structured fields; the server
+   *  enforces the "exactly one default per user" invariant. */
+  const addAddress = useCallback(
+    async (input: AddressInput):
+      Promise<{ success: true; address: AddressResource } | { success: false; error: string }> => {
+      if (!FEATURES.auth) return { success: false, error: "Auth disabled." };
+      try {
+        const res = await postAddress(input);
+        await listAddresses();   // refreshes both user.addresses and default_address
+        return { success: true, address: res.address };
+      } catch (e) {
+        return { success: false, error: extractError(e) };
+      }
+    },
+    [listAddresses]
+  );
+
+  const updateAddress = useCallback(
+    async (id: number, patch: Partial<AddressInput>):
+      Promise<{ success: true; address: AddressResource } | { success: false; error: string }> => {
+      if (!FEATURES.auth) return { success: false, error: "Auth disabled." };
+      try {
+        const res = await putAddress(id, patch);
+        await listAddresses();
+        return { success: true, address: res.address };
+      } catch (e) {
+        return { success: false, error: extractError(e) };
+      }
+    },
+    [listAddresses]
+  );
+
+  const deleteAddress = useCallback(
+    async (id: number):
+      Promise<{ success: true } | { success: false; error: string }> => {
+      if (!FEATURES.auth) return { success: false, error: "Auth disabled." };
+      try {
+        await deleteAddressApi(id);
+        await listAddresses();
+        return { success: true };
+      } catch (e) {
+        return { success: false, error: extractError(e) };
+      }
+    },
+    [listAddresses]
   );
 
   /* ── Booking: gated to Phase 2.5 ── */
@@ -378,7 +461,10 @@ export function useAuth() {
     logout,
     updateProfile,
     setDefaults,
+    listAddresses,
     addAddress,
+    updateAddress,
+    deleteAddress,
     addBooking,
   };
 }

@@ -474,6 +474,9 @@ export const fetchPage = (slug: string, signal?: AbortSignal) =>
  * don't bloat this module).
  */
 import type {
+  AddressInput,
+  AddressResponse,
+  AddressesResponse,
   LeadCaptureRequest,
   LeadCaptureResponse,
   LoginRequest,
@@ -506,3 +509,20 @@ export const fetchProfile = (signal?: AbortSignal) =>
 
 export const putProfile = (req: UpdateProfileRequest, signal?: AbortSignal) =>
   apiPut<ProfileResponse>("/user/profile", req, signal);
+
+/* ───────────── Phase 2.2 — Addresses ───────────── */
+
+export const fetchAddresses = (signal?: AbortSignal) =>
+  apiGet<AddressesResponse>("/user/addresses", undefined, signal);
+
+export const postAddress = (input: AddressInput, signal?: AbortSignal) =>
+  apiPost<AddressResponse>("/user/addresses", input, signal);
+
+export const putAddress = (
+  id: number,
+  input: Partial<AddressInput>,
+  signal?: AbortSignal
+) => apiPut<AddressResponse>(`/user/addresses/${id}`, input, signal);
+
+export const deleteAddress = (id: number, signal?: AbortSignal) =>
+  apiDelete<{ success: true }>(`/user/addresses/${id}`, undefined, signal);

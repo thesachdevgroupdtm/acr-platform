@@ -21,8 +21,10 @@ class ProfileController extends Controller
 {
     public function show(Request $request): JsonResponse
     {
+        $user = $request->user()->load('defaultAddress');
+
         return response()->json([
-            'user' => new UserResource($request->user()),
+            'user' => new UserResource($user),
         ]);
     }
 
@@ -55,7 +57,7 @@ class ProfileController extends Controller
         $user->save();
 
         return response()->json([
-            'user' => new UserResource($user->fresh()),
+            'user' => new UserResource($user->fresh()->load('defaultAddress')),
         ]);
     }
 }

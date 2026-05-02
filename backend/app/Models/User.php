@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
@@ -54,5 +55,24 @@ class User extends Authenticatable
     public function otps(): HasMany
     {
         return $this->hasMany(OtpVerification::class);
+    }
+
+    /**
+     * Phase 2.2 — addresses owned by this user.
+     */
+    public function addresses(): HasMany
+    {
+        return $this->hasMany(Address::class);
+    }
+
+    /**
+     * Phase 2.2 — eager-loadable single default address.
+     * "Exactly one is_default=true per user" is enforced by
+     * AddressController; this hasOne returns the first match if that
+     * invariant ever broke.
+     */
+    public function defaultAddress(): HasOne
+    {
+        return $this->hasOne(Address::class)->where('is_default', true);
     }
 }
