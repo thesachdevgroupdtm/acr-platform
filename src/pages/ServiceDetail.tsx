@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import {
   CheckCircle2,
   ArrowRight,
@@ -15,15 +16,15 @@ import {
   Phone,
 } from "lucide-react";
 import {
-  DB_SUB_SERVICES,
-  DB_SERVICE_CATEGORIES,
   TESTIMONIALS,
   LOCATIONS,
 } from "../data/businessData";
 import PageBanner from "../components/PageBanner";
-import { useCart } from "../data/useCart";
-import { useBookingContext } from "../data/useBookingContext";
-import { useAuth } from "../data/useAuth";
+import { useCart } from "../hooks/useCart";
+import { useBookingContext } from "../hooks/useBookingContext";
+import { useAuth } from "../hooks/useAuth";
+import { fetchServiceDetail } from "../lib/api";
+import { useApiQuery } from "../hooks/useApiQuery";
 
 interface ServiceDetailProps {
   categorySlug: string;
@@ -38,18 +39,52 @@ export default function ServiceDetail({
   setCurrentPage,
   openEstimate,
 }: ServiceDetailProps) {
-  const category = DB_SERVICE_CATEGORIES.find((c) => c.slug === categorySlug);
-  const service = DB_SUB_SERVICES.find(
-    (s) => s.slug === serviceSlug && s.sc_id === category?.id
-  );
-
   const { addItem, count } = useCart();
   // Pull synced booking state from parent ServiceCategory page
   const { state: booking } = useBookingContext();
   const { user, isAuthenticated } = useAuth();
 
+  // ---------- API: service detail (skeleton-first) ----------
+  const carIds = useMemo(
+    () => ({
+      brand_id: booking.car?.brand_id ?? null,
+      model_id: booking.car?.model_id ?? null,
+      fuel_id: booking.car?.fuel_id ?? null,
+    }),
+    [booking.car]
+  );
+  const detailQuery = useApiQuery(
+    ["service-detail", categorySlug, serviceSlug, carIds],
+    (signal) =>
+      fetchServiceDetail(categorySlug, serviceSlug, carIds, signal)
+  );
+
+  if (detailQuery.isLoading) {
+    return (
+      <div className="pt-8 pb-24">
+        <div className="site-container">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 animate-pulse">
+            <div className="lg:col-span-2 space-y-6">
+              <div className="h-8 w-2/3 bg-neutral-200" />
+              <div className="h-4 w-full bg-neutral-100" />
+              <div className="h-72 bg-neutral-100" />
+            </div>
+            <div className="bg-white border border-border h-[420px] bg-neutral-50" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const category = detailQuery.data?.category ?? null;
+  const service = detailQuery.data?.service ?? null;
+
   if (!category || !service) {
-    return <div className="p-20 text-center">Service not found.</div>;
+    return (
+      <div className="p-20 text-center">
+        {detailQuery.error ? `Error: ${detailQuery.error}` : "Service not found."}
+      </div>
+    );
   }
 
   // Booking can only be added to cart once user has completed Check Price
@@ -72,6 +107,9 @@ export default function ServiceDetail({
       categorySlug: category.slug,
       car: booking.car || undefined,
       location: selectedLocationName,
+      brand_id: booking.car?.brand_id,
+      model_id: booking.car?.model_id,
+      fuel_id:  booking.car?.fuel_id,
     });
   };
 
@@ -160,10 +198,11 @@ export default function ServiceDetail({
     },
   ];
 
+  const timeUnit = service.time_takes_option || "Hour";
   const timeUnitPlural =
     service.time_takes && Number(service.time_takes) > 1
-      ? `${service.time_unit}s`
-      : service.time_unit;
+      ? `${timeUnit}s`
+      : timeUnit;
 
   const faqs = [
     {
@@ -528,9 +567,8 @@ export default function ServiceDetail({
                   <span className="text-primary">SERVICES.</span>
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {DB_SUB_SERVICES.filter(
-                    (s) => s.sc_id === category.id && s.id !== service.id
-                  )
+                  {(detailQuery.data?.related ?? [])
+                    .filter((s) => s.id !== service.id)
                     .slice(0, 2)
                     .map((related) => (
                       <div

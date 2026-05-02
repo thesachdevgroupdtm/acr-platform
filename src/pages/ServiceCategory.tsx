@@ -259,6 +259,9 @@ export default function ServiceCategory({
       categorySlug: category.slug,
       car: bookingCar || undefined,
       location: selectedLocationName,
+      brand_id: bookingCar?.brand_id,
+      model_id: bookingCar?.model_id,
+      fuel_id:  bookingCar?.fuel_id,
     });
     setAddedFlash(String(sub.id));
     window.setTimeout(() => setAddedFlash(null), 1800);

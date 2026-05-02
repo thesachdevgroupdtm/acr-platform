@@ -75,4 +75,22 @@ class User extends Authenticatable
     {
         return $this->hasOne(Address::class)->where('is_default', true);
     }
+
+    /**
+     * Phase 2.3 — every cart this user has ever owned (any status).
+     */
+    public function carts(): HasMany
+    {
+        return $this->hasMany(Cart::class);
+    }
+
+    /**
+     * Phase 2.3 — the user's currently active cart, if any. The
+     * CartSession middleware firstOrCreates exactly one active row
+     * per (user_id, status='active'), so this hasOne is safe.
+     */
+    public function activeCart(): HasOne
+    {
+        return $this->hasOne(Cart::class)->where('status', 'active');
+    }
 }

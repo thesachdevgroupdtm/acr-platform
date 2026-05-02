@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\V1\Auth\LoginController;
 use App\Http\Controllers\Api\V1\Auth\LogoutController;
 use App\Http\Controllers\Api\V1\Auth\SendOtpController;
 use App\Http\Controllers\Api\V1\Auth\VerifyOtpController;
+use App\Http\Controllers\Api\V1\Cart\CartController;
 use App\Http\Controllers\Api\V1\HomeController;
 use App\Http\Controllers\Api\V1\ImportController;
 use App\Http\Controllers\Api\V1\PageController;
@@ -72,5 +73,17 @@ Route::prefix('v1')->group(function () {
         Route::post  ('user/addresses',             [AddressController::class, 'store'])  ->middleware('throttle:user-write');
         Route::put   ('user/addresses/{address}',   [AddressController::class, 'update']) ->middleware('throttle:user-write');
         Route::delete('user/addresses/{address}',   [AddressController::class, 'destroy'])->middleware('throttle:user-write');
+    });
+
+    // Phase 2.3 — server-authoritative cart (per /PHASE2_CONTRACT.md §5.3).
+    // The cart-session middleware accepts EITHER a sanctum token OR an
+    // X-Cart-Session UUID header. /cart/merge (guest → user) lands in 2.4.
+    Route::middleware('cart-session')->group(function () {
+        Route::get   ('cart',                  [CartController::class, 'show'])         ->middleware('throttle:user-read');
+        Route::post  ('cart/items',            [CartController::class, 'addItem'])      ->middleware('throttle:cart-write');
+        Route::put   ('cart/items/{item}',     [CartController::class, 'updateItem'])   ->middleware('throttle:cart-write');
+        Route::delete('cart/items/{item}',     [CartController::class, 'removeItem'])   ->middleware('throttle:cart-write');
+        Route::post  ('cart/coupon',           [CartController::class, 'applyCoupon'])  ->middleware('throttle:cart-write');
+        Route::delete('cart/coupon',           [CartController::class, 'removeCoupon']) ->middleware('throttle:cart-write');
     });
 });

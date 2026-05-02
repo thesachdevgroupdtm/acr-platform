@@ -58,6 +58,7 @@ class Kernel extends HttpKernel
         'auth.session' => \Illuminate\Session\Middleware\AuthenticateSession::class,
         'cache.headers' => \Illuminate\Http\Middleware\SetCacheHeaders::class,
         'can' => \Illuminate\Auth\Middleware\Authorize::class,
+        'cart-session' => \App\Http\Middleware\CartSession::class,
         'guest' => \App\Http\Middleware\RedirectIfAuthenticated::class,
         'import.token' => \App\Http\Middleware\VerifyImportToken::class,
         'password.confirm' => \Illuminate\Auth\Middleware\RequirePassword::class,

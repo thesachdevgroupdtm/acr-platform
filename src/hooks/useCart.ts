@@ -1,149 +1,298 @@
 /**
- * useCart — global cart state for ACR.
+ * useCart — server-authoritative cart (Phase 2.3).
  *
- * - Source of truth (UI):  localStorage (same as before — zero UX change).
- * - When the user is authenticated, items are mirrored to the server via
- *   POST /cart/sync so /checkout/* endpoints can transform them into orders.
- *   The mirror is best-effort and debounced; failures don't block UX.
+ * Source of truth: the backend `/cart/*` endpoints. The browser holds
+ * a guest UUID in `localStorage` only as a session identifier — the
+ * cart contents themselves are never read from local storage. When a
+ * sanctum bearer token is set on `api`, the cart resolves by user;
+ * when not, the X-Cart-Session header carries the UUID.
  *
- * Public hook signature unchanged: items, addItem, updateQty, removeItem,
- * clearCart, subtotal, count.
+ * Public surface preserved for compile compatibility with existing
+ * pages (Cart, Header, Services, ServiceCategory, ServiceDetail,
+ * Checkout, Payment):
+ *   { items, addItem, updateQty, removeItem, clearCart, subtotal, count }
+ *
+ * `addItem` accepts the legacy fields (serviceId, title, price,
+ * categorySlug, car?, location?) AND optional brand_id/model_id/
+ * fuel_id. When all three IDs are present the request includes a
+ * structured `vehicle` block so the server can pick a vehicle-
+ * specific price from `service_prices`. When IDs are missing the
+ * server falls back to the service's `base_price` (or 422s if that
+ * is also unset).
+ *
+ * Coupon mutations are stubbed to throw — the /cart/coupon
+ * endpoints are 501 in this commit and light up in Phase 2.6.
  */
-import { useEffect, useRef, useState } from "react";
-import { apiPost, getToken } from "../lib/api";
-import { FEATURES } from "../config/features";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import {
+  ApiError,
+  deleteCartItem as deleteCartItemApi,
+  fetchCart,
+  getToken,
+  postCartItem,
+  putCartItem,
+} from "../lib/api";
+import type {
+  AddCartItemRequest,
+  CartItemResource,
+  CartResource,
+} from "../types/api";
+
+/* ─────────────────── Public types (legacy, preserved) ─────────────────── */
 
 export interface CartItem {
-  /** Unique row id — `serviceId-timestamp` so duplicates can coexist if needed. */
   id: string;
   serviceId: string;
   title: string;
-  /** Per-unit price in INR. May be 0 if "quote-only". */
   price: number;
   qty: number;
   categorySlug: string;
-  /** Optional context captured at add-time (from booking card on category). */
   car?: { brand: string; model: string; fuel: string };
   location?: string;
 }
 
-const KEY = "acr_cart_v1";
-const EVENT = "acr-cart-updated";
+/* ─────────────────── Session UUID ─────────────────── */
 
-const safeRead = (): CartItem[] => {
+const SESSION_KEY = "acr_cart_session";
+
+/** Returns a stable per-browser UUID, generating one on first call. */
+function ensureSessionUuid(): string {
+  if (typeof window === "undefined") return "";
   try {
-    if (typeof window === "undefined") return [];
-    const raw = window.localStorage.getItem(KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    const existing = window.localStorage.getItem(SESSION_KEY);
+    if (existing) return existing;
+    const generated = generateUuid();
+    window.localStorage.setItem(SESSION_KEY, generated);
+    return generated;
   } catch {
-    return [];
+    return generateUuid();
   }
-};
-
-const safeWrite = (items: CartItem[]) => {
-  try {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(KEY, JSON.stringify(items));
-    window.dispatchEvent(new Event(EVENT));
-  } catch {
-    /* swallow — storage may be disabled */
-  }
-};
-
-export function useCart() {
-  const [items, setItems] = useState<CartItem[]>(() => safeRead());
-
-  useEffect(() => {
-    // Same-tab updates (other instances of this hook)
-    const onLocal = () => setItems(safeRead());
-    // Cross-tab updates (other browser tabs)
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === KEY) setItems(safeRead());
-    };
-    window.addEventListener(EVENT, onLocal);
-    window.addEventListener("storage", onStorage);
-    return () => {
-      window.removeEventListener(EVENT, onLocal);
-      window.removeEventListener("storage", onStorage);
-    };
-  }, []);
-
-  // ── Best-effort server mirror (only when feature flag on AND authenticated) ──
-  const syncTimer = useRef<number | undefined>(undefined);
-  useEffect(() => {
-    if (!FEATURES.cartSync) return;       // /cart/sync route not implemented yet
-    if (!getToken() || items.length === 0) return;
-    if (syncTimer.current) window.clearTimeout(syncTimer.current);
-    syncTimer.current = window.setTimeout(() => {
-      const payload = items
-        .map((i) => {
-          const sid = Number(i.serviceId);
-          if (!Number.isFinite(sid) || sid <= 0) return null;
-          return { service_id: sid, qty: i.qty };
-        })
-        .filter(Boolean);
-      if (payload.length === 0) return;
-      apiPost("/cart/sync", { items: payload }).catch((e) => {
-        if (typeof console !== "undefined") {
-          console.warn("Cart sync failed:", e?.message || e);
-        }
-        /* server cart will re-sync on next change */
-      });
-    }, 600);
-    return () => {
-      if (syncTimer.current) window.clearTimeout(syncTimer.current);
-    };
-  }, [items]);
-
-  // Add an item; if the same serviceId is already in the cart, bump qty by 1.
-  const addItem = (
-    item: Omit<CartItem, "id" | "qty"> & { qty?: number }
-  ) => {
-    const current = safeRead();
-    const existing = current.find((i) => i.serviceId === item.serviceId);
-    if (existing) {
-      existing.qty += item.qty ?? 1;
-      // Refresh contextual fields (latest car/location wins)
-      if (item.car) existing.car = item.car;
-      if (item.location) existing.location = item.location;
-      safeWrite(current);
-      return;
-    }
-    const next: CartItem = {
-      id: `${item.serviceId}-${Date.now()}`,
-      serviceId: item.serviceId,
-      title: item.title,
-      price: item.price,
-      qty: item.qty ?? 1,
-      categorySlug: item.categorySlug,
-      car: item.car,
-      location: item.location,
-    };
-    safeWrite([...current, next]);
-  };
-
-  const updateQty = (id: string, qty: number) => {
-    const next = safeRead()
-      .map((i) => (i.id === id ? { ...i, qty: Math.max(1, qty) } : i))
-      .filter((i) => i.qty > 0);
-    safeWrite(next);
-  };
-
-  const removeItem = (id: string) => {
-    safeWrite(safeRead().filter((i) => i.id !== id));
-  };
-
-  const clearCart = () => safeWrite([]);
-
-  const subtotal = items.reduce((sum, i) => sum + (i.price || 0) * i.qty, 0);
-  const count = items.reduce((sum, i) => sum + i.qty, 0);
-
-  return { items, addItem, updateQty, removeItem, clearCart, subtotal, count };
 }
 
-// ---------- Checkout details (separate slice, same persistence pattern) ----------
+function generateUuid(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  // RFC4122 v4 fallback (only fires on ancient browsers/SSR)
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+/** Send X-Cart-Session only when there's no bearer token. */
+function activeSessionUuid(): string | undefined {
+  if (getToken()) return undefined;
+  return ensureSessionUuid();
+}
+
+/* ─────────────────── Server → legacy mapping ─────────────────── */
+
+function presentItem(api: CartItemResource): CartItem {
+  const meta = (api.meta ?? {}) as Record<string, unknown>;
+  const car = meta.car as CartItem["car"] | undefined;
+  const location = typeof meta.location === "string" ? meta.location : undefined;
+
+  return {
+    id:           String(api.id),
+    serviceId:    String(api.ref_id),
+    title:        api.display_title || (typeof meta.title === "string" ? meta.title : ""),
+    price:        api.unit_price_snapshot,
+    qty:          api.quantity,
+    categorySlug: api.category_slug ?? (typeof meta.category_slug === "string" ? meta.category_slug : ""),
+    car,
+    location,
+  };
+}
+
+/* ─────────────────── Hook ─────────────────── */
+
+export function useCart() {
+  const qc = useQueryClient();
+
+  // Re-key the query whenever the auth token flips so a login/logout
+  // immediately refetches the right cart (user vs. guest).
+  const token = useTokenFlag();
+
+  const cartQuery = useQuery<CartResource>({
+    queryKey: ["cart", token ? "user" : "guest"],
+    queryFn: async () => (await fetchCart(activeSessionUuid())).cart,
+    staleTime: 30_000,
+  });
+
+  const cart = cartQuery.data;
+
+  const items: CartItem[] = useMemo(
+    () => (cart ? cart.items.map(presentItem) : []),
+    [cart],
+  );
+
+  const subtotal = cart?.totals.subtotal ?? 0;
+  const count    = cart?.item_count ?? 0;
+
+  const invalidate = useCallback(() => {
+    qc.invalidateQueries({ queryKey: ["cart"] });
+  }, [qc]);
+
+  const addMutation = useMutation({
+    mutationFn: async (req: AddCartItemRequest) => {
+      const res = await postCartItem(req, activeSessionUuid());
+      return res.cart;
+    },
+    onSuccess: (newCart) => {
+      qc.setQueryData(["cart", token ? "user" : "guest"], newCart);
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, body }: { id: number; body: { quantity?: number; vehicle?: AddCartItemRequest["vehicle"] } }) => {
+      const res = await putCartItem(id, body, activeSessionUuid());
+      return res.cart;
+    },
+    onSuccess: (newCart) => {
+      qc.setQueryData(["cart", token ? "user" : "guest"], newCart);
+    },
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await deleteCartItemApi(id, activeSessionUuid());
+      return res.cart;
+    },
+    onSuccess: (newCart) => {
+      qc.setQueryData(["cart", token ? "user" : "guest"], newCart);
+    },
+  });
+
+  /* ─────── Legacy-shape mutations the rest of the app calls ─────── */
+
+  /**
+   * Adds a service to the cart. Pass `brand_id`/`model_id`/`fuel_id`
+   * (all three) for a priced add; otherwise the server uses the
+   * service's `base_price` and 422s if that is unset.
+   */
+  const addItem = useCallback(
+    (item: Omit<CartItem, "id" | "qty"> & {
+      qty?: number;
+      brand_id?: number;
+      model_id?: number;
+      fuel_id?: number;
+    }) => {
+      const refId = Number(item.serviceId);
+      if (!Number.isFinite(refId) || refId <= 0) return;
+
+      const vehicle =
+        item.brand_id && item.model_id && item.fuel_id
+          ? { brand_id: item.brand_id, model_id: item.model_id, fuel_id: item.fuel_id }
+          : undefined;
+
+      const meta: Record<string, unknown> = {
+        title:         item.title,
+        category_slug: item.categorySlug,
+      };
+      if (item.car) meta.car = item.car;
+      if (item.location) meta.location = item.location;
+
+      void addMutation.mutateAsync({
+        kind:     "service",
+        ref_id:   refId,
+        quantity: item.qty ?? 1,
+        vehicle,
+        meta,
+      }).catch((e) => {
+        if (typeof console !== "undefined") {
+          const msg = e instanceof ApiError ? e.message : String(e);
+          console.warn("[useCart] addItem failed:", msg);
+        }
+      });
+    },
+    [addMutation],
+  );
+
+  const updateQty = useCallback(
+    (id: string, qty: number) => {
+      const numericId = Number(id);
+      if (!Number.isFinite(numericId) || numericId <= 0) return;
+      void updateMutation.mutateAsync({ id: numericId, body: { quantity: Math.max(1, qty) } }).catch(() => {});
+    },
+    [updateMutation],
+  );
+
+  const removeItem = useCallback(
+    (id: string) => {
+      const numericId = Number(id);
+      if (!Number.isFinite(numericId) || numericId <= 0) return;
+      void removeMutation.mutateAsync(numericId).catch(() => {});
+    },
+    [removeMutation],
+  );
+
+  /**
+   * Clears the cart by deleting every item sequentially. The server
+   * will land a `/cart` DELETE in 2.4 alongside merge — for now this
+   * is the fastest correct path with the existing endpoints.
+   */
+  const clearCart = useCallback(async () => {
+    if (!cart) return;
+    for (const it of cart.items) {
+      try {
+        await deleteCartItemApi(it.id, activeSessionUuid());
+      } catch { /* swallow — best-effort */ }
+    }
+    invalidate();
+  }, [cart, invalidate]);
+
+  /* ─────── Coupons (501 until 2.6) ─────── */
+
+  const applyCoupon = useCallback(async (_code: string): Promise<{ success: false; error: string }> => {
+    return { success: false, error: "Coupons are coming soon (Phase 2.6)." };
+  }, []);
+
+  const removeCoupon = useCallback(async (): Promise<{ success: false; error: string }> => {
+    return { success: false, error: "Coupons are coming soon (Phase 2.6)." };
+  }, []);
+
+  return {
+    items,
+    addItem,
+    updateQty,
+    removeItem,
+    clearCart,
+    subtotal,
+    count,
+    /** Server-side cart resource (use directly when you need richer fields). */
+    cart,
+    /** Coupon stubs — will return 501-equivalent until 2.6. */
+    applyCoupon,
+    removeCoupon,
+    isLoading: cartQuery.isLoading,
+    isError:   cartQuery.isError,
+  };
+}
+
+/* ─────────────────── Token-flag hook ─────────────────── */
+/**
+ * Returns true if a bearer token is currently set. Listens to the
+ * `acr-token-updated` event fired by setToken() so the cart query
+ * key flips when the user logs in/out.
+ */
+function useTokenFlag(): boolean {
+  const [hasToken, setHasToken] = useState(!!getToken());
+  useEffect(() => {
+    const onUpdate = () => setHasToken(!!getToken());
+    window.addEventListener("acr-token-updated", onUpdate);
+    return () => window.removeEventListener("acr-token-updated", onUpdate);
+  }, []);
+  return hasToken;
+}
+
+/* ─────────────────── useCheckout (unchanged from Phase 2.1) ─────────────────── */
 
 export interface CheckoutDetails {
   name: string;
@@ -193,9 +342,7 @@ const writeCheckout = (details: CheckoutDetails) => {
 };
 
 export function useCheckout() {
-  const [details, setDetailsState] = useState<CheckoutDetails>(() =>
-    readCheckout()
-  );
+  const [details, setDetailsState] = useState<CheckoutDetails>(() => readCheckout());
 
   useEffect(() => {
     const onLocal = () => setDetailsState(readCheckout());

@@ -113,6 +113,9 @@ export default function Services({ setCurrentPage }: ServicesProps) {
       categorySlug,
       car: booking.car || undefined,
       location: booking.location || undefined,
+      brand_id: booking.car?.brand_id,
+      model_id: booking.car?.model_id,
+      fuel_id:  booking.car?.fuel_id,
     });
     setAddedFlash(String(sub.id));
     setTimeout(() => setAddedFlash(null), 1800);

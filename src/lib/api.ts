@@ -116,6 +116,8 @@ interface ApiOptions {
   allowUnauthorized?: boolean;
   /** Pass a FormData/File body — skips JSON serialization + Content-Type. */
   multipart?: boolean;
+  /** Per-request headers (e.g. X-Cart-Session for guest carts). */
+  headers?: Record<string, string>;
 }
 
 function buildUrl(path: string, query?: Query): string {
@@ -137,13 +139,19 @@ export async function api<T = unknown>(
   path: string,
   opts: ApiOptions = {}
 ): Promise<T> {
-  const { method = "GET", body, query, signal, allowUnauthorized, multipart } = opts;
+  const { method = "GET", body, query, signal, allowUnauthorized, multipart, headers: extra } = opts;
 
   const headers: Record<string, string> = { Accept: "application/json" };
   if (body !== undefined && !multipart) headers["Content-Type"] = "application/json";
 
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
+
+  if (extra) {
+    for (const [k, v] of Object.entries(extra)) {
+      if (v !== undefined && v !== null) headers[k] = v;
+    }
+  }
 
   if (!API_BASE_URL && !path.startsWith("http")) {
     throw new ApiError(
@@ -474,9 +482,11 @@ export const fetchPage = (slug: string, signal?: AbortSignal) =>
  * don't bloat this module).
  */
 import type {
+  AddCartItemRequest,
   AddressInput,
   AddressResponse,
   AddressesResponse,
+  CartResponse,
   LeadCaptureRequest,
   LeadCaptureResponse,
   LoginRequest,
@@ -484,6 +494,7 @@ import type {
   ProfileResponse,
   SendOtpRequest,
   SendOtpResponse,
+  UpdateCartItemRequest,
   UpdateProfileRequest,
   VerifyOtpRequest,
   VerifyOtpResponse,
@@ -526,3 +537,51 @@ export const putAddress = (
 
 export const deleteAddress = (id: number, signal?: AbortSignal) =>
   apiDelete<{ success: true }>(`/user/addresses/${id}`, undefined, signal);
+
+/* ───────────── Phase 2.3 — Cart ─────────────
+ * Cart endpoints accept either a Bearer token (sanctum) or an
+ * X-Cart-Session UUID header (guest). When a Bearer token is
+ * present the api() helper auto-attaches it; for guests we pass
+ * the session UUID through `headers`. Callers (useCart) decide
+ * which path applies on every request.
+ */
+
+function cartHeaders(sessionUuid?: string | null): Record<string, string> | undefined {
+  if (!sessionUuid) return undefined;
+  return { "X-Cart-Session": sessionUuid };
+}
+
+export const fetchCart = (sessionUuid?: string | null, signal?: AbortSignal) =>
+  api<CartResponse>("/cart", { method: "GET", signal, headers: cartHeaders(sessionUuid) });
+
+export const postCartItem = (
+  req: AddCartItemRequest,
+  sessionUuid?: string | null,
+  signal?: AbortSignal,
+) =>
+  api<CartResponse>("/cart/items", { method: "POST", body: req, signal, headers: cartHeaders(sessionUuid) });
+
+export const putCartItem = (
+  id: number,
+  req: UpdateCartItemRequest,
+  sessionUuid?: string | null,
+  signal?: AbortSignal,
+) =>
+  api<CartResponse>(`/cart/items/${id}`, { method: "PUT", body: req, signal, headers: cartHeaders(sessionUuid) });
+
+export const deleteCartItem = (
+  id: number,
+  sessionUuid?: string | null,
+  signal?: AbortSignal,
+) =>
+  api<CartResponse>(`/cart/items/${id}`, { method: "DELETE", signal, headers: cartHeaders(sessionUuid) });
+
+export const postCartCoupon = (
+  code: string,
+  sessionUuid?: string | null,
+  signal?: AbortSignal,
+) =>
+  api<CartResponse>("/cart/coupon", { method: "POST", body: { code }, signal, headers: cartHeaders(sessionUuid) });
+
+export const deleteCartCoupon = (sessionUuid?: string | null, signal?: AbortSignal) =>
+  api<CartResponse>("/cart/coupon", { method: "DELETE", signal, headers: cartHeaders(sessionUuid) });

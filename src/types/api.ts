@@ -121,3 +121,63 @@ export interface AddressesResponse {
 export interface AddressResponse {
   address: AddressResource;
 }
+
+/* ───────────── Cart (Phase 2.3) ───────────── */
+
+/**
+ * Per /PHASE2_CONTRACT.md §4.3 / §9. Only `service` is reachable in
+ * 2.3; `package` and `product` light up in 2.6 alongside their
+ * tables. The frontend should hard-route on `kind === 'service'`
+ * for the foreseeable future.
+ */
+export type CartItemKind = "service" | "package" | "product";
+
+export interface CartItemResource {
+  id: number;
+  kind: CartItemKind;
+  ref_id: number;
+  display_title: string;
+  category_slug: string | null;
+  image: string | null;
+  unit_price_snapshot: number;
+  quantity: number;
+  line_total: number;
+  vehicle: { brand_id: number | null; model_id: number | null; fuel_id: number | null } | null;
+  meta: Record<string, unknown> | null;
+}
+
+export interface CartTotals {
+  subtotal: number;
+  discount: number;
+  coupon: { code: string; type: string; value: number } | null;
+  tax: number;
+  total: number;
+}
+
+export interface CartResource {
+  id: number;
+  status: "active" | "converted" | "abandoned";
+  currency: string;
+  expires_at: string | null;
+  item_count: number;
+  items: CartItemResource[];
+  totals: CartTotals;
+  is_user_cart: boolean;
+}
+
+export interface CartResponse {
+  cart: CartResource;
+}
+
+export interface AddCartItemRequest {
+  kind: CartItemKind;
+  ref_id: number;
+  quantity?: number;
+  vehicle?: { brand_id: number; model_id: number; fuel_id: number };
+  meta?: Record<string, unknown>;
+}
+
+export interface UpdateCartItemRequest {
+  quantity?: number;
+  vehicle?: { brand_id: number; model_id: number; fuel_id: number };
+}
