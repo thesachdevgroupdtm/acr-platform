@@ -104,17 +104,48 @@ export default function ServiceDetail({
   });
   const inCart = !!cartItem;
 
+  // Phase 2.3.5 — strict vehicle-only price state machine. Use the
+  // top-level `vehicle_price` from /services/{cat}/{slug} response,
+  // NOT `service.price` (which silently falls back to base_price
+  // server-side when no priced row matches and would re-introduce
+  // the flicker). The 4 states map 1:1 to the sidebar UI below.
+  type PriceState =
+    | { kind: "no-vehicle" }
+    | { kind: "loading" }
+    | { kind: "price"; value: number }
+    | { kind: "no-price" };
+  const vehicleSelected = !!(
+    booking.car?.brand_id && booking.car?.model_id && booking.car?.fuel_id
+  );
+  const detailLoading = vehicleSelected && detailQuery.isLoading;
+  const vehiclePrice =
+    typeof detailQuery.data?.vehicle_price === "number"
+      ? detailQuery.data.vehicle_price
+      : null;
+  const priceState: PriceState = !vehicleSelected
+    ? { kind: "no-vehicle" }
+    : detailLoading
+    ? { kind: "loading" }
+    : vehiclePrice != null
+    ? { kind: "price", value: vehiclePrice }
+    : { kind: "no-price" };
+
   // ---------- Page-level constants (no location-tied content) ----------
   const cityWord = "Delhi NCR";
-  const priceDisplay = service.price
-    ? `Starting at ₹${service.price}`
-    : "Get Custom Quote";
+  const priceDisplay =
+    priceState.kind === "price"
+      ? `Starting at ₹${priceState.value}`
+      : "Get Custom Quote";
 
   const handleAddToCart = () => {
     addItem({
       serviceId: String(service.id),
       title: service.title,
-      price: Number(service.price) || 0,
+      // Phase 2.3.5 — addItem's `price` is a legacy display hint;
+      // the server re-snapshots authoritatively from service_prices
+      // on every POST /cart/items. We pass the resolved vehicle
+      // price when available; the backend ignores it for pricing.
+      price: priceState.kind === "price" ? priceState.value : 0,
       categorySlug: category.slug,
       car: booking.car || undefined,
       location: selectedLocationName,
@@ -224,8 +255,11 @@ export default function ServiceDetail({
     },
     {
       q: `What is the ${service.title.toLowerCase()} cost?`,
-      a: service.price
-        ? `${service.title} starts at ₹${service.price}. The final ${category.title.toLowerCase()} cost depends on car make, model and parts grade. We share a transparent quote upfront.`
+      // Phase 2.3.5 — FAQ answer references the resolved vehicle
+      // price when available, otherwise omits the number entirely.
+      // We never render base_price here either.
+      a: priceState.kind === "price"
+        ? `${service.title} starts at ₹${priceState.value}. The final ${category.title.toLowerCase()} cost depends on car make, model and parts grade. We share a transparent quote upfront.`
         : `${service.title} pricing depends on car make, model and parts required. We offer transparent, upfront quotes at all our centres.`,
     },
     {
@@ -712,12 +746,37 @@ export default function ServiceDetail({
                 </h3>
                 {canBook ? (
                   <>
-                    <p className="text-3xl sm:text-4xl font-black mb-1">
-                      {service.price ? `₹${service.price}` : "Get Quote"}
-                    </p>
-                    <p className="text-[10px] text-white/70 uppercase tracking-widest mb-5">
-                      Starting price · Final after inspection
-                    </p>
+                    {/* Phase 2.3.5 — strict 4-state machine; never base_price. */}
+                    {priceState.kind === "loading" ? (
+                      <div className="h-10 sm:h-12 w-32 bg-white/20 animate-pulse rounded mb-1" />
+                    ) : priceState.kind === "price" ? (
+                      <>
+                        <p className="text-3xl sm:text-4xl font-black mb-1">
+                          ₹{priceState.value}
+                        </p>
+                        <p className="text-[10px] text-white/70 uppercase tracking-widest mb-5">
+                          Starting price · Final after inspection
+                        </p>
+                      </>
+                    ) : priceState.kind === "no-price" ? (
+                      <>
+                        <p className="text-2xl sm:text-3xl font-black mb-1">
+                          Quote on Inspection
+                        </p>
+                        <p className="text-[10px] text-white/70 uppercase tracking-widest mb-5">
+                          Final after inspection
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-2xl sm:text-3xl font-black mb-1">
+                          Select Your Car
+                        </p>
+                        <p className="text-[10px] text-white/70 uppercase tracking-widest mb-5">
+                          Pick brand · model · fuel to see your price
+                        </p>
+                      </>
+                    )}
                   </>
                 ) : (
                   <>
@@ -755,14 +814,16 @@ export default function ServiceDetail({
                           ? removeItem(String(cartItem.id))
                           : handleAddToCart()
                       }
-                      // Phase 2.3.4 — ADDED state inherits identical sizing
-                      // from the base button; only the inner border tint
-                      // changes so the toggle is unambiguous on the
-                      // primary-colored sidebar background.
-                      className={`w-full py-3.5 font-black uppercase tracking-tighter text-sm flex items-center justify-center gap-2 transition-colors mb-3 border ${
-                        inCart
-                          ? "bg-white text-primary border-primary hover:bg-primary/5"
-                          : "bg-white text-primary border-white hover:bg-white/90"
+                      // Phase 2.3.5 — ADDED state inherits the BOOK NOW
+                      // button's `btn-ink btn-ink-white` ink-sweep hover
+                      // so the two sit-side-by-side and feel identical
+                      // on hover. Base ADDED look is white-on-blue with
+                      // a primary border; sweep paints `bg-neutral-100`
+                      // on hover for visible feedback. Add-to-Cart uses
+                      // the same btn-ink-white base for visual parity
+                      // (no ADDED border so it reads as the primary CTA).
+                      className={`btn-ink btn-ink-white w-full py-3.5 font-black uppercase tracking-tighter text-sm justify-center gap-2 mb-3 ${
+                        inCart ? "border border-primary" : ""
                       }`}
                       aria-pressed={inCart}
                     >

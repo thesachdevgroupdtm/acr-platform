@@ -106,11 +106,19 @@ export default function Services({ setCurrentPage }: ServicesProps) {
     [servicesQuery.data?.available_category_ids]
   );
 
-  // Phase 2.3.4 — vehicle-specific prices. /services list endpoint
-  // returns base_price only by design (SubServiceResource); to match
-  // ServiceCategory + ServiceDetail, POST /pricing once with every
-  // visible service id and override base_price in render. Skipped
-  // when bookingCar lacks any of the three IDs.
+  // Phase 2.3.5 — vehicle-specific prices ONLY. Base_price is never
+  // shown to users; the row's price column is a 4-state machine
+  // driven by `priceFor` below:
+  //   no-vehicle → "Check Price" CTA (existing UX)
+  //   loading    → skeleton bar (no number rendered)
+  //   price      → ₹{vehicle-specific value}
+  //   no-price   → "Quote on Inspection"
+  // The /services list endpoint deliberately returns base_price only
+  // (see SubServiceResource); we POST /pricing for every visible
+  // service id and never fall back to base_price for display.
+  const vehicleSelected = !!(
+    booking.car?.brand_id && booking.car?.model_id && booking.car?.fuel_id
+  );
   const allServiceIds = useMemo(() => {
     const ids: number[] = [];
     for (const c of apiCategories) {
@@ -119,21 +127,14 @@ export default function Services({ setCurrentPage }: ServicesProps) {
     return ids;
   }, [apiCategories]);
   const pricingReq = useMemo(() => {
-    if (
-      !booking.car?.brand_id ||
-      !booking.car?.model_id ||
-      !booking.car?.fuel_id ||
-      allServiceIds.length === 0
-    ) {
-      return null;
-    }
+    if (!vehicleSelected || allServiceIds.length === 0) return null;
     return {
-      brand_id:     booking.car.brand_id,
-      model_id:     booking.car.model_id,
-      fuel_type_id: booking.car.fuel_id,        // backend uses fuel_type_id
+      brand_id:     booking.car!.brand_id!,
+      model_id:     booking.car!.model_id!,
+      fuel_type_id: booking.car!.fuel_id!,        // backend uses fuel_type_id
       service_ids:  allServiceIds,
     };
-  }, [booking.car, allServiceIds]);
+  }, [vehicleSelected, booking.car, allServiceIds]);
   const pricingQuery = usePricingFor(pricingReq);
   const priceMap = useMemo(() => {
     const m = new Map<number, number>();
@@ -142,6 +143,7 @@ export default function Services({ setCurrentPage }: ServicesProps) {
     }
     return m;
   }, [pricingQuery.data]);
+  const pricingLoading = vehicleSelected && pricingQuery.isFetching && pricingQuery.data === undefined;
 
   const handleAddToCart = (sub: CategorySubService, categorySlug: string) => {
     addItem({
@@ -291,7 +293,14 @@ export default function Services({ setCurrentPage }: ServicesProps) {
                     category={category}
                     pricesShown={booking.pricesShown}
                     pricesAvailableForCategory={availableCategoryIds.has(category.id)}
-                    priceFor={(subId) => priceMap.get(subId)}
+                    priceStateFor={(subId) => {
+                      if (!vehicleSelected) return { kind: "no-vehicle" };
+                      if (pricingLoading) return { kind: "loading" };
+                      const v = priceMap.get(subId);
+                      return v != null
+                        ? { kind: "price", value: v }
+                        : { kind: "no-price" };
+                    }}
                     addedFlash={addedFlash}
                     cartItemFor={(subId) =>
                       findCartItem({
@@ -362,14 +371,23 @@ export default function Services({ setCurrentPage }: ServicesProps) {
 
 // ─────────────────── Category Section ───────────────────
 
+/**
+ * Phase 2.3.5 — discriminated union driving the row's price column.
+ * Computed once by the parent so the row's render is atomic and
+ * doesn't flash through intermediate states.
+ */
+type PriceState =
+  | { kind: "no-vehicle" }
+  | { kind: "loading" }
+  | { kind: "price"; value: number }
+  | { kind: "no-price" };
+
 interface CategorySectionProps {
   category: ApiServiceCategory;          // sub-services arrive nested via Phase 1.6
   pricesShown: boolean;                  // user has unlocked prices via OTP
   pricesAvailableForCategory: boolean;   // backend says this category has prices for the vehicle
-  /** Phase 2.3.4 — vehicle-specific price for a sub-service. Returns
-   *  undefined when no vehicle selected or no priced row matched.
-   *  When defined, overrides sub.base_price for display. */
-  priceFor: (subId: number) => number | undefined;
+  /** Phase 2.3.5 — strict 4-state price status; never base_price. */
+  priceStateFor: (subId: number) => PriceState;
   addedFlash: string | null;
   /** Phase 2.3.3 — returns the matching CartItemResource (with its
    *  server `id`) when this sub is already in the cart for the current
@@ -385,7 +403,7 @@ const CategorySection: React.FC<CategorySectionProps> = ({
   category,
   pricesShown,
   pricesAvailableForCategory,
-  priceFor,
+  priceStateFor,
   addedFlash,
   cartItemFor,
   onAddToCart,
@@ -436,10 +454,8 @@ const CategorySection: React.FC<CategorySectionProps> = ({
           const showPrice = pricesShown && pricesAvailableForCategory;
           const cartItem = cartItemFor(sub.id);
           const inCart = !!cartItem;
-          // Phase 2.3.4 — prefer the /pricing match; fall back to
-          // base_price (no vehicle, or service has no priced row).
-          const vehiclePrice = priceFor(sub.id);
-          const displayPrice = vehiclePrice ?? sub.base_price ?? null;
+          // Phase 2.3.5 — strict 4-state machine. Never base_price.
+          const priceState = priceStateFor(sub.id);
           return (
             <div
               key={sub.id}
@@ -454,18 +470,36 @@ const CategorySection: React.FC<CategorySectionProps> = ({
                 </button>
               </div>
 
-              {/* Price column — only renders prices the API actually returned */}
+              {/* Price column — vehicle-specific only (Phase 2.3.5). */}
               <div className="sm:text-right sm:w-28">
                 {showPrice ? (
-                  <>
-                    <p className="text-base font-black text-neutral-900">
-                      {displayPrice ? `₹${displayPrice}` : "Quote"}
-                    </p>
-                    <span className="text-[9px] uppercase tracking-widest font-bold text-neutral-400">
-                      {displayPrice ? "Onwards" : "On Inspection"}
-                    </span>
-                  </>
+                  priceState.kind === "loading" ? (
+                    <div className="sm:ml-auto h-5 w-16 bg-neutral-200 animate-pulse rounded" />
+                  ) : priceState.kind === "price" ? (
+                    <>
+                      <p className="text-base font-black text-neutral-900">
+                        ₹{priceState.value}
+                      </p>
+                      <span className="text-[9px] uppercase tracking-widest font-bold text-neutral-400">
+                        Onwards
+                      </span>
+                    </>
+                  ) : (
+                    // 'no-price' — vehicle resolved, no priced row matched.
+                    <>
+                      <p className="text-base font-black text-neutral-900">
+                        Quote
+                      </p>
+                      <span className="text-[9px] uppercase tracking-widest font-bold text-neutral-400">
+                        On Inspection
+                      </span>
+                    </>
+                  )
                 ) : (
+                  // showPrice=false implies pricesShown=false OR category
+                  // not priced for the vehicle. Either way, the category-
+                  // level "Check Price" / "Hidden" UX already handles
+                  // discovery; this row stays neutral.
                   <div className="flex items-center sm:justify-end gap-1.5">
                     <Lock className="w-3 h-3 text-neutral-400" />
                     <span className="text-[10px] uppercase tracking-widest font-bold text-neutral-400">
@@ -484,15 +518,16 @@ const CategorySection: React.FC<CategorySectionProps> = ({
                         ? onRemoveFromCart(cartItem.id)
                         : onAddToCart(sub)
                     }
-                    // Phase 2.3.4 — same dimensions as ADD TO CART; only
-                    // the colors invert so the button doesn't visually
-                    // jump between states. Border kept on both states so
-                    // the box model is identical.
-                    className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition-colors w-full sm:w-auto flex items-center justify-center gap-1.5 border ${
+                    // Phase 2.3.5 — same btn-ink ink-sweep treatment as
+                    // ServiceCategory + ServiceDetail for cross-page
+                    // consistency. ADDED hover paints bg-primary with
+                    // white text; ADD TO CART hover paints
+                    // bg-primary-dark.
+                    className={`btn-ink ${
                       inCart || justAdded
-                        ? "bg-white text-primary border-primary hover:bg-primary/5"
-                        : "bg-primary text-white border-primary hover:bg-primary-dark hover:border-primary-dark"
-                    }`}
+                        ? "btn-ink-outline"
+                        : "btn-ink-primary"
+                    } px-4 py-2 text-[10px] font-bold uppercase tracking-widest w-full sm:w-auto justify-center gap-1.5`}
                     aria-pressed={inCart}
                   >
                     {inCart || justAdded ? (

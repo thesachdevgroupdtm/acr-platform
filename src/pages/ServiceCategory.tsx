@@ -38,6 +38,7 @@ import {
   type SubService as ApiSubService,
 } from "../lib/api";
 import { useApiQuery } from "../hooks/useApiQuery";
+import { usePricingFor } from "../hooks/usePricing";
 
 interface ServiceCategoryProps {
   categorySlug: string;
@@ -90,6 +91,40 @@ export default function ServiceCategory({
   const apiSubServices: ApiSubService[] = detailQuery.data?.services ?? [];
   const priceShowFromApi = Boolean(detailQuery.data?.price_show);
   const isLoadingDetail = detailQuery.isLoading;
+
+  // Phase 2.3.5 — POST /pricing in parallel for explicit
+  // matched_prices, so per-service "no priced row" can be detected
+  // without trusting `sub.price` (which the backend silently falls
+  // back to base_price when no row matches). priceMap drives the
+  // 4-state machine in the price column.
+  const subServiceIds = useMemo(
+    () => apiSubServices.map((s) => s.id),
+    [apiSubServices]
+  );
+  const vehicleSelected = !!(
+    bookingCtx0.car?.brand_id &&
+    bookingCtx0.car?.model_id &&
+    bookingCtx0.car?.fuel_id
+  );
+  const pricingReq = useMemo(() => {
+    if (!vehicleSelected || subServiceIds.length === 0) return null;
+    return {
+      brand_id:     bookingCtx0.car!.brand_id!,
+      model_id:     bookingCtx0.car!.model_id!,
+      fuel_type_id: bookingCtx0.car!.fuel_id!,
+      service_ids:  subServiceIds,
+    };
+  }, [vehicleSelected, bookingCtx0.car, subServiceIds]);
+  const pricingQuery = usePricingFor(pricingReq);
+  const priceMap = useMemo(() => {
+    const m = new Map<number, number>();
+    for (const p of pricingQuery.data?.matched_prices ?? []) {
+      m.set(p.service_id, p.price);
+    }
+    return m;
+  }, [pricingQuery.data]);
+  const pricingLoading =
+    vehicleSelected && pricingQuery.isFetching && pricingQuery.data === undefined;
   // For sections that need a stable display object — never null in render below;
   // skeleton path returns early when no category resolved.
   const category = apiCategory;
@@ -728,17 +763,32 @@ export default function ServiceCategory({
                           </p>
                         </div>
 
-                        {/* Price column — strictly API-driven */}
+                        {/* Price column — Phase 2.3.5 strict 4-state machine.
+                            Never base_price. Vehicle-resolved or "Quote on
+                            Inspection"; loading skeleton between. */}
                         <div className="sm:text-right sm:w-28">
                           {showPrice ? (
-                            <>
-                              <p className="text-base font-black text-neutral-900">
-                                {sub.price ? `₹${sub.price}` : "Quote"}
-                              </p>
-                              <span className="text-[9px] uppercase tracking-widest font-bold text-neutral-400">
-                                Onwards
-                              </span>
-                            </>
+                            pricingLoading ? (
+                              <div className="sm:ml-auto h-5 w-16 bg-neutral-200 animate-pulse rounded" />
+                            ) : priceMap.has(sub.id) ? (
+                              <>
+                                <p className="text-base font-black text-neutral-900">
+                                  ₹{priceMap.get(sub.id)}
+                                </p>
+                                <span className="text-[9px] uppercase tracking-widest font-bold text-neutral-400">
+                                  Onwards
+                                </span>
+                              </>
+                            ) : (
+                              <>
+                                <p className="text-base font-black text-neutral-900">
+                                  Quote
+                                </p>
+                                <span className="text-[9px] uppercase tracking-widest font-bold text-neutral-400">
+                                  On Inspection
+                                </span>
+                              </>
+                            )
                           ) : (
                             <div className="flex items-center sm:justify-end gap-1.5">
                               <Lock className="w-3 h-3 text-neutral-400" />
@@ -758,15 +808,18 @@ export default function ServiceCategory({
                                   ? removeItem(String(cartItem.id))
                                   : handleAddToCart(sub)
                               }
-                              // Phase 2.3.4 — ADDED state mirrors ADD TO CART
-                              // dimensions exactly; only colors invert (white
-                              // bg, primary text + border) so button sizes
-                              // don't shift between states.
-                              className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition-colors w-full sm:w-auto flex items-center justify-center gap-1.5 border ${
+                              // Phase 2.3.5 — ADDED hover matches BOOK
+                              // NOW's btn-ink ink-sweep for visible
+                              // feedback. ADD TO CART uses btn-ink-primary
+                              // (sweep to primary-dark); ADDED uses
+                              // btn-ink-outline (sweep fills primary,
+                              // text turns white on hover). Both share
+                              // identical box dimensions.
+                              className={`btn-ink ${
                                 inCart || justAdded
-                                  ? "bg-white text-primary border-primary hover:bg-primary/5"
-                                  : "bg-primary text-white border-primary hover:bg-primary-dark hover:border-primary-dark"
-                              }`}
+                                  ? "btn-ink-outline"
+                                  : "btn-ink-primary"
+                              } px-4 py-2 text-[10px] font-bold uppercase tracking-widest w-full sm:w-auto justify-center gap-1.5`}
                               aria-pressed={inCart}
                             >
                               {inCart || justAdded ? (
