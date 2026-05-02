@@ -467,3 +467,42 @@ export const postPricing = (req: PricingRequest, signal?: AbortSignal) =>
 
 export const fetchPage = (slug: string, signal?: AbortSignal) =>
   apiGet<PageResponse>(`/pages/${slug}`, undefined, signal);
+
+/* ───────────── Phase 2.1 — Auth + User ─────────────
+ * The 7 endpoints from /PHASE2_CONTRACT.md §5.1. Typed via the
+ * interfaces in src/types/api.ts (kept separate so domain types
+ * don't bloat this module).
+ */
+import type {
+  LeadCaptureRequest,
+  LeadCaptureResponse,
+  LoginRequest,
+  LoginResponse,
+  ProfileResponse,
+  SendOtpRequest,
+  SendOtpResponse,
+  UpdateProfileRequest,
+  VerifyOtpRequest,
+  VerifyOtpResponse,
+} from "../types/api";
+
+export const postLeadCapture = (req: LeadCaptureRequest, signal?: AbortSignal) =>
+  apiPost<LeadCaptureResponse>("/auth/lead-capture", req, signal);
+
+export const postSendOtp = (req: SendOtpRequest, signal?: AbortSignal) =>
+  apiPost<SendOtpResponse>("/auth/send-otp", req, signal);
+
+export const postVerifyOtp = (req: VerifyOtpRequest, signal?: AbortSignal) =>
+  apiPost<VerifyOtpResponse>("/auth/verify-otp", req, signal);
+
+export const postLogin = (req: LoginRequest, signal?: AbortSignal) =>
+  apiPost<LoginResponse>("/auth/login", req, signal);
+
+export const postLogout = (signal?: AbortSignal) =>
+  apiPost<{ success: true }>("/auth/logout", undefined, signal);
+
+export const fetchProfile = (signal?: AbortSignal) =>
+  apiGet<ProfileResponse>("/user/profile", undefined, signal);
+
+export const putProfile = (req: UpdateProfileRequest, signal?: AbortSignal) =>
+  apiPut<ProfileResponse>("/user/profile", req, signal);

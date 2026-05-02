@@ -1,28 +1,44 @@
 /**
- * useAuth — user account state for ACR (API-backed).
+ * useAuth — user account state for ACR (OTP-based per Phase 2.1).
  *
- * Calls the Laravel API exposed at VITE_API_BASE_URL. Sanctum personal
- * access tokens are stored in localStorage via src/lib/api.ts.
+ * Auth flow (per /PHASE2_CONTRACT.md §5.1 + §6.5):
+ *   1. signUp({name, phone, email?})  → POST /auth/lead-capture
+ *      → returns { pendingUserId, otpSentTo }
+ *   2. logIn(phone)                   → POST /auth/login
+ *      → returns { pendingUserId, otpSentTo }
+ *   3. verifyOtp({channel,destination,code}) → POST /auth/verify-otp
+ *      → returns { token, user }; stores token; sets user.
+ *   4. logOut()                       → POST /auth/logout (when authenticated)
  *
- * The hook surface is preserved from the previous mock implementation
- * (so consumer pages don't break), but methods that hit the network
- * now return Promises:
+ * Other consumer surface (Cart/Checkout/Payment/Header/MyBookings):
+ *   user, isAuthenticated, bootstrapped, logout (alias of logOut),
+ *   setDefaults({car?,location?}), addAddress(...) [gated by 2.2],
+ *   addBooking(...) [gated by 2.5], BookingRecord type, validateEmail,
+ *   NAME_REGEX, PHONE_REGEX.
  *
- *   await login(identifier, password)
- *   await signup({ name, phone, email, password })
- *   await logout()
- *   await updateProfile({ firstname, lastname, email, phone })
- *   await addAddress(address, label?, makeDefault?)
- *   await addBooking(bookingPayload)        // creates an Order via /checkout/offline
- *
- * Pure UI/UX helpers stay synchronous:
- *   setDefaults({ car?, location? })  // local hint only
- *   findExisting(phone, email)        // no-op (server enforces uniqueness on submit)
- *   validateEmail / checkPasswordStrength
+ * Password-based methods removed in this commit per /PHASE2_CONTRACT.md
+ * §11 Assumption 15 (OTP-only auth, no passwords ever).
  */
 import { useCallback, useEffect, useState } from "react";
-import { apiGet, apiPost, apiPut, getToken, setToken, ApiError } from "../lib/api";
+import {
+  ApiError,
+  fetchProfile,
+  postLeadCapture,
+  postLogin,
+  postLogout,
+  postVerifyOtp,
+  putProfile,
+  getToken,
+  setToken,
+} from "../lib/api";
 import { FEATURES } from "../config/features";
+import type {
+  LeadCaptureResponse,
+  LoginResponse,
+  OtpChannel,
+  UserResource,
+  VerifyOtpResponse,
+} from "../types/api";
 
 /* ───────────────── Types ───────────────── */
 
@@ -49,18 +65,23 @@ export interface BookingRecord {
   notes?: string;
 }
 
+/**
+ * AcrUser is the consumer-facing shape. Maintained for compatibility
+ * with existing pages (Cart, Checkout, Header, MyBookings, etc.) that
+ * read user.name / user.phone / user.bookings / user.addresses.
+ *
+ * In Phase 2.1, bookings and addresses arrive as empty arrays —
+ * server endpoints land in 2.5 (orders) and 2.2 (addresses).
+ */
 export interface AcrUser {
   id: string;
-  name: string;          // derived from firstname + lastname
-  firstname?: string;
-  lastname?: string;
+  name: string;
   phone: string;
   email: string;
-  /** Preserved for backwards compat — server now enforces verification via OTP. */
   phoneVerified: boolean;
   emailVerified: boolean;
-  bookings: BookingRecord[];     // populated lazily from /orders if needed
-  addresses: SavedAddress[];     // populated from /user/addresses
+  bookings: BookingRecord[];
+  addresses: SavedAddress[];
   defaultCar?: { brand: string; model: string; fuel: string };
   defaultLocation?: string;
   createdAt: string;
@@ -71,7 +92,7 @@ export interface AcrUser {
 const DEFAULTS_KEY = "acr_user_defaults_v1";
 const EVENT = "acr-auth-updated";
 
-/* ───────────── Validators (kept identical to legacy) ───────────── */
+/* ───────────── Validators ───────────── */
 
 export const NAME_REGEX = /^[A-Za-z][A-Za-z\s.'-]{1,}$/;
 export const PHONE_REGEX = /^\d{10}$/;
@@ -94,34 +115,6 @@ export function validateEmail(email: string): string | null {
   return null;
 }
 
-export interface PasswordStrength {
-  score: 0 | 1 | 2 | 3 | 4;
-  label: "Too weak" | "Weak" | "Fair" | "Strong" | "Very strong";
-  errors: string[];
-}
-
-export function checkPasswordStrength(pw: string): PasswordStrength {
-  const errors: string[] = [];
-  if (pw.length < 8) errors.push("At least 8 characters");
-  if (!/[A-Z]/.test(pw)) errors.push("An uppercase letter");
-  if (!/[a-z]/.test(pw)) errors.push("A lowercase letter");
-  if (!/\d/.test(pw)) errors.push("A number");
-  if (!/[!@#$%^&*(),.?":{}|<>_\-+=/\\[\];`~]/.test(pw))
-    errors.push("A special character");
-
-  let score: 0 | 1 | 2 | 3 | 4 = 0;
-  if (pw.length >= 8) score = 1;
-  if (pw.length >= 8 && /[A-Z]/.test(pw) && /[a-z]/.test(pw)) score = 2;
-  if (pw.length >= 10 && /[A-Z]/.test(pw) && /[a-z]/.test(pw) && /\d/.test(pw)) score = 3;
-  if (
-    pw.length >= 12 && /[A-Z]/.test(pw) && /[a-z]/.test(pw) && /\d/.test(pw)
-    && /[!@#$%^&*(),.?":{}|<>_\-+=/\\[\];`~]/.test(pw)
-  ) score = 4;
-
-  const labels: PasswordStrength["label"][] = ["Too weak","Weak","Fair","Strong","Very strong"];
-  return { score, label: labels[score], errors };
-}
-
 /* ───────────── Helpers ───────────── */
 
 function readDefaults(): { defaultCar?: AcrUser["defaultCar"]; defaultLocation?: string } {
@@ -142,55 +135,41 @@ function writeDefaults(d: { defaultCar?: AcrUser["defaultCar"]; defaultLocation?
   } catch { /* swallow */ }
 }
 
-interface ApiAuthUser {
-  id: number | string;
-  firstname?: string | null;
-  lastname?: string | null;
-  email: string;
-  phone: string;
-  image?: string | null;
-}
-
-interface ApiAddress {
-  id: number | string;
-  address: string;
-  zip?: string;
-  city?: string;
-  state?: string;
-}
-
-function presentUser(u: ApiAuthUser, addresses: ApiAddress[] = []): AcrUser {
+/** Maps the API UserResource (Phase 2.1) into AcrUser (consumer shape). */
+function presentUser(api: UserResource): AcrUser {
   const defaults = readDefaults();
-  const fullName = [u.firstname, u.lastname].filter(Boolean).join(" ").trim() || u.email;
   return {
-    id: String(u.id),
-    name: fullName,
-    firstname: u.firstname || undefined,
-    lastname:  u.lastname  || undefined,
-    phone: u.phone,
-    email: u.email,
-    phoneVerified: true,  // server gates via OTP at register-time
-    emailVerified: true,
-    bookings: [],         // pages should fetch via /orders if they need bookings
-    addresses: addresses.map((a) => ({
-      id: String(a.id),
-      label: "Saved",
-      address: a.address,
-      isDefault: false,
-    })),
-    defaultCar: defaults.defaultCar,
-    defaultLocation: defaults.defaultLocation,
-    createdAt: "",
-    lastLoginAt: "",
+    id:             String(api.id),
+    name:           api.name,
+    phone:          api.phone,
+    email:          api.email ?? "",
+    phoneVerified:  api.is_verified_phone,
+    emailVerified:  api.is_verified_email,
+    bookings:       [],                            // Phase 2.5
+    addresses:      api.default_address
+      ? [{
+          id:        String(api.default_address.id),
+          label:     api.default_address.label,
+          address:   api.default_address.line1,
+          isDefault: true,
+        }]
+      : [],                                        // Phase 2.2 fully populates
+    defaultCar:     defaults.defaultCar,
+    defaultLocation:defaults.defaultLocation,
+    createdAt:      api.created_at,
+    lastLoginAt:    api.last_login_at ?? "",
   };
 }
 
 /* ───────────── Hook ───────────── */
 
-interface MeResponse { user: ApiAuthUser; }
-interface ProfileResponse { user: ApiAuthUser; addresses: ApiAddress[]; }
-interface LoginResponse  { success: boolean; user?: ApiAuthUser; token?: string; message?: string; }
-interface RegisterResponse extends LoginResponse {}
+export interface PendingOtp {
+  pendingUserId: number;
+  otpSentTo: OtpChannel;
+  destination: string;     // phone or email — needed for verifyOtp call
+  /** Returned by the server in dev/staging only (APP_DEBUG=true). */
+  devCode?: string;
+}
 
 export function useAuth() {
   const [user, setUser] = useState<AcrUser | null>(null);
@@ -198,7 +177,6 @@ export function useAuth() {
 
   const refreshFromServer = useCallback(async () => {
     if (!FEATURES.auth) {
-      // Auth backend not available yet — never issue a network request.
       setUser(null);
       return;
     }
@@ -207,8 +185,8 @@ export function useAuth() {
       return;
     }
     try {
-      const data = await apiGet<ProfileResponse>("/user/profile");
-      setUser(presentUser(data.user, data.addresses || []));
+      const data = await fetchProfile();
+      setUser(presentUser(data.user));
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) {
         setToken(null);
@@ -228,119 +206,125 @@ export function useAuth() {
     };
   }, [refreshFromServer]);
 
-  /* ── Signup ── */
-  const signup = useCallback(
-    async (data: { name: string; phone: string; email: string; password: string; }):
-      Promise<{ success: boolean; error?: string; user?: AcrUser }> => {
+  /* ── Sign up — stage one of two ──
+   * Calls /auth/lead-capture; the server upserts the user and dispatches
+   * an OTP. The caller MUST follow up with verifyOtp() using the same
+   * phone as `destination`. */
+  const signUp = useCallback(
+    async (input: { name: string; phone: string; email?: string }):
+      Promise<{ success: true; pending: PendingOtp } | { success: false; error: string }> => {
       if (!FEATURES.auth) {
         return { success: false, error: "Sign-up is coming soon." };
       }
-      const phone = data.phone.trim();
-      const email = data.email.trim().toLowerCase();
-      const fullName = data.name.trim();
+      const phone = input.phone.trim();
+      const name  = input.name.trim();
+      const email = input.email?.trim().toLowerCase();
 
-      if (!NAME_REGEX.test(fullName))     return { success: false, error: "Enter a valid name" };
-      if (!PHONE_REGEX.test(phone))       return { success: false, error: "Phone must be 10 digits" };
-      const emailErr = validateEmail(email);
-      if (emailErr)                       return { success: false, error: emailErr };
-      const pw = checkPasswordStrength(data.password);
-      if (pw.score < 2)                   return { success: false, error: "Password is too weak" };
+      if (!NAME_REGEX.test(name))     return { success: false, error: "Enter a valid name." };
+      if (!PHONE_REGEX.test(phone))   return { success: false, error: "Phone must be 10 digits." };
+      if (email) {
+        const emailErr = validateEmail(email);
+        if (emailErr) return { success: false, error: emailErr };
+      }
 
-      const [first, ...rest] = fullName.split(/\s+/);
       try {
-        const res = await apiPost<RegisterResponse>("/auth/register", {
-          firstname: first,
-          lastname:  rest.join(" ") || null,
-          email, phone,
-          password: data.password,
-        });
-        if (res.token) setToken(res.token);
-        if (res.user) {
-          const u = presentUser(res.user);
-          setUser(u);
-          return { success: true, user: u };
-        }
-        return { success: false, error: res.message || "Could not create account" };
+        const res: LeadCaptureResponse = await postLeadCapture({ name, phone, email });
+        return {
+          success: true,
+          pending: {
+            pendingUserId: res.pending_user_id,
+            otpSentTo:     res.otp_sent_to,
+            destination:   phone,
+            devCode:       res.dev_code,
+          },
+        };
       } catch (e) {
-        const msg = e instanceof ApiError
-          ? extractFirstError(e.payload) || e.message
-          : "Network error";
-        return { success: false, error: msg };
+        return { success: false, error: extractError(e) };
       }
     },
     []
   );
 
-  /* ── Login ── */
-  const login = useCallback(
-    async (identifier: string, password: string):
-      Promise<{ success: boolean; error?: string; lockoutUntil?: number }> => {
+  /* ── Log in — stage one of two ──
+   * Phone-only entry; backend triggers the OTP send and returns pending state. */
+  const logIn = useCallback(
+    async (phone: string):
+      Promise<{ success: true; pending: PendingOtp } | { success: false; error: string }> => {
       if (!FEATURES.auth) {
         return { success: false, error: "Login is coming soon." };
       }
+      const trimmed = phone.trim();
+      if (!PHONE_REGEX.test(trimmed)) {
+        return { success: false, error: "Phone must be 10 digits." };
+      }
       try {
-        const res = await apiPost<LoginResponse>("/auth/login", {
-          identifier: identifier.trim(),
-          password,
-        });
-        if (res.token) setToken(res.token);
-        if (res.user) {
-          const u = presentUser(res.user);
-          setUser(u);
-          return { success: true };
-        }
-        return { success: false, error: res.message || "Login failed" };
+        const res: LoginResponse = await postLogin({ phone: trimmed });
+        return {
+          success: true,
+          pending: {
+            pendingUserId: res.pending_user_id,
+            otpSentTo:     res.otp_sent_to,
+            destination:   trimmed,
+            devCode:       res.dev_code,
+          },
+        };
       } catch (e) {
-        const msg = e instanceof ApiError
-          ? extractFirstError(e.payload) || e.message
-          : "Network error";
-        return { success: false, error: msg };
+        return { success: false, error: extractError(e) };
       }
     },
     []
   );
 
-  /* ── Logout ── */
-  const logout = useCallback(async () => {
-    if (FEATURES.auth) {
-      try { await apiPost("/auth/logout"); } catch { /* token might already be invalid */ }
+  /* ── Verify OTP — stage two of two ──
+   * On success: stores the Sanctum token via setToken() and sets `user`.
+   * The Header / Cart / etc. immediately re-render in the authenticated state. */
+  const verifyOtp = useCallback(
+    async (input: { channel: OtpChannel; destination: string; code: string }):
+      Promise<{ success: true; user: AcrUser } | { success: false; error: string }> => {
+      if (!FEATURES.auth) {
+        return { success: false, error: "Verification is coming soon." };
+      }
+      try {
+        const res: VerifyOtpResponse = await postVerifyOtp(input);
+        setToken(res.token);
+        const u = presentUser(res.user);
+        setUser(u);
+        return { success: true, user: u };
+      } catch (e) {
+        return { success: false, error: extractError(e) };
+      }
+    },
+    []
+  );
+
+  /* ── Log out ── */
+  const logOut = useCallback(async () => {
+    if (FEATURES.auth && getToken()) {
+      try { await postLogout(); } catch { /* token might already be invalid */ }
     }
     setToken(null);
     setUser(null);
   }, []);
 
-  /* ── Update profile ── */
+  /* Backwards-compat alias for existing consumers (Header, MyBookings). */
+  const logout = logOut;
+
+  /* ── Update profile (name / email — phone is server-side immutable) ── */
   const updateProfile = useCallback(
-    async (updates: Partial<Pick<AcrUser, "name" | "firstname" | "lastname" | "email" | "phone">>):
-      Promise<{ success: boolean; error?: string }> => {
+    async (updates: { name?: string; email?: string | null }):
+      Promise<{ success: true } | { success: false; error: string }> => {
       if (!FEATURES.auth) {
         return { success: false, error: "Profile editing is coming soon." };
       }
-      if (!user) return { success: false, error: "Not signed in" };
-
-      let firstname = updates.firstname;
-      let lastname  = updates.lastname;
-      if (updates.name && !firstname && !lastname) {
-        const [f, ...r] = updates.name.trim().split(/\s+/);
-        firstname = f;
-        lastname  = r.join(" ") || undefined;
-      }
       try {
-        await apiPut<{ user: ApiAuthUser }>("/auth/profile", {
-          firstname, lastname,
-          email: updates.email,
-          phone: updates.phone,
-        });
-        await refreshFromServer();
+        const res = await putProfile(updates);
+        setUser(presentUser(res.user));
         return { success: true };
       } catch (e) {
-        const msg = e instanceof ApiError
-          ? extractFirstError(e.payload) || e.message
-          : "Network error";
-        return { success: false, error: msg };
+        return { success: false, error: extractError(e) };
       }
     },
-    [user, refreshFromServer]
+    []
   );
 
   /* ── UX hint defaults (stay local) ── */
@@ -357,82 +341,29 @@ export function useAuth() {
     []
   );
 
-  /* ── Address: persist to server + refresh ── */
+  /* ── Address: gated to Phase 2.2 ── */
   const addAddress = useCallback(
-    async (address: string, _label = "Default", _makeDefault = true) => {
-      if (!FEATURES.auth) {
-        // Address management requires auth backend; no-op until enabled.
-        return;
-      }
-      if (!user) return;
-      try {
-        await apiPost("/user/addresses", {
-          address: address.trim(),
-          city: " ",  // city is required server-side; UI provides via Checkout details
-          zip:  " ",
-        });
-        await refreshFromServer();
-      } catch (e) {
-        if (typeof console !== "undefined") {
-          console.warn("addAddress failed:", e instanceof ApiError ? e.message : e);
-        }
-      }
+    async (_address: string, _label = "Default", _makeDefault = true) => {
+      // Phase 2.2 — /user/addresses endpoint not yet shipped.
+      // Existing callers (Checkout) invoke this opportunistically; no-op
+      // here keeps them working without a flag check at the call site.
+      return;
     },
-    [user, refreshFromServer]
+    []
   );
 
-  /* ── Booking: hand off to /checkout/offline ── */
+  /* ── Booking: gated to Phase 2.5 ── */
   const addBooking = useCallback(
-    async (booking: Omit<BookingRecord, "id" | "createdAt" | "status"> & {
-      mobile?: string;
-      vehicle_number?: string;
-      slot_date?: string;
-      slot_time?: string;
-    }): Promise<string> => {
-      if (!FEATURES.offlineCheckout) {
-        // Backend route /checkout/offline is not implemented yet; return a
-        // placeholder invoice so the success flow renders. The booking is
-        // NOT persisted server-side — re-enable once the route ships.
-        if (typeof console !== "undefined") {
-          console.warn(
-            "[useAuth] FEATURES.offlineCheckout=false — booking not sent to server.",
-            booking
-          );
-        }
-        return `ACR${Date.now()}`;
-      }
-      try {
-        const res = await apiPost<{ success: boolean; order: { invoice_no: string; id: number } }>(
-          "/checkout/offline",
-          {
-            name: user?.name || "",
-            email: user?.email || "",
-            mobile: booking.mobile || user?.phone || "",
-            address: booking.address,
-            city: " ",
-            zip: " ",
-            subtotal: booking.subtotal,
-            order_total: booking.total,
-            product_gst: 0,
-            service_gst: booking.gst,
-            vehicle_number: booking.vehicle_number,
-            slot_date: booking.slot_date || booking.preferredDate,
-            slot_time: booking.slot_time || booking.preferredTime,
-          }
+    async (_booking: Omit<BookingRecord, "id" | "createdAt" | "status">):
+      Promise<string> => {
+      if (typeof console !== "undefined") {
+        console.warn(
+          "[useAuth] addBooking is gated until Phase 2.5 (offlineCheckout). " +
+          "Returning placeholder invoice; nothing persisted server-side."
         );
-        return res.order?.invoice_no || `ACR${Date.now()}`;
-      } catch (e) {
-        if (typeof console !== "undefined") {
-          console.error("addBooking → /checkout/offline failed:", e instanceof ApiError ? e.message : e);
-        }
-        return `ACR${Date.now()}`;
       }
+      return `ACR${Date.now()}`;
     },
-    [user]
-  );
-
-  const findExisting = useCallback(
-    (_phone: string, _email: string): { byPhone?: AcrUser; byEmail?: AcrUser } => ({}),
     []
   );
 
@@ -440,26 +371,27 @@ export function useAuth() {
     user,
     isAuthenticated: !!user,
     bootstrapped,
-    signup,
-    login,
+    signUp,
+    logIn,
+    verifyOtp,
+    logOut,
     logout,
     updateProfile,
     setDefaults,
     addAddress,
     addBooking,
-    findExisting,
-    validateEmail,
-    checkPasswordStrength,
   };
 }
 
-/* Surfaces the first message from a Laravel 422 payload */
-function extractFirstError(payload: unknown): string | null {
-  if (!payload || typeof payload !== "object") return null;
-  const p = payload as { errors?: Record<string, string[]>; message?: string };
-  if (p.errors) {
-    const first = Object.values(p.errors).flat()[0];
-    if (typeof first === "string") return first;
+/** Pulls the most useful error string out of an ApiError or fallback. */
+function extractError(e: unknown): string {
+  if (e instanceof ApiError) {
+    const payload = e.payload as { errors?: Record<string, string[]>; message?: string } | null;
+    if (payload?.errors) {
+      const first = Object.values(payload.errors).flat()[0];
+      if (typeof first === "string") return first;
+    }
+    return payload?.message ?? e.message;
   }
-  return typeof p.message === "string" ? p.message : null;
+  return "Network error. Please try again.";
 }

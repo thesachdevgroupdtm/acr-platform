@@ -1,133 +1,69 @@
 <?php
 
-use Illuminate\Http\Request;
+use App\Http\Controllers\Api\V1\Auth\LeadCaptureController;
+use App\Http\Controllers\Api\V1\Auth\LoginController;
+use App\Http\Controllers\Api\V1\Auth\LogoutController;
+use App\Http\Controllers\Api\V1\Auth\SendOtpController;
+use App\Http\Controllers\Api\V1\Auth\VerifyOtpController;
+use App\Http\Controllers\Api\V1\HomeController;
+use App\Http\Controllers\Api\V1\ImportController;
+use App\Http\Controllers\Api\V1\PageController;
+use App\Http\Controllers\Api\V1\PricingController;
+use App\Http\Controllers\Api\V1\ServiceController;
+use App\Http\Controllers\Api\V1\User\ProfileController;
+use App\Http\Controllers\Api\V1\VehicleController;
 use Illuminate\Support\Facades\Route;
-
-use App\Http\Controllers\Front\HomeController;
-use App\Http\Controllers\Front\ServiceController;
-use App\Http\Controllers\Front\ServiceCenterConroller;
-use App\Http\Controllers\Front\offerController;
-use App\Http\Controllers\Front\FaqController;
-use App\Http\Controllers\Front\CmsPagesController;
-use App\Http\Controllers\Front\ProductController;
-use App\Http\Controllers\Front\ContactController;
-use App\Http\Controllers\Front\OtpController;
-use App\Http\Controllers\Front\SearchController;
-use App\Http\Controllers\Front\CartController;
-use App\Http\Controllers\Front\CheckoutController;
-use App\Http\Controllers\Front\OrderController;
-use App\Http\Controllers\Front\UserController;
-use App\Http\Controllers\Front\Auth\LoginController;
-use App\Http\Controllers\Front\Auth\RegisterController;
 
 /*
 |--------------------------------------------------------------------------
-| API Routes (consumed by the React frontend)
+| API Routes — v1
 |--------------------------------------------------------------------------
-|
-| Each route below points at a *Api sibling method on an EXISTING
-| Front\* controller. The legacy web flow (routes/web.php → Blade views)
-| is unaffected.
-|
-| Auth: Sanctum personal access tokens (Bearer). Send:
-|   Authorization: Bearer {token}
-|
+| Consumed by the React frontend at http://localhost:3000.
 */
 
 Route::prefix('v1')->group(function () {
 
-    /* ── Public read-only ───────────────────────────────────────── */
-    Route::get('home',                                  [HomeController::class, 'indexApi']);
+    // Home payload
+    Route::get('home', [HomeController::class, 'index']);
 
-    Route::get('service-categories',                    [ServiceController::class, 'categoriesApi']);
-    Route::get('services',                              [ServiceController::class, 'servicesApi']);
-    Route::get('services/{categorySlug}',               [ServiceController::class, 'categoryDetailApi']);
-    Route::get('services/{categorySlug}/{serviceSlug}', [ServiceController::class, 'serviceDetailApi']);
+    // Service categories + services
+    Route::get('services',                                  [ServiceController::class, 'index']);
+    Route::get('services/{slug}',                           [ServiceController::class, 'show']);
+    Route::get('services/{categorySlug}/{serviceSlug}',     [ServiceController::class, 'detail']);
 
-    Route::get('service-centers',                       [ServiceCenterConroller::class, 'indexApi']);
-    Route::get('service-centers/{id}',                  [ServiceCenterConroller::class, 'showApi'])->whereNumber('id');
+    // Vehicle picker
+    Route::get('vehicle/brands',                            [VehicleController::class, 'brands']);
+    Route::get('vehicle/models',                            [VehicleController::class, 'models']);
+    Route::get('vehicle/fuels',                             [VehicleController::class, 'fuels']);
 
-    Route::get('offers',                                [offerController::class, 'indexApi']);
-    Route::get('faqs',                                  [FaqController::class, 'indexApi']);
+    // Frontend currently calls /search/* — alias to the same handlers.
+    Route::get('search/brands',                             [VehicleController::class, 'brands']);
+    Route::get('search/models',                             [VehicleController::class, 'models']);
+    Route::get('search/fuels',                              [VehicleController::class, 'fuels']);
 
-    Route::get('products',                              [ProductController::class, 'accessoriesApi']);
-    Route::get('products/{slug}',                       [ProductController::class, 'detailApi']);
+    // Pricing
+    Route::post('pricing',                                  [PricingController::class, 'quote']);
 
-    Route::get('cms/about-us',                          [CmsPagesController::class, 'aboutUsApi']);
-    Route::get('cms/page/{slug}',                       [CmsPagesController::class, 'pageApi']);
-    Route::get('cms/company/{slug}',                    [CmsPagesController::class, 'companyPageApi']);
+    // CMS pages
+    Route::get('pages/{slug}',                              [PageController::class, 'show']);
 
-    Route::get('contact',                               [ContactController::class, 'indexApi']);
-
-    /* ── Vehicle picker + global search ─────────────────────────── */
-    Route::get('search/brands',                         [SearchController::class, 'brandsApi']);
-    Route::get('search/models',                         [SearchController::class, 'modelsApi']);
-    Route::get('search/fuels',                          [SearchController::class, 'fuelsApi']);
-    Route::get('search/vehicle-summary',                [SearchController::class, 'vehicleSummaryApi']);
-    Route::get('search',                                [SearchController::class, 'searchApi']);
-
-    /* ── Public form posts (rate-limited) ───────────────────────── */
-    Route::middleware('throttle:10,1')->group(function () {
-        Route::post('contact',                          [ContactController::class, 'submitApi']);
-        Route::post('appointment',                      [ContactController::class, 'appointmentApi']);
+    // CSV import (admin-only, bearer-token gated)
+    Route::middleware('import.token')->prefix('import')->group(function () {
+        Route::post('car-brands',     [ImportController::class, 'carBrands']);
+        Route::post('car-models',     [ImportController::class, 'carModels']);
+        Route::post('fuel-types',     [ImportController::class, 'fuelTypes']);
+        Route::post('service-prices', [ImportController::class, 'servicePrices']);
     });
 
-    /* ── OTP (rate-limited) ─────────────────────────────────────── */
-    Route::middleware('throttle:5,1')->group(function () {
-        Route::post('otp/send',                         [OtpController::class, 'sendApi']);
-        Route::post('otp/verify',                       [OtpController::class, 'verifyApi']);
-        Route::post('otp/resend',                       [OtpController::class, 'resendApi']);
-    });
+    // Phase 2.1 — Auth + OTP (per /PHASE2_CONTRACT.md §5.1).
+    Route::post('auth/lead-capture', LeadCaptureController::class)->middleware('throttle:auth-public');
+    Route::post('auth/send-otp',     SendOtpController::class)->middleware('throttle:auth-public');
+    Route::post('auth/verify-otp',   VerifyOtpController::class)->middleware('throttle:auth-verify');
+    Route::post('auth/login',        LoginController::class)->middleware('throttle:auth-public');
 
-    /* ── Auth (open) ────────────────────────────────────────────── */
-    Route::middleware('throttle:10,1')->group(function () {
-        Route::post('auth/register',                    [RegisterController::class, 'registerApi']);
-        Route::post('auth/login',                       [LoginController::class, 'loginApi']);
-        Route::post('auth/forgot-password',             [LoginController::class, 'forgotApi']);
-        Route::post('auth/reset-password',              [LoginController::class, 'resetApi']);
-    });
-
-    /* ── Authenticated (Sanctum bearer token) ───────────────────── */
     Route::middleware('auth:sanctum')->group(function () {
-
-        // Auth
-        Route::get('auth/me',                           [LoginController::class, 'meApi']);
-        Route::post('auth/logout',                      [LoginController::class, 'logoutApi']);
-        Route::put('auth/password',                     [LoginController::class, 'changePasswordApi']);
-
-        // Service booking helpers
-        Route::post('services/book-now',                [ServiceController::class, 'bookNowApi']);
-
-        // Cart
-        Route::get('cart',                              [CartController::class, 'indexApi']);
-        Route::post('cart',                             [CartController::class, 'addApi']);
-        Route::put('cart',                              [CartController::class, 'updateApi']);
-        Route::delete('cart',                           [CartController::class, 'removeApi']);
-        Route::get('cart/count',                        [CartController::class, 'countApi']);
-        Route::post('cart/sync',                        [CartController::class, 'syncApi']);
-
-        // Checkout
-        Route::get('checkout/summary',                  [CheckoutController::class, 'summaryApi']);
-        Route::post('checkout/available-slots',         [CheckoutController::class, 'availableSlotsApi']);
-        Route::post('checkout/offline',                 [CheckoutController::class, 'createOfflineApi']);
-        Route::post('checkout/online',                  [CheckoutController::class, 'createOnlineApi']);
-
-        // Orders / bookings
-        Route::get('orders',                            [OrderController::class, 'listApi']);
-        Route::get('orders/{id}',                       [OrderController::class, 'showApi'])->whereNumber('id');
-        Route::post('orders/{id}/cancel',               [OrderController::class, 'cancelApi'])->whereNumber('id');
-        Route::post('orders/{id}/reschedule',           [OrderController::class, 'rescheduleApi'])->whereNumber('id');
-
-        // User profile + addresses
-        Route::get('user/profile',                      [UserController::class, 'profileApi']);
-        Route::get('user/addresses',                    [UserController::class, 'addressListApi']);
-        Route::post('user/addresses',                   [UserController::class, 'addressStoreApi']);
-        Route::put('user/addresses/{id}',               [UserController::class, 'addressUpdateApi'])->whereNumber('id');
-        Route::delete('user/addresses/{id}',            [UserController::class, 'addressDeleteApi'])->whereNumber('id');
+        Route::post('auth/logout',  LogoutController::class)->middleware('throttle:user-write');
+        Route::get('user/profile',  [ProfileController::class, 'show'])->middleware('throttle:user-read');
+        Route::put('user/profile',  [ProfileController::class, 'update'])->middleware('throttle:user-write');
     });
-});
-
-// Sanctum default user route — kept for compatibility
-Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
-    return $request->user();
 });

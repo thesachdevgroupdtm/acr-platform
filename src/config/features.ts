@@ -15,11 +15,17 @@
  * production and the typed fetcher has been added to src/lib/api.ts.
  */
 export const FEATURES = {
-  /** /auth/login, /auth/register, /auth/logout, /auth/profile, /user/profile, /user/addresses */
-  auth: false,
-  /** /cart/sync — best-effort server mirror of the local cart */
+  /**
+   * Phase 2.1 (this commit) wires the OTP-based auth surface:
+   *   /auth/lead-capture, /auth/send-otp, /auth/verify-otp,
+   *   /auth/login, /auth/logout, /user/profile (GET, PUT).
+   * Address endpoints land in 2.2 — auth=true alone is sufficient
+   * for the login flow.
+   */
+  auth: true,
+  /** /cart/* (server-authoritative cart) lands in Phase 2.3. */
   cartSync: false,
-  /** /checkout/offline — turn cart into an order (Pay-on-service flow) */
+  /** /checkout/place-order lands in Phase 2.5. */
   offlineCheckout: false,
 } as const;
 
