@@ -28,7 +28,7 @@ import {
   TESTIMONIALS,
   LOCATIONS,
 } from "../data/businessData";
-import { useBrands, useModels } from "../hooks/useVehicle";
+import { useBrands, useModels, useFuels } from "../hooks/useVehicle";
 import PageBanner from "../components/PageBanner";
 import { useCart } from "../hooks/useCart";
 import { useAuth } from "../hooks/useAuth";
@@ -95,7 +95,7 @@ export default function ServiceCategory({
   const category = apiCategory;
 
   // ---------- Cart ----------
-  const { addItem, count, isInCart } = useCart();
+  const { addItem, count, isInCart, findCartItem, removeItem } = useCart();
   const [addedFlash, setAddedFlash] = useState<string | null>(null);
 
   // ---------- Auth (drives phone prefill + OTP skip) ----------
@@ -119,6 +119,15 @@ export default function ServiceCategory({
     brand: string;
     model: string;
     fuel: string;
+    /** Phase 2.3.3 — IDs/slugs captured by the in-page picker so the
+     *  /services/{slug} query receives proper vehicle context and the
+     *  resulting prices match ServiceDetail's Pricing tab. */
+    brand_id?: number;
+    model_id?: number;
+    fuel_id?: number;
+    brand_slug?: string;
+    model_slug?: string;
+    fuel_slug?: string;
   } | null>(bookingCtx.car);
   const [bookingPhone, setBookingPhone] = useState(bookingCtx.phone || "");
   const [otpSent, setOtpSent] = useState(bookingCtx.otpVerified);
@@ -135,8 +144,11 @@ export default function ServiceCategory({
   const [pendingCar, setPendingCar] = useState<{
     brand: string;
     brandId: number | null;
+    brandSlug: string | null;
     model: string;
-  }>({ brand: "", brandId: null, model: "" });
+    modelId: number | null;
+    modelSlug: string | null;
+  }>({ brand: "", brandId: null, brandSlug: null, model: "", modelId: null, modelSlug: null });
   const [carSearch, setCarSearch] = useState("");
 
   // ---------- Vehicle picker — pure API via React Query ----------
@@ -144,8 +156,13 @@ export default function ServiceCategory({
   const modelsQuery = useModels(
     showCarSelector && carStep === 2 ? pendingCar.brandId : null
   );
+  const fuelsQuery = useFuels(
+    showCarSelector && carStep === 3 ? pendingCar.brandId : null,
+    showCarSelector && carStep === 3 ? pendingCar.modelId : null,
+  );
   const apiBrandRows = brandsQuery.data?.brands ?? [];
   const apiModelRows = modelsQuery.data?.models ?? [];
+  const apiFuelRows  = fuelsQuery.data?.fuels   ?? [];
 
   // ---------- Section nav scroll spy ----------
   useEffect(() => {
@@ -322,20 +339,47 @@ export default function ServiceCategory({
     setCarSearch("");
   };
   const selectBrand = (brand: string, brandId: number | null = null) => {
-    setPendingCar({ brand, brandId, model: "" });
+    const row = apiBrandRows.find((b) => b.id === brandId);
+    setPendingCar({
+      brand,
+      brandId,
+      brandSlug: row?.slug ?? null,
+      model: "",
+      modelId: null,
+      modelSlug: null,
+    });
     setCarStep(2);
     setCarSearch("");
   };
   const selectModel = (model: string) => {
-    setPendingCar({ ...pendingCar, model });
+    const row = apiModelRows.find((m) => (m.title || m.name) === model);
+    setPendingCar({
+      ...pendingCar,
+      model,
+      modelId: row?.id ?? null,
+      modelSlug: row?.slug ?? null,
+    });
     setCarStep(3);
     setCarSearch("");
   };
   const selectFuel = (fuel: string) => {
+    // Phase 2.3.3 — capture fuel_id and fuel_slug from the API row so
+    // bookingCtx.car carries the data /services/{slug} needs to resolve
+    // vehicle-specific prices. Fallback: case-insensitive match against
+    // the static FUEL_TYPES list when the API is slow / unavailable.
+    const row = apiFuelRows.find(
+      (f) => (f.title || f.name)?.toLowerCase() === fuel.toLowerCase()
+    );
     setBookingCar({
       brand: pendingCar.brand,
       model: pendingCar.model,
       fuel,
+      ...(pendingCar.brandId  != null ? { brand_id:  pendingCar.brandId  } : {}),
+      ...(pendingCar.modelId  != null ? { model_id:  pendingCar.modelId  } : {}),
+      ...(row?.id             != null ? { fuel_id:   row.id              } : {}),
+      ...(pendingCar.brandSlug         ? { brand_slug: pendingCar.brandSlug } : {}),
+      ...(pendingCar.modelSlug         ? { model_slug: pendingCar.modelSlug } : {}),
+      ...(row?.slug                    ? { fuel_slug: row.slug             } : {}),
     });
     closeCarSelector();
   };
@@ -650,14 +694,18 @@ export default function ServiceCategory({
                     // Show prices ONLY when user passed OTP AND API marks
                     // the category as priced for the chosen vehicle.
                     const showPrice = pricesShown && priceShowFromApi;
-                    // Phase 2.3.2 — toggle to "View Cart" when this exact
-                    // (service, vehicle) tuple is already in the server cart.
-                    const inCart = isInCart({
+                    // Phase 2.3.3 — toggle add/remove on the same button.
+                    // First click: addItem. Second click on the same row:
+                    // remove the server cart line. The 1.8 s `justAdded`
+                    // flash continues to bridge the visual gap between
+                    // the click and the React Query refetch.
+                    const cartItem = findCartItem({
                       ref_id:   sub.id,
                       brand_id: bookingCar?.brand_id,
                       model_id: bookingCar?.model_id,
                       fuel_id:  bookingCar?.fuel_id,
                     });
+                    const inCart = !!cartItem;
                     return (
                       <div
                         key={sub.id}
@@ -706,8 +754,8 @@ export default function ServiceCategory({
                           {showPrice ? (
                             <button
                               onClick={() =>
-                                inCart
-                                  ? setCurrentPage("cart")
+                                inCart && cartItem
+                                  ? removeItem(String(cartItem.id))
                                   : handleAddToCart(sub)
                               }
                               className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition-colors w-full sm:w-auto flex items-center justify-center gap-1.5 ${
@@ -715,12 +763,9 @@ export default function ServiceCategory({
                                   ? "bg-primary-dark text-white"
                                   : "bg-primary text-white hover:bg-primary-dark"
                               }`}
+                              aria-pressed={inCart}
                             >
-                              {inCart ? (
-                                <>
-                                  <CheckCircle2 className="w-3.5 h-3.5" /> View Cart
-                                </>
-                              ) : justAdded ? (
+                              {inCart || justAdded ? (
                                 <>
                                   <CheckCircle2 className="w-3.5 h-3.5" /> Added
                                 </>

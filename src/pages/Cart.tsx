@@ -127,10 +127,14 @@ export default function Cart({ setCurrentPage, openAuth }: CartProps) {
     setCheckout({ couponCode: "" });
   };
 
+  // Phase 2.3.3 — GST removed from Cart per contract Decision D-B.
+  // Cart is pre-tax. GST renders at Checkout/Payment (Phase 2.5).
+  // GST_PCT is intentionally kept imported above so when 2.5 lights
+  // up Checkout/Payment they continue to compile against the same
+  // constant without a flag-flip churn.
   const serviceCharge = Math.round(subtotal * (SERVICE_CHARGE_PCT / 100));
   const subtotalAfterDiscount = Math.max(0, subtotal - effectiveDiscount);
-  const gst = Math.round(subtotalAfterDiscount * (GST_PCT / 100));
-  const total = subtotalAfterDiscount + serviceCharge + gst;
+  const total = subtotalAfterDiscount + serviceCharge;
 
   // Gate: checkout requires an authenticated account (anti-fake-lead).
   // Guests get prompted to login or sign up before proceeding.
@@ -307,7 +311,7 @@ export default function Cart({ setCurrentPage, openAuth }: CartProps) {
                         value={`₹${serviceCharge}`}
                       />
                     )}
-                    <Row label={`GST (${GST_PCT}%)`} value={`₹${gst}`} />
+                    {/* GST line removed — see Decision D-B comment above. */}
                   </div>
 
                   <div className="px-5 py-4 flex items-baseline justify-between">

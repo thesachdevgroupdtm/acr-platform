@@ -39,7 +39,7 @@ export default function ServiceDetail({
   setCurrentPage,
   openEstimate,
 }: ServiceDetailProps) {
-  const { addItem, count, isInCart } = useCart();
+  const { addItem, count, findCartItem, removeItem } = useCart();
   // Pull synced booking state from parent ServiceCategory page
   const { state: booking } = useBookingContext();
   const { user, isAuthenticated } = useAuth();
@@ -93,14 +93,16 @@ export default function ServiceDetail({
   const selectedLocationName =
     LOCATIONS.find((l) => l.id === booking.location)?.name || "your area";
 
-  // Phase 2.3.2 — Add-to-Cart button toggle (Bug A): flip to View Cart
-  // when this exact (service, vehicle) tuple is already in the server cart.
-  const inCart = isInCart({
+  // Phase 2.3.3 — toggle add/remove on the same button. First click:
+  // addItem; second click: remove the server cart line. The 1.8 s
+  // post-add flash bridges the visual gap to the React Query refetch.
+  const cartItem = findCartItem({
     ref_id:   service.id,
     brand_id: booking.car?.brand_id,
     model_id: booking.car?.model_id,
     fuel_id:  booking.car?.fuel_id,
   });
+  const inCart = !!cartItem;
 
   // ---------- Page-level constants (no location-tied content) ----------
   const cityWord = "Delhi NCR";
@@ -749,13 +751,16 @@ export default function ServiceDetail({
                   <>
                     <button
                       onClick={() =>
-                        inCart ? setCurrentPage("cart") : handleAddToCart()
+                        inCart && cartItem
+                          ? removeItem(String(cartItem.id))
+                          : handleAddToCart()
                       }
                       className="w-full bg-white text-primary py-3.5 font-black uppercase tracking-tighter text-sm flex items-center justify-center gap-2 hover:bg-white/90 transition-colors mb-3"
+                      aria-pressed={inCart}
                     >
                       {inCart ? (
                         <>
-                          <CheckCircle2 className="w-4 h-4" /> View Cart
+                          <CheckCircle2 className="w-4 h-4" /> Added
                         </>
                       ) : (
                         <>

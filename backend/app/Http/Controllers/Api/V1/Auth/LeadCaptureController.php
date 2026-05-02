@@ -37,16 +37,53 @@ class LeadCaptureController extends Controller
         $name  = trim($validated['name']);
         $email = $validated['email'] ?? null;
 
+        // Phase 2.3.3 — pre-validate email uniqueness so the
+        // users.email UNIQUE index never has a chance to throw a
+        // raw QueryException at the UI. If the email already
+        // belongs to a DIFFERENT phone, return a clean 422 with a
+        // helpful message. If it belongs to the same phone, the
+        // firstOrCreate below resolves the existing row and the
+        // email assignment is a no-op.
+        if ($email) {
+            $emailOwner = User::query()
+                ->where('email', $email)
+                ->where('phone', '!=', $phone)
+                ->first();
+            if ($emailOwner) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'This email is already registered with another account. Please use a different email, or log in with your existing account.',
+                    'errors'  => [
+                        'email' => ['This email is already registered.'],
+                    ],
+                ], 422);
+            }
+        }
+
         // OTP-only auth: `password` is nullable per Phase 2.1.1
         // migration; we never write to it on this path.
-        $user = User::firstOrCreate(
-            ['phone' => $phone],
-            [
-                'name'  => $name,
-                'email' => $email,        // may be null
-                'role'  => 'customer',
-            ]
-        );
+        // Defense in depth: any future integrity-violation edge case
+        // (race on email, etc.) is caught here so APP_DEBUG=true does
+        // not leak SQL traces to the response body.
+        try {
+            $user = User::firstOrCreate(
+                ['phone' => $phone],
+                [
+                    'name'  => $name,
+                    'email' => $email,        // may be null
+                    'role'  => 'customer',
+                ]
+            );
+        } catch (\Illuminate\Database\QueryException $e) {
+            if ($e->getCode() === '23000') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Account creation failed due to a conflict. Please try a different phone or email.',
+                    'errors'  => [],
+                ], 422);
+            }
+            throw $e;
+        }
 
         if (!$user->wasRecentlyCreated) {
             // Existing row — update name freely; email only if not

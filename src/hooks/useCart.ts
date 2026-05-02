@@ -191,6 +191,42 @@ export function useCart() {
     [cart],
   );
 
+  /**
+   * Phase 2.3.3 — toggle-remove companion to `isInCart`. Returns the
+   * matching CartItemResource (with its server `id`) so callers can
+   * call `removeItem(item.id)` on a second click without having to
+   * reach into the legacy `items` array. Same matching rules as
+   * `isInCart`: kind + ref_id + vehicle tuple, with `undefined`
+   * collapsing to `null` for "no-vehicle" line equality.
+   */
+  const findCartItem = useCallback(
+    (q: {
+      kind?: CartItemResource["kind"];
+      ref_id: number;
+      brand_id?: number | null;
+      model_id?: number | null;
+      fuel_id?: number | null;
+    }): CartItemResource | null => {
+      if (!cart) return null;
+      const targetKind = q.kind ?? "service";
+      return (
+        cart.items.find((it) => {
+          if (it.kind !== targetKind) return false;
+          if (it.ref_id !== q.ref_id) return false;
+          const ib = it.vehicle?.brand_id ?? null;
+          const im = it.vehicle?.model_id ?? null;
+          const ifu = it.vehicle?.fuel_id  ?? null;
+          return (
+            ib === (q.brand_id ?? null) &&
+            im === (q.model_id ?? null) &&
+            ifu === (q.fuel_id  ?? null)
+          );
+        }) ?? null
+      );
+    },
+    [cart],
+  );
+
   const invalidate = useCallback(() => {
     qc.invalidateQueries({ queryKey: ["cart"] });
   }, [qc]);
@@ -325,6 +361,9 @@ export function useCart() {
     cart,
     /** Phase 2.3.2 — Add-to-Cart button toggle helper (Bug A). */
     isInCart,
+    /** Phase 2.3.3 — companion lookup so callers can toggle-remove via
+     *  `removeItem(findCartItem(...).id)` on a second click. */
+    findCartItem,
     /** Coupon stubs — will return 501-equivalent until 2.6. */
     applyCoupon,
     removeCoupon,
