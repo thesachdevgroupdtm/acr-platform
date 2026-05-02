@@ -60,6 +60,26 @@ export interface CartItem {
 
 const SESSION_KEY = "acr_cart_session";
 
+/* ─────────────────── Phase 2.3.1 — legacy localStorage purge ───────────────────
+ * Pre-Phase-2.3 the hook persisted an `acr_cart_v1` array as the
+ * cart's source of truth. Phase 2.3 made the server authoritative
+ * and dropped every read/write of that key — but existing user
+ * browsers still carry the stale entry, surfacing it in DevTools
+ * Local Storage and confusing operators ("why are there cart items
+ * here?"). This module-level cleanup deletes the key once per page
+ * load. Idempotent: a second navigation no-ops because the key is
+ * already gone. Safe to leave in indefinitely; can be removed once
+ * we're confident no live user still has the legacy entry. */
+if (typeof window !== "undefined") {
+  try {
+    if (window.localStorage.getItem("acr_cart_v1") !== null) {
+      window.localStorage.removeItem("acr_cart_v1");
+    }
+  } catch {
+    /* swallow — storage may be disabled */
+  }
+}
+
 /** Returns a stable per-browser UUID, generating one on first call. */
 function ensureSessionUuid(): string {
   if (typeof window === "undefined") return "";
@@ -307,6 +327,10 @@ export interface CheckoutDetails {
   couponCode: string;
 }
 
+// Phase 2.5 review: consider sessionStorage instead of localStorage
+// for PII (name/phone/email persist across sessions today); or clear
+// on logout. CheckoutDetails currently holds only safe form-prefill
+// fields — no cart line data — so cart server-truth is unaffected.
 const CHECKOUT_KEY = "acr_checkout_v1";
 const CHECKOUT_EVENT = "acr-checkout-updated";
 const EMPTY_CHECKOUT: CheckoutDetails = {
