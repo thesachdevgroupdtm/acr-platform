@@ -168,7 +168,8 @@ export default function Header({ currentPage, setCurrentPage, openEstimate, open
   return (
     <header className="sticky top-0 z-[9999] bg-white border-b border-border overflow-visible">
       {/* Top Bar - Blue Background */}
-      <div className="bg-primary py-2 overflow-hidden">
+      {/* Phase 2.3.1: removed overflow-hidden — was clipping user menu dropdown */}
+      <div className="bg-primary py-2">
         <div className="site-container flex justify-between items-center text-[9px] font-bold uppercase tracking-[0.15em] text-white">
           {/* Left Side */}
           <div className="flex items-center gap-6">
