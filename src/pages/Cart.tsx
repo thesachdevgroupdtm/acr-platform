@@ -25,7 +25,6 @@ import {
   computeCouponDiscount,
   OfferCoupon,
 } from "../data/businessData";
-import { FEATURES } from "../config/features";
 
 interface CartProps {
   setCurrentPage: (page: string) => void;
@@ -142,12 +141,6 @@ export default function Cart({ setCurrentPage, openAuth }: CartProps) {
     if (!isAuthenticated) {
       openAuth("login", "checkout");
       return;
-    }
-    if (!FEATURES.checkoutFlow) {
-      // Phase 2.3.2 — destination is the ComingSoon page; nav still
-      // proceeds so the user gets the explanation + Call Now CTA.
-      // eslint-disable-next-line no-console
-      console.info("[Phase 2.3.2] Checkout flow gated; user routed to ComingSoon page.");
     }
     setCurrentPage("checkout");
   };

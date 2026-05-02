@@ -755,7 +755,15 @@ export default function ServiceDetail({
                           ? removeItem(String(cartItem.id))
                           : handleAddToCart()
                       }
-                      className="w-full bg-white text-primary py-3.5 font-black uppercase tracking-tighter text-sm flex items-center justify-center gap-2 hover:bg-white/90 transition-colors mb-3"
+                      // Phase 2.3.4 — ADDED state inherits identical sizing
+                      // from the base button; only the inner border tint
+                      // changes so the toggle is unambiguous on the
+                      // primary-colored sidebar background.
+                      className={`w-full py-3.5 font-black uppercase tracking-tighter text-sm flex items-center justify-center gap-2 transition-colors mb-3 border ${
+                        inCart
+                          ? "bg-white text-primary border-primary hover:bg-primary/5"
+                          : "bg-white text-primary border-white hover:bg-white/90"
+                      }`}
                       aria-pressed={inCart}
                     >
                       {inCart ? (

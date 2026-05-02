@@ -46,6 +46,13 @@ export interface LeadCaptureRequest {
   name: string;
   phone: string;
   email?: string;
+  /**
+   * Phase 2.3.4 — caller-declared intent. Default 'lead_capture'
+   * preserves Quick-Estimate / soft-merge semantics. 'signup'
+   * activates strict phone uniqueness server-side: if the phone is
+   * already on file, the server returns 422 instead of merging.
+   */
+  intent?: "signup" | "lead_capture";
 }
 
 export interface LeadCaptureResponse {

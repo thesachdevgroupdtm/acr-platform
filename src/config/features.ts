@@ -28,20 +28,22 @@ export const FEATURES = {
   /** /checkout/place-order lands in Phase 2.5. */
   offlineCheckout: false,
   /**
-   * Phase 2.3.2 — gates the existing client-side fake Checkout +
-   * Payment flow until Phase 2.5 ships /checkout/place-order. With
-   * this off, Checkout/Payment render a "coming soon" notice with
-   * the cart summary and a Call Now CTA instead of generating a
-   * fake `ACR<timestamp>` invoice that no backend ever sees.
+   * Phase 2.3.4 — restored to original client-side flow. The
+   * pre-2.3.2 Checkout → Payment → BookingConfirmation experience
+   * is the production launch path until Phase 2.5 swaps the fake
+   * /checkout/place-order call for a real one. The 2.3.2 gate
+   * served its purpose during diagnostics and is kept as a key so
+   * Phase 2.5 can flip it back briefly during a partial rollout
+   * if needed.
    */
-  checkoutFlow: false,
+  checkoutFlow: true,
   /**
-   * Phase 2.3.2 — gates MyBookings until /user/orders ships. With
-   * this off, MyBookings shows a "coming soon" notice next to the
-   * user's profile card instead of "0 BOOKINGS" (which read from
-   * the unwired AcrUser.bookings array).
+   * Phase 2.3.4 — restored alongside checkoutFlow. MyBookings
+   * renders the existing two-column user-profile + bookings-history
+   * layout. The bookings list itself is empty pre-2.5 (no
+   * persistence) which matches the pre-2.3.2 behavior.
    */
-  bookingsList: false,
+  bookingsList: true,
 } as const;
 
 export type FeatureFlag = keyof typeof FEATURES;

@@ -22,6 +22,7 @@ import {
   type CategorySubService,
 } from "../lib/api";
 import { useApiQuery } from "../hooks/useApiQuery";
+import { usePricingFor } from "../hooks/usePricing";
 
 interface ServicesProps {
   setCurrentPage: (page: string) => void;
@@ -104,6 +105,43 @@ export default function Services({ setCurrentPage }: ServicesProps) {
     () => new Set(servicesQuery.data?.available_category_ids ?? []),
     [servicesQuery.data?.available_category_ids]
   );
+
+  // Phase 2.3.4 — vehicle-specific prices. /services list endpoint
+  // returns base_price only by design (SubServiceResource); to match
+  // ServiceCategory + ServiceDetail, POST /pricing once with every
+  // visible service id and override base_price in render. Skipped
+  // when bookingCar lacks any of the three IDs.
+  const allServiceIds = useMemo(() => {
+    const ids: number[] = [];
+    for (const c of apiCategories) {
+      for (const s of c.services ?? []) ids.push(s.id);
+    }
+    return ids;
+  }, [apiCategories]);
+  const pricingReq = useMemo(() => {
+    if (
+      !booking.car?.brand_id ||
+      !booking.car?.model_id ||
+      !booking.car?.fuel_id ||
+      allServiceIds.length === 0
+    ) {
+      return null;
+    }
+    return {
+      brand_id:     booking.car.brand_id,
+      model_id:     booking.car.model_id,
+      fuel_type_id: booking.car.fuel_id,        // backend uses fuel_type_id
+      service_ids:  allServiceIds,
+    };
+  }, [booking.car, allServiceIds]);
+  const pricingQuery = usePricingFor(pricingReq);
+  const priceMap = useMemo(() => {
+    const m = new Map<number, number>();
+    for (const p of pricingQuery.data?.matched_prices ?? []) {
+      m.set(p.service_id, p.price);
+    }
+    return m;
+  }, [pricingQuery.data]);
 
   const handleAddToCart = (sub: CategorySubService, categorySlug: string) => {
     addItem({
@@ -253,6 +291,7 @@ export default function Services({ setCurrentPage }: ServicesProps) {
                     category={category}
                     pricesShown={booking.pricesShown}
                     pricesAvailableForCategory={availableCategoryIds.has(category.id)}
+                    priceFor={(subId) => priceMap.get(subId)}
                     addedFlash={addedFlash}
                     cartItemFor={(subId) =>
                       findCartItem({
@@ -327,6 +366,10 @@ interface CategorySectionProps {
   category: ApiServiceCategory;          // sub-services arrive nested via Phase 1.6
   pricesShown: boolean;                  // user has unlocked prices via OTP
   pricesAvailableForCategory: boolean;   // backend says this category has prices for the vehicle
+  /** Phase 2.3.4 — vehicle-specific price for a sub-service. Returns
+   *  undefined when no vehicle selected or no priced row matched.
+   *  When defined, overrides sub.base_price for display. */
+  priceFor: (subId: number) => number | undefined;
   addedFlash: string | null;
   /** Phase 2.3.3 — returns the matching CartItemResource (with its
    *  server `id`) when this sub is already in the cart for the current
@@ -342,6 +385,7 @@ const CategorySection: React.FC<CategorySectionProps> = ({
   category,
   pricesShown,
   pricesAvailableForCategory,
+  priceFor,
   addedFlash,
   cartItemFor,
   onAddToCart,
@@ -392,6 +436,10 @@ const CategorySection: React.FC<CategorySectionProps> = ({
           const showPrice = pricesShown && pricesAvailableForCategory;
           const cartItem = cartItemFor(sub.id);
           const inCart = !!cartItem;
+          // Phase 2.3.4 — prefer the /pricing match; fall back to
+          // base_price (no vehicle, or service has no priced row).
+          const vehiclePrice = priceFor(sub.id);
+          const displayPrice = vehiclePrice ?? sub.base_price ?? null;
           return (
             <div
               key={sub.id}
@@ -411,10 +459,10 @@ const CategorySection: React.FC<CategorySectionProps> = ({
                 {showPrice ? (
                   <>
                     <p className="text-base font-black text-neutral-900">
-                      {sub.base_price ? `₹${sub.base_price}` : "Quote"}
+                      {displayPrice ? `₹${displayPrice}` : "Quote"}
                     </p>
                     <span className="text-[9px] uppercase tracking-widest font-bold text-neutral-400">
-                      {sub.base_price ? "Onwards" : "On Inspection"}
+                      {displayPrice ? "Onwards" : "On Inspection"}
                     </span>
                   </>
                 ) : (
@@ -436,10 +484,14 @@ const CategorySection: React.FC<CategorySectionProps> = ({
                         ? onRemoveFromCart(cartItem.id)
                         : onAddToCart(sub)
                     }
-                    className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition-colors w-full sm:w-auto flex items-center justify-center gap-1.5 ${
+                    // Phase 2.3.4 — same dimensions as ADD TO CART; only
+                    // the colors invert so the button doesn't visually
+                    // jump between states. Border kept on both states so
+                    // the box model is identical.
+                    className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition-colors w-full sm:w-auto flex items-center justify-center gap-1.5 border ${
                       inCart || justAdded
-                        ? "bg-primary-dark text-white"
-                        : "bg-primary text-white hover:bg-primary-dark"
+                        ? "bg-white text-primary border-primary hover:bg-primary/5"
+                        : "bg-primary text-white border-primary hover:bg-primary-dark hover:border-primary-dark"
                     }`}
                     aria-pressed={inCart}
                   >

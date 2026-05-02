@@ -28,14 +28,38 @@ class LeadCaptureController extends Controller
     public function __invoke(Request $request, OtpDriverInterface $otp): JsonResponse
     {
         $validated = $request->validate([
-            'name'  => ['required', 'string', 'min:2', 'max:120'],
-            'phone' => ['required', 'string', 'regex:/^\d{10}$/'],
-            'email' => ['nullable', 'string', 'email', 'max:191'],
+            'name'   => ['required', 'string', 'min:2', 'max:120'],
+            'phone'  => ['required', 'string', 'regex:/^\d{10}$/'],
+            'email'  => ['nullable', 'string', 'email', 'max:191'],
+            // Phase 2.3.4 — caller declares intent so we can apply
+            // strict phone-uniqueness only when this endpoint is
+            // serving a sign-up form. Quick-Estimate / lead-capture
+            // continues to soft-merge by phone (existing behavior).
+            'intent' => ['nullable', 'string', 'in:signup,lead_capture'],
         ]);
 
-        $phone = $validated['phone'];
-        $name  = trim($validated['name']);
-        $email = $validated['email'] ?? null;
+        $phone  = $validated['phone'];
+        $name   = trim($validated['name']);
+        $email  = $validated['email']  ?? null;
+        $intent = $validated['intent'] ?? 'lead_capture';
+
+        // Phase 2.3.4 — strict phone uniqueness on signup. Without
+        // this, a duplicate phone is silently merged and the
+        // existing account's name was being overwritten by the
+        // pre-2.3.4 update branch. Existing accounts must use the
+        // login flow.
+        if ($intent === 'signup') {
+            $existingPhone = User::query()->where('phone', $phone)->first();
+            if ($existingPhone) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'This phone number is already registered. Please log in to your existing account.',
+                    'errors'  => [
+                        'phone' => ['This phone is already registered.'],
+                    ],
+                ], 422);
+            }
+        }
 
         // Phase 2.3.3 — pre-validate email uniqueness so the
         // users.email UNIQUE index never has a chance to throw a
@@ -86,19 +110,30 @@ class LeadCaptureController extends Controller
         }
 
         if (!$user->wasRecentlyCreated) {
-            // Existing row — update name freely; email only if not
-            // overwriting a verified-different one.
-            $user->name = $name;
+            // Phase 2.3.4 — name is NOT overwritten on existing rows.
+            // Profile-name edits go through PUT /user/profile (Phase
+            // 2.1). Pre-2.3.4 this branch silently rewrote the name
+            // on every Quick-Estimate call, which the user reported
+            // as "my name keeps changing".
+            //
+            // Email is still soft-updated when there is no existing
+            // verified-different email on the row — same rules as
+            // before. A separate-account collision was already
+            // caught by the pre-validation block above.
+            $changed = false;
             if ($email) {
                 $canReplaceEmail =
                     !$user->email
                     || !$user->is_verified_email
                     || strcasecmp($user->email, $email) === 0;
-                if ($canReplaceEmail) {
+                if ($canReplaceEmail && $user->email !== $email) {
                     $user->email = $email;
+                    $changed = true;
                 }
             }
-            $user->save();
+            if ($changed) {
+                $user->save();
+            }
         }
 
         $code = $this->generateCode();

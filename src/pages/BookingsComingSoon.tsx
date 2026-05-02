@@ -1,3 +1,5 @@
+// Phase 2.3.4 — currently unreachable; preserved for reference and
+// possible re-use during Phase 2.5 partial rollouts.
 /**
  * Phase 2.3.2 — placeholder rendered when FEATURES.bookingsList is off.
  *

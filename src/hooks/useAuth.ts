@@ -250,7 +250,17 @@ export function useAuth() {
       }
 
       try {
-        const res: LeadCaptureResponse = await postLeadCapture({ name, phone, email });
+        // Phase 2.3.4 — explicit `signup` intent so the server
+        // applies strict phone-uniqueness validation. Returning
+        // 422 with a clean phone-field error when the number is
+        // already on file replaces the pre-2.3.4 silent merge that
+        // also overwrote the existing account's name.
+        const res: LeadCaptureResponse = await postLeadCapture({
+          name,
+          phone,
+          email,
+          intent: "signup",
+        });
         return {
           success: true,
           pending: {

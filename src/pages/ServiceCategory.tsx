@@ -758,10 +758,14 @@ export default function ServiceCategory({
                                   ? removeItem(String(cartItem.id))
                                   : handleAddToCart(sub)
                               }
-                              className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition-colors w-full sm:w-auto flex items-center justify-center gap-1.5 ${
+                              // Phase 2.3.4 — ADDED state mirrors ADD TO CART
+                              // dimensions exactly; only colors invert (white
+                              // bg, primary text + border) so button sizes
+                              // don't shift between states.
+                              className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition-colors w-full sm:w-auto flex items-center justify-center gap-1.5 border ${
                                 inCart || justAdded
-                                  ? "bg-primary-dark text-white"
-                                  : "bg-primary text-white hover:bg-primary-dark"
+                                  ? "bg-white text-primary border-primary hover:bg-primary/5"
+                                  : "bg-primary text-white border-primary hover:bg-primary-dark hover:border-primary-dark"
                               }`}
                               aria-pressed={inCart}
                             >
