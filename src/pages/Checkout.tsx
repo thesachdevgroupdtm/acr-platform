@@ -26,6 +26,8 @@ import {
   computeCouponDiscount,
 } from "../data/businessData";
 import { CheckoutSteps } from "./Cart";
+import { FEATURES } from "../config/features";
+import CheckoutComingSoon from "./CheckoutComingSoon";
 
 interface CheckoutProps {
   setCurrentPage: (page: string) => void;
@@ -39,6 +41,13 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const GST_PCT = 18;
 
 export default function Checkout({ setCurrentPage, openAuth }: CheckoutProps) {
+  // Phase 2.3.2 — gate the pre-2.5 client-side fake checkout flow.
+  // Real /checkout/place-order ships in Phase 2.5; until then the
+  // ComingSoon notice is shown so users don't get a fake invoice.
+  if (!FEATURES.checkoutFlow) {
+    return <CheckoutComingSoon setCurrentPage={setCurrentPage} />;
+  }
+
   const { items, subtotal, count } = useCart();
   const { details, setDetails } = useCheckout();
   const { user, isAuthenticated, setDefaults } = useAuth();
@@ -47,28 +56,43 @@ export default function Checkout({ setCurrentPage, openAuth }: CheckoutProps) {
   const { state: booking } = useBookingContext();
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // Auto-prefill personal details from the logged-in user account so
-  // customers don't have to retype on every booking.
+  // Phase 2.3.2 — prefill priority chain (Bug B):
+  //   1. useAuth().user            (server-verified PII; highest fidelity)
+  //   2. acr_checkout_v1 (`details`) (last form draft — already loaded into state)
+  //   3. acr_booking_ctx_v1.phone   (verified phone from Quick Estimate OTP)
+  //
+  // We only set fields that are EMPTY in `details` so the user's edits
+  // survive a re-render. Once a field is populated from any source, the
+  // user controls it.
   useEffect(() => {
-    if (!user) return;
     const updates: Partial<typeof details> = {};
-    if (!details.name && user.name) updates.name = user.name;
-    if (!details.phone && user.phone) updates.phone = user.phone;
-    if (!details.email && user.email) updates.email = user.email;
-    // Prefill saved address if user already has one
-    if (!details.address && user.addresses && user.addresses.length > 0) {
-      const def =
-        user.addresses.find((a) => a.isDefault) || user.addresses[0];
-      if (def) updates.address = def.address;
+
+    // Priority 1 — authenticated user wins for any empty field.
+    if (user) {
+      if (!details.name && user.name) updates.name = user.name;
+      if (!details.phone && user.phone) updates.phone = user.phone;
+      if (!details.email && user.email) updates.email = user.email;
+      if (!details.address && user.addresses && user.addresses.length > 0) {
+        const def =
+          user.addresses.find((a) => a.isDefault) || user.addresses[0];
+        if (def) updates.address = def.address;
+      }
+      if (!details.serviceCenter && user.defaultLocation) {
+        updates.serviceCenter = user.defaultLocation;
+      }
     }
-    // Prefill default service-center if user saved one
-    if (!details.serviceCenter && user.defaultLocation) {
-      updates.serviceCenter = user.defaultLocation;
+
+    // Priority 3 fallback — Quick Estimate captured a verified phone but
+    // the user is not logged in. Auth wins above; this only applies when
+    // user.phone is unavailable AND draft is empty.
+    if (!details.phone && !updates.phone && booking.phone) {
+      updates.phone = booking.phone;
     }
+
     if (Object.keys(updates).length > 0) setDetails(updates);
     // setDetails is stable from useCheckout
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  }, [user, booking.phone]);
 
 
   // ---------- Coupon-aware totals (synced from Cart via useCheckout) ----------

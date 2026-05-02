@@ -27,6 +27,21 @@ export const FEATURES = {
   cartSync: false,
   /** /checkout/place-order lands in Phase 2.5. */
   offlineCheckout: false,
+  /**
+   * Phase 2.3.2 — gates the existing client-side fake Checkout +
+   * Payment flow until Phase 2.5 ships /checkout/place-order. With
+   * this off, Checkout/Payment render a "coming soon" notice with
+   * the cart summary and a Call Now CTA instead of generating a
+   * fake `ACR<timestamp>` invoice that no backend ever sees.
+   */
+  checkoutFlow: false,
+  /**
+   * Phase 2.3.2 — gates MyBookings until /user/orders ships. With
+   * this off, MyBookings shows a "coming soon" notice next to the
+   * user's profile card instead of "0 BOOKINGS" (which read from
+   * the unwired AcrUser.bookings array).
+   */
+  bookingsList: false,
 } as const;
 
 export type FeatureFlag = keyof typeof FEATURES;

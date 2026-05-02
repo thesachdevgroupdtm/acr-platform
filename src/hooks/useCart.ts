@@ -156,6 +156,41 @@ export function useCart() {
   const subtotal = cart?.totals.subtotal ?? 0;
   const count    = cart?.item_count ?? 0;
 
+  /**
+   * Phase 2.3.2 — Add-to-Cart button toggle (Bug A).
+   *
+   * Returns true when the cart already holds a line for the given
+   * (kind, ref_id, brand_id?, model_id?, fuel_id?) tuple. Vehicle
+   * IDs are matched strictly: undefined in the query equals null on
+   * the server row (i.e. no-vehicle line). Pass all three vehicle
+   * IDs when the caller has a selected vehicle so the toggle tracks
+   * the same line `addItem` would dedup against.
+   */
+  const isInCart = useCallback(
+    (q: {
+      kind?: CartItemResource["kind"];
+      ref_id: number;
+      brand_id?: number | null;
+      model_id?: number | null;
+      fuel_id?: number | null;
+    }): boolean => {
+      if (!cart) return false;
+      const targetKind = q.kind ?? "service";
+      return cart.items.some((it) => {
+        if (it.kind !== targetKind) return false;
+        if (it.ref_id !== q.ref_id) return false;
+        const ib = it.vehicle?.brand_id ?? null;
+        const im = it.vehicle?.model_id ?? null;
+        const ifu = it.vehicle?.fuel_id  ?? null;
+        const qb = q.brand_id ?? null;
+        const qm = q.model_id ?? null;
+        const qf = q.fuel_id  ?? null;
+        return ib === qb && im === qm && ifu === qf;
+      });
+    },
+    [cart],
+  );
+
   const invalidate = useCallback(() => {
     qc.invalidateQueries({ queryKey: ["cart"] });
   }, [qc]);
@@ -288,6 +323,8 @@ export function useCart() {
     count,
     /** Server-side cart resource (use directly when you need richer fields). */
     cart,
+    /** Phase 2.3.2 — Add-to-Cart button toggle helper (Bug A). */
+    isInCart,
     /** Coupon stubs — will return 501-equivalent until 2.6. */
     applyCoupon,
     removeCoupon,

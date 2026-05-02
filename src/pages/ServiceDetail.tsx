@@ -39,7 +39,7 @@ export default function ServiceDetail({
   setCurrentPage,
   openEstimate,
 }: ServiceDetailProps) {
-  const { addItem, count } = useCart();
+  const { addItem, count, isInCart } = useCart();
   // Pull synced booking state from parent ServiceCategory page
   const { state: booking } = useBookingContext();
   const { user, isAuthenticated } = useAuth();
@@ -92,6 +92,15 @@ export default function ServiceDetail({
   const canBook = booking.pricesShown;
   const selectedLocationName =
     LOCATIONS.find((l) => l.id === booking.location)?.name || "your area";
+
+  // Phase 2.3.2 — Add-to-Cart button toggle (Bug A): flip to View Cart
+  // when this exact (service, vehicle) tuple is already in the server cart.
+  const inCart = isInCart({
+    ref_id:   service.id,
+    brand_id: booking.car?.brand_id,
+    model_id: booking.car?.model_id,
+    fuel_id:  booking.car?.fuel_id,
+  });
 
   // ---------- Page-level constants (no location-tied content) ----------
   const cityWord = "Delhi NCR";
@@ -739,10 +748,20 @@ export default function ServiceDetail({
                 {canBook ? (
                   <>
                     <button
-                      onClick={handleAddToCart}
+                      onClick={() =>
+                        inCart ? setCurrentPage("cart") : handleAddToCart()
+                      }
                       className="w-full bg-white text-primary py-3.5 font-black uppercase tracking-tighter text-sm flex items-center justify-center gap-2 hover:bg-white/90 transition-colors mb-3"
                     >
-                      <ShoppingCart className="w-4 h-4" /> Add to Cart
+                      {inCart ? (
+                        <>
+                          <CheckCircle2 className="w-4 h-4" /> View Cart
+                        </>
+                      ) : (
+                        <>
+                          <ShoppingCart className="w-4 h-4" /> Add to Cart
+                        </>
+                      )}
                     </button>
                     <button
                       onClick={() => openEstimate?.(false, service.title)}

@@ -95,7 +95,7 @@ export default function ServiceCategory({
   const category = apiCategory;
 
   // ---------- Cart ----------
-  const { addItem, count } = useCart();
+  const { addItem, count, isInCart } = useCart();
   const [addedFlash, setAddedFlash] = useState<string | null>(null);
 
   // ---------- Auth (drives phone prefill + OTP skip) ----------
@@ -650,6 +650,14 @@ export default function ServiceCategory({
                     // Show prices ONLY when user passed OTP AND API marks
                     // the category as priced for the chosen vehicle.
                     const showPrice = pricesShown && priceShowFromApi;
+                    // Phase 2.3.2 — toggle to "View Cart" when this exact
+                    // (service, vehicle) tuple is already in the server cart.
+                    const inCart = isInCart({
+                      ref_id:   sub.id,
+                      brand_id: bookingCar?.brand_id,
+                      model_id: bookingCar?.model_id,
+                      fuel_id:  bookingCar?.fuel_id,
+                    });
                     return (
                       <div
                         key={sub.id}
@@ -697,14 +705,22 @@ export default function ServiceCategory({
                         <div className="sm:w-32 sm:text-right">
                           {showPrice ? (
                             <button
-                              onClick={() => handleAddToCart(sub)}
+                              onClick={() =>
+                                inCart
+                                  ? setCurrentPage("cart")
+                                  : handleAddToCart(sub)
+                              }
                               className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition-colors w-full sm:w-auto flex items-center justify-center gap-1.5 ${
-                                justAdded
+                                inCart || justAdded
                                   ? "bg-primary-dark text-white"
                                   : "bg-primary text-white hover:bg-primary-dark"
                               }`}
                             >
-                              {justAdded ? (
+                              {inCart ? (
+                                <>
+                                  <CheckCircle2 className="w-3.5 h-3.5" /> View Cart
+                                </>
+                              ) : justAdded ? (
                                 <>
                                   <CheckCircle2 className="w-3.5 h-3.5" /> Added
                                 </>

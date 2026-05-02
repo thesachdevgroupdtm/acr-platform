@@ -15,8 +15,8 @@ import {
   X,
 } from "lucide-react";
 import PageBanner from "../components/PageBanner";
-import { useCart, useCheckout } from "../data/useCart";
-import { useAuth } from "../data/useAuth";
+import { useCart, useCheckout } from "../hooks/useCart";
+import { useAuth } from "../hooks/useAuth";
 import {
   LOCATIONS,
   OFFERS,
@@ -24,6 +24,8 @@ import {
   computeCouponDiscount,
 } from "../data/businessData";
 import { CheckoutSteps } from "./Cart";
+import { FEATURES } from "../config/features";
+import CheckoutComingSoon from "./CheckoutComingSoon";
 
 interface PaymentProps {
   setCurrentPage: (page: string) => void;
@@ -66,6 +68,14 @@ const METHODS: {
 ];
 
 export default function Payment({ setCurrentPage }: PaymentProps) {
+  // Phase 2.3.2 — same gate as Checkout. Defensive: this page is
+  // technically unreachable when Checkout shows ComingSoon, but if
+  // a user lands here directly we route them through the same
+  // explanation rather than a dead fake-payment form.
+  if (!FEATURES.checkoutFlow) {
+    return <CheckoutComingSoon setCurrentPage={setCurrentPage} />;
+  }
+
   const { items, subtotal, count, clearCart } = useCart();
   const { details, resetDetails } = useCheckout();
   const { user, addBooking } = useAuth();

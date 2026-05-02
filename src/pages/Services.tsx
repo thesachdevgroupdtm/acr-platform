@@ -33,7 +33,7 @@ const STICKY_OFFSET_PX = 132;
 const SECTION_NAV_OFFSET_PX = 112; // height of header alone
 
 export default function Services({ setCurrentPage }: ServicesProps) {
-  const { addItem, count } = useCart();
+  const { addItem, count, isInCart } = useCart();
   const { state: booking } = useBookingContext();
 
   // ---------- API: categories list (skeleton-first, never static) ----------
@@ -254,6 +254,14 @@ export default function Services({ setCurrentPage }: ServicesProps) {
                     pricesShown={booking.pricesShown}
                     pricesAvailableForCategory={availableCategoryIds.has(category.id)}
                     addedFlash={addedFlash}
+                    isInCartFor={(subId) =>
+                      isInCart({
+                        ref_id:   subId,
+                        brand_id: booking.car?.brand_id,
+                        model_id: booking.car?.model_id,
+                        fuel_id:  booking.car?.fuel_id,
+                      })
+                    }
                     onAddToCart={(sub) => handleAddToCart(sub, category.slug)}
                     onViewDetail={(subSlug) =>
                       setCurrentPage(`service-${category.slug}/${subSlug}`)
@@ -261,6 +269,7 @@ export default function Services({ setCurrentPage }: ServicesProps) {
                     onViewCategory={() =>
                       setCurrentPage(`category-${category.slug}`)
                     }
+                    onViewCart={() => setCurrentPage("cart")}
                   />
                 ))}
 
@@ -319,9 +328,13 @@ interface CategorySectionProps {
   pricesShown: boolean;                  // user has unlocked prices via OTP
   pricesAvailableForCategory: boolean;   // backend says this category has prices for the vehicle
   addedFlash: string | null;
+  /** Phase 2.3.2 — true when this sub is already in the server cart for the
+   *  current vehicle selection. Drives the Add-to-Cart → View Cart toggle. */
+  isInCartFor: (subId: number) => boolean;
   onAddToCart: (sub: CategorySubService) => void;
   onViewDetail: (subSlug: string) => void;
   onViewCategory: () => void;
+  onViewCart: () => void;
 }
 
 const CategorySection: React.FC<CategorySectionProps> = ({
@@ -329,9 +342,11 @@ const CategorySection: React.FC<CategorySectionProps> = ({
   pricesShown,
   pricesAvailableForCategory,
   addedFlash,
+  isInCartFor,
   onAddToCart,
   onViewDetail,
   onViewCategory,
+  onViewCart,
 }) => {
   const subs: CategorySubService[] = category.services ?? [];
 
@@ -374,6 +389,7 @@ const CategorySection: React.FC<CategorySectionProps> = ({
           // confirmed via OTP AND the backend marks this category as
           // priced for the chosen vehicle (available_category_ids).
           const showPrice = pricesShown && pricesAvailableForCategory;
+          const inCart = isInCartFor(sub.id);
           return (
             <div
               key={sub.id}
@@ -413,14 +429,18 @@ const CategorySection: React.FC<CategorySectionProps> = ({
               <div className="sm:w-32 sm:text-right">
                 {showPrice ? (
                   <button
-                    onClick={() => onAddToCart(sub)}
+                    onClick={() => (inCart ? onViewCart() : onAddToCart(sub))}
                     className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition-colors w-full sm:w-auto flex items-center justify-center gap-1.5 ${
-                      justAdded
+                      inCart || justAdded
                         ? "bg-primary-dark text-white"
                         : "bg-primary text-white hover:bg-primary-dark"
                     }`}
                   >
-                    {justAdded ? (
+                    {inCart ? (
+                      <>
+                        <CheckCircle2 className="w-3.5 h-3.5" /> View Cart
+                      </>
+                    ) : justAdded ? (
                       <>
                         <CheckCircle2 className="w-3.5 h-3.5" /> Added
                       </>

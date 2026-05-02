@@ -8,7 +8,9 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import PageBanner from "../components/PageBanner";
-import { useAuth, BookingRecord } from "../data/useAuth";
+import { useAuth, BookingRecord } from "../hooks/useAuth";
+import { FEATURES } from "../config/features";
+import BookingsComingSoon from "./BookingsComingSoon";
 
 interface MyBookingsProps {
   setCurrentPage: (page: string) => void;
@@ -19,6 +21,13 @@ export default function MyBookings({
   setCurrentPage,
   openAuth,
 }: MyBookingsProps) {
+  // Phase 2.3.2 — bookings list reads from AcrUser.bookings, which
+  // the pre-2.5 fake Checkout never wrote anywhere readable. Until
+  // /user/orders ships, render a ComingSoon notice instead.
+  if (!FEATURES.bookingsList) {
+    return <BookingsComingSoon setCurrentPage={setCurrentPage} openAuth={openAuth} />;
+  }
+
   const { user, isAuthenticated, logout } = useAuth();
 
   return (
