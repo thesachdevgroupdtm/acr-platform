@@ -8,7 +8,6 @@ use App\Models\User;
 use App\Services\Otp\OtpDriverInterface;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
 
 /**
  * POST /api/v1/auth/lead-capture
@@ -38,18 +37,14 @@ class LeadCaptureController extends Controller
         $name  = trim($validated['name']);
         $email = $validated['email'] ?? null;
 
-        // The skeleton users table has a NOT NULL `password` column, but
-        // OTP-only auth never authenticates against it. Set a random
-        // throwaway value (auto-hashed by the User model's cast). This
-        // yields an unusable password — login is exclusively OTP-based
-        // per /PHASE2_CONTRACT.md §11 Assumption 15.
+        // OTP-only auth: `password` is nullable per Phase 2.1.1
+        // migration; we never write to it on this path.
         $user = User::firstOrCreate(
             ['phone' => $phone],
             [
-                'name'     => $name,
-                'email'    => $email,
-                'role'     => 'customer',
-                'password' => Str::random(60),
+                'name'  => $name,
+                'email' => $email,        // may be null
+                'role'  => 'customer',
             ]
         );
 
