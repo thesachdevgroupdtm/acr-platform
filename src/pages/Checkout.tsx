@@ -121,12 +121,19 @@ export default function Checkout({ setCurrentPage, openAuth }: CheckoutProps) {
     // No prefill match — let user pick.
   }, [centers, details.serviceCenter, booking.location, selectedCenterId]);
 
-  // ---------- Totals (Phase 2.5a — server uses 18% GST; coupon math gated to 2.5b) ----------
-  // Cart subtotal is server-trusted. We compute GST/total locally for
-  // the summary panel; the backend re-computes authoritatively at
-  // /checkout/place-order time.
-  const gst = useMemo(() => Math.round(subtotal * (GST_PCT / 100)), [subtotal]);
-  const total = subtotal + gst;
+  // ---------- Totals (Phase 2.5b — discount-aware) ----------
+  // Cart subtotal is server-trusted. With a coupon applied, GST is
+  // computed on (subtotal - discount) to match the backend's
+  // CheckoutService::quote math; the place-order endpoint re-runs
+  // the same calculation authoritatively.
+  const cartDiscount = cart?.totals.discount ?? 0;
+  const cartCoupon = cart?.totals.coupon ?? null;
+  const subtotalAfterDiscount = Math.max(0, subtotal - cartDiscount);
+  const gst = useMemo(
+    () => Math.round(subtotalAfterDiscount * (GST_PCT / 100)),
+    [subtotalAfterDiscount],
+  );
+  const total = subtotalAfterDiscount + gst;
 
   const handleChange = (
     field: keyof typeof details,
@@ -638,13 +645,13 @@ export default function Checkout({ setCurrentPage, openAuth }: CheckoutProps) {
                       ₹{subtotal}
                     </span>
                   </div>
-                  {(cart?.totals.discount ?? 0) > 0 && cart?.totals.coupon && (
+                  {cartDiscount > 0 && cartCoupon && (
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-primary">
-                        Discount ({cart.totals.coupon.code})
+                        Coupon ({cartCoupon.code})
                       </span>
                       <span className="font-bold text-primary">
-                        − ₹{cart.totals.discount}
+                        − ₹{cartDiscount}
                       </span>
                     </div>
                   )}

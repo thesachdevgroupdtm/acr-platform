@@ -153,10 +153,16 @@ export interface CartItemResource {
   meta: Record<string, unknown> | null;
 }
 
+export interface AppliedCouponSummary {
+  code: string;
+  name: string;
+  discount_amount: number;
+}
+
 export interface CartTotals {
   subtotal: number;
   discount: number;
-  coupon: { code: string; type: string; value: number } | null;
+  coupon: AppliedCouponSummary | null;
   tax: number;
   total: number;
 }
@@ -187,6 +193,35 @@ export interface AddCartItemRequest {
 export interface UpdateCartItemRequest {
   quantity?: number;
   vehicle?: { brand_id: number; model_id: number; fuel_id: number };
+}
+
+/* ───────────── Coupons (Phase 2.5b) ───────────── */
+
+export type CouponDiscountType = "percent" | "flat";
+
+export interface CouponResource {
+  id: number;
+  code: string;
+  name: string;
+  description: string;
+  discount_type: CouponDiscountType;
+  discount_value: number;
+  max_discount: number | null;
+  min_order_value: number;
+  expiry_date: string | null;
+  badge: string | null;
+  /** Present only when fetched with ?context=cart. */
+  eligible?: boolean;
+  /** Present only when fetched with ?context=cart and !eligible. */
+  ineligible_reason?: string;
+}
+
+export interface CouponsListResponse {
+  coupons: CouponResource[];
+}
+
+export interface CartCouponApplyRequest {
+  code: string;
 }
 
 /* ───────────── Service centers (Phase 2.5a) ───────────── */
@@ -306,7 +341,14 @@ export interface OrderResource {
   service_center: ServiceCenterResource | null;
   items: OrderItemResource[];
   payments: PaymentTransactionResource[];
-  totals: { subtotal: number; discount: number; tax: number; total: number };
+  totals: {
+    subtotal: number;
+    discount: number;
+    tax: number;
+    total: number;
+    /** Phase 2.5b — applied coupon snapshot, null when no coupon. */
+    coupon?: AppliedCouponSummary | null;
+  };
   timestamps: OrderTimestamps;
 }
 

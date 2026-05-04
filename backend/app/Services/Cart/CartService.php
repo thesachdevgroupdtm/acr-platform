@@ -62,19 +62,36 @@ class CartService
             fn ($i) => (float) $i->unit_price_snapshot * (int) $i->quantity
         );
 
-        // TODO Phase 2.6 — coupon discount math. Until the coupons
-        // table lands, /cart/coupon returns 501 and totals always
-        // reports coupon=null / discount=0.
-        $discount = 0.0;
-        $coupon   = null;
-        $tax      = 0.0;        // Decision D-B — cart is pre-tax.
+        // Phase 2.5b — coupon discount integration.
+        $discount   = 0.0;
+        $couponMeta = null;
 
+        if ($cart->coupon_id !== null) {
+            $coupon = $cart->relationLoaded('coupon') ? $cart->coupon : $cart->coupon()->first();
+            if ($coupon && $coupon->is_active && !$coupon->isExpired()) {
+                $discount   = (float) $coupon->calculateDiscount($subtotal);
+                $couponMeta = [
+                    'code'            => $coupon->code,
+                    'name'            => $coupon->name,
+                    'discount_amount' => round($discount, 2),
+                ];
+            } else {
+                // Stale coupon ref (deactivated/expired since apply).
+                // Auto-clear so the cart doesn't quote a phantom
+                // discount on the next read.
+                $cart->coupon_id = null;
+                $cart->save();
+            }
+        }
+
+        // Decision D-B — cart is pre-tax. Tax lands at checkout.
+        $tax   = 0.0;
         $total = max(0.0, $subtotal - $discount + $tax);
 
         return [
             'subtotal' => round($subtotal, 2),
             'discount' => round($discount, 2),
-            'coupon'   => $coupon,
+            'coupon'   => $couponMeta,
             'tax'      => round($tax, 2),
             'total'    => round($total, 2),
         ];

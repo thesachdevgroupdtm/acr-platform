@@ -39,7 +39,7 @@ class OrderController extends Controller
 
         $q = Order::query()
             ->where('user_id', $request->user()->id)
-            ->with(['items.service', 'items.brand', 'items.carModel', 'items.fuel', 'serviceCenter', 'payments'])
+            ->with(['items.service', 'items.brand', 'items.carModel', 'items.fuel', 'serviceCenter', 'payments', 'coupon'])
             ->orderByDesc('id');
 
         if (!empty($validated['status'])) {
@@ -69,7 +69,7 @@ class OrderController extends Controller
             abort(Response::HTTP_NOT_FOUND);
         }
 
-        $order->load(['items.service', 'items.brand', 'items.carModel', 'items.fuel', 'serviceCenter', 'payments']);
+        $order->load(['items.service', 'items.brand', 'items.carModel', 'items.fuel', 'serviceCenter', 'payments', 'coupon']);
 
         return response()->json(['order' => new OrderResource($order)]);
     }

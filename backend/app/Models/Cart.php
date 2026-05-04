@@ -24,6 +24,7 @@ class Cart extends Model
         'user_id',
         'session_uuid',
         'currency',
+        'coupon_id',
         'expires_at',
         'status',
     ];
@@ -40,6 +41,12 @@ class Cart extends Model
     public function items(): HasMany
     {
         return $this->hasMany(CartItem::class);
+    }
+
+    /** Phase 2.5b — single applied coupon (no stacking, D-2.5b-3). */
+    public function coupon(): BelongsTo
+    {
+        return $this->belongsTo(Coupon::class);
     }
 
     public function scopeActive(Builder $q): Builder

@@ -489,6 +489,7 @@ import type {
   CartResponse,
   CheckoutQuoteRequest,
   CheckoutQuoteResponse,
+  CouponsListResponse,
   LeadCaptureRequest,
   LeadCaptureResponse,
   LoginRequest,
@@ -655,3 +656,15 @@ export const postCancelOrder = (
     reason ? { reason } : {},
     signal,
   );
+
+/* ───────────── Phase 2.5b — Coupons (public listing) ───────────── */
+
+/**
+ * GET /coupons. `context=marketing` returns featured coupons for the
+ * /coupons landing page. `context=cart` adds per-coupon eligibility
+ * flags computed against the authenticated user's active cart.
+ */
+export const fetchCoupons = (
+  context: "marketing" | "cart" = "marketing",
+  signal?: AbortSignal,
+) => apiGet<CouponsListResponse>("/coupons", { context }, signal);

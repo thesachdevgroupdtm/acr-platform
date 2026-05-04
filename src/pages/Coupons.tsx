@@ -1,111 +1,183 @@
+import type * as React from "react";
 import { useState } from "react";
 import { motion } from "motion/react";
 import PageBanner from "../components/PageBanner";
-import { Copy, CheckCircle2, Ticket, Clock } from "lucide-react";
+import { Copy, CheckCircle2, Ticket, Tag, ArrowRight } from "lucide-react";
+import { useCoupons } from "../hooks/useCoupons";
+import type { CouponResource } from "../types/api";
 
 interface CouponsProps {
   setCurrentPage: (page: string) => void;
   openEstimate?: (isCorporate?: boolean, initialService?: string) => void;
 }
 
-const COUPONS = [
-  {
-    id: 1,
-    code: "FIRST10",
-    description: "Get 10% off on your first regular car service",
-    validity: "Valid till end of month",
-    urgency: "New Customers Only"
-  },
-  {
-    id: 2,
-    code: "ACCOOL20",
-    description: "Flat ₹500 off on complete AC servicing & gas top-up",
-    validity: "Only for today",
-    urgency: "High Demand"
-  },
-  {
-    id: 3,
-    code: "CERAMICPRO",
-    description: "Free interior deep cleaning with Ceramic Coating",
-    validity: "Limited Use",
-    urgency: "Only 10 uses left"
-  }
-];
-
+/**
+ * Phase 2.5b — public coupons listing.
+ *
+ * Reads featured/active/non-expired coupons from GET /coupons
+ * (marketing context). Each card has a Copy Code button using the
+ * Clipboard API; success shows a 1.5s "Copied!" toast inline.
+ *
+ * Marketing context — no Apply button on cards (per D-2.5b-2). To
+ * apply, the user navigates to Cart and uses the picker modal.
+ */
 export default function Coupons({ setCurrentPage }: CouponsProps) {
-  const [copiedId, setCopiedId] = useState<number | null>(null);
+  const { coupons, isLoading, isError } = useCoupons("marketing");
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
-  const handleCopy = (id: number, code: string) => {
-    navigator.clipboard.writeText(code);
-    setCopiedId(id);
-    setTimeout(() => {
-      setCopiedId(null);
-    }, 2000);
+  const copyCode = async (code: string) => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopiedCode(code);
+      window.setTimeout(() => setCopiedCode((c) => (c === code ? null : c)), 1500);
+    } catch {
+      // Browser blocked clipboard or permissions denied — silent
+      // (the user can still type the code).
+    }
   };
 
   return (
     <>
       <PageBanner
-        title="Get Exclusive Coupons"
+        title="Available Coupons"
         breadcrumbs={[
           { label: "Home", onClick: () => setCurrentPage("home") },
-          { label: "Coupons" }
+          { label: "Coupons" },
         ]}
       />
-      
-      <div className="section-spacing pt-0">
-        <div className="site-container">
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {COUPONS.map((coupon, i) => (
-              <motion.div
-                key={coupon.id}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.5, delay: i * 0.1 }}
-                className="bg-white border-2 border-border border-dashed p-8 relative flex flex-col items-center text-center group hover:border-primary/50 transition-colors"
-              >
-                {/* Decoration */}
-                <div className="absolute top-1/2 -translate-y-1/2 -left-4 w-8 h-8 rounded-full bg-neutral-100 hidden md:block" />
-                <div className="absolute top-1/2 -translate-y-1/2 -right-4 w-8 h-8 rounded-full bg-neutral-100 hidden md:block" />
 
-                <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-3 py-1 text-[10px] font-black uppercase tracking-widest mb-6">
-                  <Ticket className="w-3 h-3" /> {coupon.urgency}
-                </div>
-
-                <div className="text-4xl font-black tracking-tighter text-neutral-900 mb-4 select-all">
-                  {coupon.code}
-                </div>
-                
-                <p className="text-neutral-500 font-medium leading-relaxed mb-6 flex-grow">
-                  {coupon.description}
-                </p>
-
-                <div className="flex items-center justify-center gap-2 text-xs font-bold text-neutral-400 uppercase tracking-widest mb-8 border-b border-border w-full py-4">
-                  <Clock className="w-3.5 h-3.5" /> {coupon.validity}
-                </div>
-
-                <button 
-                  onClick={() => handleCopy(coupon.id, coupon.code)}
-                  className={`w-full py-4 text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all duration-300 ${
-                    copiedId === coupon.id 
-                    ? 'bg-green-600 text-white' 
-                    : 'bg-neutral-900 text-white hover:bg-primary'
-                  }`}
-                >
-                  {copiedId === coupon.id ? (
-                    <>COPIED! <CheckCircle2 className="w-4 h-4" /></>
-                  ) : (
-                    <>COPY & APPLY <Copy className="w-4 h-4" /></>
-                  )}
-                </button>
-              </motion.div>
-            ))}
+      <div className="pb-14 pt-8">
+        <div className="site-container max-w-5xl">
+          <div className="flex items-baseline justify-between mb-8">
+            <div>
+              <h2 className="text-2xl sm:text-3xl uppercase font-black text-neutral-900 tracking-tighter">
+                CURRENT <span className="text-primary">OFFERS.</span>
+              </h2>
+              <p className="text-xs text-neutral-500 mt-1">
+                Tap Copy Code, then apply at checkout.
+              </p>
+            </div>
+            <button
+              onClick={() => setCurrentPage("services")}
+              className="text-[10px] sm:text-xs uppercase tracking-widest font-bold text-primary hover:underline flex items-center gap-1"
+            >
+              Browse Services <ArrowRight className="w-3 h-3" />
+            </button>
           </div>
 
+          {isLoading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {[0, 1, 2, 3].map((i) => (
+                <div key={i} className="bg-white border border-border p-5 space-y-3">
+                  <div className="h-4 w-1/3 bg-neutral-200 animate-pulse" />
+                  <div className="h-3 w-2/3 bg-neutral-200 animate-pulse" />
+                  <div className="h-3 w-1/2 bg-neutral-100 animate-pulse" />
+                  <div className="h-9 w-32 bg-neutral-200 animate-pulse" />
+                </div>
+              ))}
+            </div>
+          ) : isError ? (
+            <div className="bg-white border border-accent-dark/30 py-16 text-center">
+              <p className="text-sm text-accent-dark">Couldn't load coupons.</p>
+            </div>
+          ) : coupons.length === 0 ? (
+            <div className="bg-white border border-border py-16 px-6 text-center">
+              <div className="w-14 h-14 bg-neutral-100 mx-auto mb-4 flex items-center justify-center">
+                <Ticket className="w-7 h-7 text-neutral-400" />
+              </div>
+              <h3 className="text-lg font-black uppercase tracking-tighter text-neutral-900 mb-1">
+                No coupons available
+              </h3>
+              <p className="text-xs text-neutral-500">
+                Check back soon — new offers drop regularly.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {coupons.map((c) => (
+                <CouponCard
+                  key={c.id}
+                  coupon={c}
+                  copied={copiedCode === c.code}
+                  onCopy={() => void copyCode(c.code)}
+                />
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </>
   );
 }
+
+interface CouponCardProps {
+  coupon: CouponResource;
+  copied: boolean;
+  onCopy: () => void;
+}
+
+const CouponCard: React.FC<CouponCardProps> = ({ coupon, copied, onCopy }) => {
+  const conditions: string[] = [];
+  if (coupon.min_order_value > 0) {
+    conditions.push(`Min order ₹${coupon.min_order_value}`);
+  }
+  if (coupon.max_discount !== null) {
+    conditions.push(`Max ₹${coupon.max_discount} off`);
+  }
+  if (coupon.expiry_date) {
+    conditions.push(`Valid till ${coupon.expiry_date}`);
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25, ease: "easeOut" }}
+      className="bg-white border border-border p-5 hover:border-primary transition-colors"
+    >
+      <div className="flex items-start justify-between gap-3 mb-2">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-base font-black uppercase tracking-tighter text-neutral-900">
+              {coupon.code}
+            </p>
+            {coupon.badge && (
+              <span className="bg-primary text-white text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5">
+                {coupon.badge}
+              </span>
+            )}
+          </div>
+          <p className="text-sm font-bold text-neutral-700 mt-0.5">{coupon.name}</p>
+        </div>
+        <Tag className="w-5 h-5 text-primary shrink-0" />
+      </div>
+
+      <p className="text-xs text-neutral-500 leading-relaxed mb-3">
+        {coupon.description}
+      </p>
+
+      {conditions.length > 0 && (
+        <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 mb-3">
+          {conditions.join(" · ")}
+        </p>
+      )}
+
+      <button
+        onClick={onCopy}
+        className={`btn-ink ${
+          copied ? "btn-ink-primary" : "btn-ink-outline"
+        } px-4 py-2.5 text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-1.5 transition-colors`}
+      >
+        {copied ? (
+          <>
+            <CheckCircle2 className="w-3.5 h-3.5" /> Copied!
+          </>
+        ) : (
+          <>
+            <Copy className="w-3.5 h-3.5" /> Copy Code
+          </>
+        )}
+      </button>
+    </motion.div>
+  );
+};

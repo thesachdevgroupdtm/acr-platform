@@ -106,7 +106,11 @@ class Order extends Model
         return $this->hasMany(PaymentTransaction::class);
     }
 
-    // coupon() belongsTo Coupon — declared in Phase 2.5b.
+    /** Phase 2.5b — single applied coupon (no stacking, D-2.5b-3). */
+    public function coupon(): BelongsTo
+    {
+        return $this->belongsTo(Coupon::class);
+    }
 
     public function scopeActive(Builder $q): Builder
     {

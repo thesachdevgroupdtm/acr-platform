@@ -183,7 +183,11 @@ export default function BookingConfirmation({
                   Phase 2.5b populates the discount on placement. */}
               {order.totals.discount > 0 && (
                 <div className="flex items-center justify-between">
-                  <span className="text-primary">Coupon Applied</span>
+                  <span className="text-primary">
+                    {order.totals.coupon
+                      ? `Coupon (${order.totals.coupon.code})`
+                      : "Coupon Applied"}
+                  </span>
                   <span className="font-bold text-primary">
                     − ₹{order.totals.discount}
                   </span>

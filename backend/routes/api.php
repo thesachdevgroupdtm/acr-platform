@@ -6,12 +6,14 @@ use App\Http\Controllers\Api\V1\Auth\LogoutController;
 use App\Http\Controllers\Api\V1\Auth\SendOtpController;
 use App\Http\Controllers\Api\V1\Auth\VerifyOtpController;
 use App\Http\Controllers\Api\V1\Cart\CartController;
+use App\Http\Controllers\Api\V1\Cart\CartCouponController;
 use App\Http\Controllers\Api\V1\Cart\MergeCartController;
 use App\Http\Controllers\Api\V1\Checkout\CheckoutController;
 use App\Http\Controllers\Api\V1\HomeController;
 use App\Http\Controllers\Api\V1\ImportController;
 use App\Http\Controllers\Api\V1\PageController;
 use App\Http\Controllers\Api\V1\PricingController;
+use App\Http\Controllers\Api\V1\Public\CouponsController;
 use App\Http\Controllers\Api\V1\Public\ServiceCentersController;
 use App\Http\Controllers\Api\V1\ServiceController;
 use App\Http\Controllers\Api\V1\User\AddressController;
@@ -87,8 +89,12 @@ Route::prefix('v1')->group(function () {
         Route::post  ('cart/items',            [CartController::class, 'addItem'])      ->middleware('throttle:cart-write');
         Route::put   ('cart/items/{item}',     [CartController::class, 'updateItem'])   ->middleware('throttle:cart-write');
         Route::delete('cart/items/{item}',     [CartController::class, 'removeItem'])   ->middleware('throttle:cart-write');
-        Route::post  ('cart/coupon',           [CartController::class, 'applyCoupon'])  ->middleware('throttle:cart-write');
-        Route::delete('cart/coupon',           [CartController::class, 'removeCoupon']) ->middleware('throttle:cart-write');
+        // Phase 2.5b — real coupon backend. Apply requires auth so the
+        // service can enforce usage_per_user; the auth:sanctum middleware
+        // is layered on top of cart-session here. Remove can be guest
+        // (a guest cart can still hold an applied coupon).
+        Route::post  ('cart/coupon',           [CartCouponController::class, 'apply'])  ->middleware(['auth:sanctum', 'throttle:cart-write']);
+        Route::delete('cart/coupon',           [CartCouponController::class, 'remove']) ->middleware('throttle:cart-write');
 
         // Phase 2.4 — explicit guest→user cart merge (multi-device,
         // re-merge after OTP-verify path missed the X-Cart-Session
@@ -98,6 +104,13 @@ Route::prefix('v1')->group(function () {
 
     // Phase 2.5a — service centers (public read for checkout dropdown).
     Route::get('service-centers', [ServiceCentersController::class, 'index'])
+        ->middleware('throttle:public-read');
+
+    // Phase 2.5b — coupons listing. Public route; the controller
+    // resolves the user via `$request->user('sanctum')` so a Bearer
+    // token (when present) lights up ?context=cart eligibility, and
+    // an anonymous request still gets the marketing payload.
+    Route::get('coupons', [CouponsController::class, 'index'])
         ->middleware('throttle:public-read');
 
     // Phase 2.5a — checkout pipeline (auth + cart-session so the

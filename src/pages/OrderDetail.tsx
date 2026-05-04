@@ -253,7 +253,11 @@ export default function OrderDetail({
               </div>
               {order.totals.discount > 0 && (
                 <div className="flex items-center justify-between">
-                  <span className="text-neutral-500">Discount</span>
+                  <span className="text-primary">
+                    {order.totals.coupon
+                      ? `Coupon (${order.totals.coupon.code})`
+                      : "Discount"}
+                  </span>
                   <span className="font-bold text-primary">
                     − ₹{order.totals.discount}
                   </span>

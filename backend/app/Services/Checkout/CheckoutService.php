@@ -8,6 +8,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\PaymentTransaction;
 use App\Models\User;
+use App\Services\Coupon\CouponService;
 use App\Services\Order\FakeBookingGuard;
 use App\Services\Order\OrderNumberService;
 use Illuminate\Support\Facades\DB;
@@ -35,6 +36,7 @@ class CheckoutService
     public function __construct(
         private OrderNumberService $orderNumber,
         private FakeBookingGuard $guard,
+        private CouponService $coupons,
     ) {
     }
 
@@ -52,10 +54,31 @@ class CheckoutService
             fn ($i) => (float) $i->unit_price_snapshot * (int) $i->quantity
         );
 
-        $discount = 0.0;        // Phase 2.5b activates coupon math.
-        $gstPct   = (int) config('services.gst_percentage', 18);
-        $tax      = round(($subtotal - $discount) * ($gstPct / 100), 2);
-        $total    = round(max(0.0, $subtotal - $discount + $tax), 2);
+        // Phase 2.5b — coupon discount integration. Mirrors
+        // CartService::totalsFor; both must stay in sync so the
+        // user sees the same total in cart and checkout.
+        $discount   = 0.0;
+        $couponMeta = null;
+        if ($cart->coupon_id !== null) {
+            $coupon = $cart->relationLoaded('coupon') ? $cart->coupon : $cart->coupon()->first();
+            if ($coupon && $coupon->is_active && !$coupon->isExpired()) {
+                $discount   = (float) $coupon->calculateDiscount($subtotal);
+                $couponMeta = [
+                    'code'            => $coupon->code,
+                    'name'            => $coupon->name,
+                    'discount_amount' => round($discount, 2),
+                ];
+            } else {
+                // Stale ref — clear so the next quote() doesn't
+                // pick it back up. Same self-heal as totalsFor.
+                $cart->coupon_id = null;
+                $cart->save();
+            }
+        }
+
+        $gstPct = (int) config('services.gst_percentage', 18);
+        $tax    = round(($subtotal - $discount) * ($gstPct / 100), 2);
+        $total  = round(max(0.0, $subtotal - $discount + $tax), 2);
 
         $preview = $items->map(function (CartItem $i) {
             $title = $i->relationLoaded('service') && $i->service
@@ -70,18 +93,27 @@ class CheckoutService
             ];
         })->values()->all();
 
+        $breakdown = [
+            ['label' => 'Subtotal', 'value' => round($subtotal, 2)],
+        ];
+        if ($couponMeta) {
+            $breakdown[] = [
+                'label' => "Coupon ({$couponMeta['code']})",
+                'value' => -round($discount, 2),
+            ];
+        }
+        $breakdown[] = ['label' => "GST ({$gstPct}%)", 'value' => $tax];
+        $breakdown[] = ['label' => 'Total', 'value' => $total];
+
         return [
             'subtotal'        => round($subtotal, 2),
             'discount'        => round($discount, 2),
+            'coupon'          => $couponMeta,
             'tax'             => $tax,
             'total'           => $total,
             'gst_pct'         => $gstPct,
             'items'           => $preview,
-            'breakdown_lines' => [
-                ['label' => 'Subtotal',         'value' => round($subtotal, 2)],
-                ['label' => "GST ({$gstPct}%)", 'value' => $tax],
-                ['label' => 'Total',            'value' => $total],
-            ],
+            'breakdown_lines' => $breakdown,
         ];
     }
 
@@ -93,7 +125,7 @@ class CheckoutService
      */
     public function placeOrder(Cart $cart, array $checkoutData, User $user): Order
     {
-        $cart->load(['items.service', 'items.brand', 'items.carModel', 'items.fuel']);
+        $cart->load(['items.service', 'items.brand', 'items.carModel', 'items.fuel', 'coupon']);
 
         if ($cart->items->isEmpty()) {
             throw new RuntimeException('Cart is empty.');
@@ -110,11 +142,14 @@ class CheckoutService
             // Vehicle snapshot from the first cart item that has a vehicle.
             $vehicleSnapshot = $this->buildVehicleSnapshot($cart);
 
+            // Phase 2.5b — pin the cart's applied coupon onto the order.
+            $couponId = $cart->coupon_id;
+
             $order = Order::create([
                 'order_number'      => $orderNumber,
                 'user_id'           => $user->id,
                 'service_center_id' => $checkoutData['service_center_id'] ?? null,
-                'coupon_id'         => null,            // Phase 2.5b
+                'coupon_id'         => $couponId,
                 'status'            => Order::STATUS_PENDING,
                 'payment_status'    => Order::PAYMENT_STATUS_PENDING,
                 'name_snapshot'     => $checkoutData['name'] ?? $user->name,
@@ -132,6 +167,16 @@ class CheckoutService
                 'is_high_risk'      => (bool) ($checkoutData['is_high_risk'] ?? false),
                 'placed_at'         => now(),
             ]);
+
+            // Phase 2.5b D-2.5b-7 — claim coupon usage atomically.
+            if ($couponId !== null && $cart->coupon !== null) {
+                $this->coupons->claim(
+                    $cart->coupon,
+                    $user,
+                    $order,
+                    (float) $totals['discount'],
+                );
+            }
 
             foreach ($cart->items as $item) {
                 $title = $item->service?->name ?? ($item->meta['title'] ?? '');
@@ -163,7 +208,7 @@ class CheckoutService
             $cart->expires_at = now();
             $cart->save();
 
-            $order->load(['items.service', 'items.brand', 'items.carModel', 'items.fuel', 'serviceCenter', 'payments']);
+            $order->load(['items.service', 'items.brand', 'items.carModel', 'items.fuel', 'serviceCenter', 'payments', 'coupon']);
 
             Log::info('Order placed', [
                 'order_id'     => $order->id,
@@ -191,7 +236,7 @@ class CheckoutService
             // gateway lands (Phase 4+).
         });
 
-        $order->load(['items.service', 'items.brand', 'items.carModel', 'items.fuel', 'serviceCenter', 'payments']);
+        $order->load(['items.service', 'items.brand', 'items.carModel', 'items.fuel', 'serviceCenter', 'payments', 'coupon']);
 
         Log::info('Order cancelled by user', [
             'order_id'     => $order->id,

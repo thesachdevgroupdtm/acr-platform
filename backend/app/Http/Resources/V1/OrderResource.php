@@ -49,6 +49,18 @@ class OrderResource extends JsonResource
                 'discount' => round((float) $this->discount, 2),
                 'tax'      => round((float) $this->tax, 2),
                 'total'    => round((float) $this->total, 2),
+                // Phase 2.5b — applied coupon snapshot. Reads the
+                // related Coupon row when the order has coupon_id set.
+                // Caller should eager-load `coupon` to avoid an N+1
+                // when iterating order lists; OrderResource degrades
+                // gracefully when not loaded.
+                'coupon'   => $this->coupon_id !== null && $this->relationLoaded('coupon') && $this->coupon
+                    ? [
+                        'code'            => $this->coupon->code,
+                        'name'            => $this->coupon->name,
+                        'discount_amount' => round((float) $this->discount, 2),
+                    ]
+                    : null,
             ],
 
             'timestamps' => [

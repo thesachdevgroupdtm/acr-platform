@@ -31,9 +31,11 @@ import {
 } from "@tanstack/react-query";
 import {
   ApiError,
+  deleteCartCoupon as deleteCartCouponApi,
   deleteCartItem as deleteCartItemApi,
   fetchCart,
   getToken,
+  postCartCoupon as postCartCouponApi,
   postCartItem,
   putCartItem,
 } from "../lib/api";
@@ -408,31 +410,64 @@ export function useCart() {
     invalidate();
   }, [cart, invalidate]);
 
-  /* ─────── Coupons (501 until Phase 2.5b) ───────
-   * The /cart/coupon endpoints are 501 stubs in this commit (real
-   * coupon backend lands in 2.5b). The frontend treats applyCoupon
-   * as a "coming soon" surface: the UI renders the input + Apply
-   * button, the user types a code and clicks Apply, and we surface
-   * a friendly message instead of pretending the coupon applied.
-   * When 2.5b lands, this stub is replaced with a real
-   * postCartCoupon call and the local state plumbing already works.
+  /* ─────── Coupons (Phase 2.5b — real backend) ───────
+   *
+   * Both mutations hit the real /cart/coupon endpoints. The
+   * server validates (CouponService::validate) and replaces the
+   * cart's coupon_id under last-apply-wins; the response carries
+   * the updated CartResource so React Query reads the new totals
+   * straight away.
+   *
+   * Errors are surfaced via the same `{success:false, error}`
+   * envelope the 2.5.1 stub used so existing UI consumers
+   * (CouponInput, CouponPickerModal) compile unchanged.
    */
+  const applyCouponMutation = useMutation({
+    mutationFn: async (code: string) => {
+      const res = await postCartCouponApi(code, activeSessionUuid());
+      return res.cart;
+    },
+    onSuccess: (newCart) => {
+      qc.setQueryData(["cart", token ? "user" : "guest"], newCart);
+    },
+  });
+
+  const removeCouponMutation = useMutation({
+    mutationFn: async () => {
+      const res = await deleteCartCouponApi(activeSessionUuid());
+      return res.cart;
+    },
+    onSuccess: (newCart) => {
+      qc.setQueryData(["cart", token ? "user" : "guest"], newCart);
+    },
+  });
+
   const applyCoupon = useCallback(
-    async (_code: string): Promise<{ success: false; error: string }> => ({
-      success: false,
-      error:
-        "Coupon system launching soon — coupons will be available shortly. Please proceed without coupon for now.",
-    }),
-    [],
+    async (
+      code: string,
+    ): Promise<{ success: true } | { success: false; error: string }> => {
+      try {
+        await applyCouponMutation.mutateAsync(code.trim().toUpperCase());
+        return { success: true };
+      } catch (e) {
+        const msg = e instanceof ApiError ? e.message : "Couldn't apply coupon. Please try again.";
+        return { success: false, error: msg };
+      }
+    },
+    [applyCouponMutation],
   );
 
   const removeCoupon = useCallback(
-    async (): Promise<{ success: false; error: string }> => ({
-      success: false,
-      error:
-        "Coupon system launching soon. There's nothing to remove yet.",
-    }),
-    [],
+    async (): Promise<{ success: true } | { success: false; error: string }> => {
+      try {
+        await removeCouponMutation.mutateAsync();
+        return { success: true };
+      } catch (e) {
+        const msg = e instanceof ApiError ? e.message : "Couldn't remove coupon. Please try again.";
+        return { success: false, error: msg };
+      }
+    },
+    [removeCouponMutation],
   );
 
   return {

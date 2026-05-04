@@ -183,21 +183,9 @@ class CartController extends Controller
         return $this->show($request);
     }
 
-    public function applyCoupon(Request $request): JsonResponse
-    {
-        return response()->json(
-            ['message' => 'Not implemented yet (Phase 2.6 — coupons table not migrated)'],
-            Response::HTTP_NOT_IMPLEMENTED
-        );
-    }
-
-    public function removeCoupon(Request $request): JsonResponse
-    {
-        return response()->json(
-            ['message' => 'Not implemented yet (Phase 2.6 — coupons table not migrated)'],
-            Response::HTTP_NOT_IMPLEMENTED
-        );
-    }
+    // Phase 2.5b — applyCoupon / removeCoupon moved to
+    // CartCouponController (real backend lit). The 501 stubs that
+    // previously sat here have been removed.
 
     private function cart(Request $request): Cart
     {

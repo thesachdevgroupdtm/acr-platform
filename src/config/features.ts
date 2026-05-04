@@ -56,11 +56,12 @@ export const FEATURES = {
    */
   bookingsList: true,
   /**
-   * Phase 2.5a — coupon UI hidden. The /cart/coupon endpoints still
-   * 501; the orders.coupon_id column exists but is always null.
-   * Phase 2.5b lights up coupon math + UI in one go.
+   * Phase 2.5b — real coupon system shipped. /cart/coupon
+   * endpoints validate + persist; cart.totals.coupon carries the
+   * applied snapshot; CouponPickerModal browses /coupons. Stays
+   * true unless we need to dark-launch a regression.
    */
-  couponsLit: false,
+  couponsLit: true,
   /**
    * Phase 2.5a — payments are placeholder ("Pay at Service Center"
    * / cash_at_center). Real gateway (Razorpay/UPI) lands in Phase 4+.
