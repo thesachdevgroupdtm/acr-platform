@@ -24,6 +24,7 @@ import { FEATURES } from "../config/features";
 import CheckoutComingSoon from "./CheckoutComingSoon";
 import { ApiError, postPlaceOrder } from "../lib/api";
 import CouponInput from "../components/CouponInput";
+import VehicleBadge from "../components/VehicleBadge";
 import {
   AFTERNOON_SLOTS,
   EVENING_SLOTS,
@@ -548,6 +549,32 @@ export default function Checkout({ setCurrentPage, openAuth }: CheckoutProps) {
 
             {/* ORDER SUMMARY (sticky) */}
             <aside className="lg:sticky lg:self-start lg:top-28 space-y-4">
+              {/* Phase 2.5.2 — vehicle context banner. Sourced from
+                  the first cart item's `car` meta (set by Add-to-Cart
+                  handlers); falls back to the synced booking ctx. */}
+              <VehicleBadge
+                variant="banner"
+                vehicle={
+                  items[0]?.car
+                    ? {
+                        brand_name: items[0].car.brand,
+                        model_name: items[0].car.model,
+                        fuel_name:  items[0].car.fuel,
+                      }
+                    : booking.car
+                    ? {
+                        brand_name: booking.car.brand,
+                        model_name: booking.car.model,
+                        fuel_name:  booking.car.fuel,
+                      }
+                    : null
+                }
+                serviceCenter={
+                  selectedCenterId
+                    ? centers.find((c) => c.id === selectedCenterId)?.name
+                    : undefined
+                }
+              />
               <div className="bg-white border border-border shadow-xl">
                 <div className="px-5 py-4 border-b border-border">
                   <h3 className="text-base font-black uppercase tracking-tighter text-neutral-900">
@@ -649,6 +676,17 @@ export default function Checkout({ setCurrentPage, openAuth }: CheckoutProps) {
   );
 }
 
+/**
+ * Phase 2.5.2 (D-2.5.2-5) — horizontal slot row.
+ *
+ * The label is given a fixed `min-w-[100px]` on desktop so the
+ * three rows align vertically. The button container takes the
+ * remaining width via `flex-1`, and each button inside is also
+ * `flex-1` so they split that remaining width equally — eliminating
+ * the right-side whitespace that the user reported on 2.5.1.
+ *
+ * Mobile (<sm): label stacks above; buttons split 50/50 below.
+ */
 function SlotRow({
   label,
   slots,
@@ -662,10 +700,10 @@ function SlotRow({
 }) {
   return (
     <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-      <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-500 sm:w-24 shrink-0">
+      <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-500 sm:min-w-[100px] shrink-0">
         {label}
       </span>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-1 gap-2">
         {slots.map((slot) => {
           const active = selected === slot;
           return (
@@ -675,8 +713,8 @@ function SlotRow({
               onClick={() => onSelect(slot)}
               className={
                 active
-                  ? "btn-ink btn-ink-primary px-3 py-2 text-[11px] font-black uppercase tracking-tighter"
-                  : "bg-white border border-border text-neutral-700 px-3 py-2 text-[11px] font-bold uppercase tracking-tighter hover:border-primary hover:text-primary transition-colors"
+                  ? "btn-ink btn-ink-primary flex-1 px-3 py-2 text-[11px] font-black uppercase tracking-tighter whitespace-nowrap"
+                  : "bg-white border border-border text-neutral-700 flex-1 px-3 py-2 text-[11px] font-bold uppercase tracking-tighter hover:border-primary hover:text-primary transition-colors whitespace-nowrap"
               }
             >
               {slot}

@@ -9,6 +9,7 @@ import {
   Banknote,
   Package,
   Home,
+  Car,
 } from "lucide-react";
 import PageBanner from "../components/PageBanner";
 import { useOrderDetail } from "../hooks/useOrders";
@@ -122,6 +123,25 @@ export default function BookingConfirmation({
             </div>
 
             <div className="px-5 py-4 space-y-3 text-sm">
+              {/* Phase 2.5.2 — vehicle row above services. Reads
+                  order.vehicle_snapshot frozen at placement time. */}
+              {(() => {
+                const v = order.vehicle_snapshot;
+                if (!v) return null;
+                const carLine = [v.brand_name, v.model_name].filter(Boolean).join(" ");
+                if (!carLine && !v.fuel_name) return null;
+                return (
+                  <Row
+                    icon={Car}
+                    label="Vehicle"
+                    value={
+                      v.fuel_name
+                        ? `${carLine || "—"} · ${v.fuel_name}`
+                        : carLine || "—"
+                    }
+                  />
+                );
+              })()}
               <Row
                 icon={Package}
                 label="Services"

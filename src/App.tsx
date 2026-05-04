@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
 import Home from "./pages/Home";
@@ -35,15 +35,36 @@ import { BUSINESS_INFO } from "./data/businessData";
 import { MessageCircle } from "lucide-react";
 
 /**
- * Phase 2.5.1 — minimal pathname → currentPage mapping. Used only
- * on initial mount so that hard-refreshing /checkout, /order-12,
- * etc. lands directly on the right page instead of briefly
- * flashing Home (the default state). Click navigation continues to
- * use the existing `setCurrentPage` flow without URL sync — the
- * full router migration is a Phase 3 deliverable.
+ * Phase 2.5.1 + 2.5.2 — pathname ↔ currentPage mapping.
+ *
+ * The codebase still uses string-based pseudo-routing (a
+ * `currentPage` state value); the full react-router migration
+ * remains a Phase 3 deliverable. Phase 2.5.2 makes the pseudo-
+ * router URL-aware in three ways:
+ *
+ *   1. parsePageFromUrl(loc): URL → currentPage. Used on mount
+ *      AND in the popstate listener so back/forward work.
+ *   2. pageToUrl(page): currentPage → URL. Used by navigateTo to
+ *      push history on click navigation.
+ *   3. SPA fallback: dist/.htaccess (production) + Vite dev server
+ *      default behaviour ensures unknown routes serve index.html.
+ *
+ * Both helpers are aware of the Vite `base` (`/app/` on production,
+ * `/` in dev) via `import.meta.env.BASE_URL`. Hard-refresh on
+ * /app/checkout in production therefore parses to "checkout".
  */
+const BASE_URL = (import.meta.env.BASE_URL || "/").replace(/\/+$/, "") || "/";
+
+function stripBase(pathname: string): string {
+  if (BASE_URL === "/") return pathname;
+  if (pathname === BASE_URL) return "/";
+  if (pathname.startsWith(BASE_URL + "/")) return pathname.slice(BASE_URL.length);
+  return pathname;
+}
+
 function parsePageFromUrl(loc: Location): string {
-  const raw = (loc.pathname || "/").replace(/\/+$/, "");
+  const rebased = stripBase(loc.pathname || "/");
+  const raw = rebased.replace(/\/+$/, "");
   if (raw === "" || raw === "/") return "home";
 
   // Strip the leading slash and accept the same string vocabulary
@@ -61,7 +82,51 @@ function parsePageFromUrl(loc: Location): string {
   const confMatch = stripped.match(/^booking-confirmation\/(\d+)$/);
   if (confMatch) return `booking-confirmation-${confMatch[1]}`;
 
+  // /services/{cat}/{sub} → service-{cat}/{sub}
+  const svcMatch = stripped.match(/^services\/([^/]+)\/([^/]+)$/);
+  if (svcMatch) return `service-${svcMatch[1]}/${svcMatch[2]}`;
+
+  // /category/{slug} → category-{slug}
+  const catMatch = stripped.match(/^category\/([^/]+)$/);
+  if (catMatch) return `category-${catMatch[1]}`;
+
+  // /center/{id} → center-{id}
+  const centerMatch = stripped.match(/^center\/([^/]+)$/);
+  if (centerMatch) return `center-${centerMatch[1]}`;
+
   return stripped;
+}
+
+/**
+ * Inverse of parsePageFromUrl. The mapping is intentionally not
+ * 1:1 — pretty URLs like /order/12 map back to the internal key
+ * "order-12" so existing currentPage-based logic doesn't change.
+ */
+function pageToUrl(page: string): string {
+  const rel = (() => {
+    if (page === "home") return "/";
+    if (page === "my-bookings") return "/booking-history";
+
+    const orderMatch = page.match(/^order-(\d+)$/);
+    if (orderMatch) return `/order/${orderMatch[1]}`;
+    const confMatch = page.match(/^booking-confirmation-(\d+)$/);
+    if (confMatch) return `/booking-confirmation/${confMatch[1]}`;
+
+    // service-{cat}/{sub}
+    const svcMatch = page.match(/^service-(.+)\/(.+)$/);
+    if (svcMatch) return `/services/${svcMatch[1]}/${svcMatch[2]}`;
+    const catMatch = page.match(/^category-(.+)$/);
+    if (catMatch) return `/category/${catMatch[1]}`;
+    const centerMatch = page.match(/^center-(.+)$/);
+    if (centerMatch) return `/center/${centerMatch[1]}`;
+
+    return `/${page}`;
+  })();
+
+  // Re-apply the Vite base prefix in production (e.g. /app + /checkout
+  // → /app/checkout). Dev's BASE_URL is "/" so this is a no-op.
+  if (BASE_URL === "/") return rel;
+  return rel === "/" ? BASE_URL : `${BASE_URL}${rel}`;
 }
 
 export default function App() {
@@ -70,6 +135,26 @@ export default function App() {
   // on mount (one tick). Prevents the Home flash on hard-refresh
   // of any non-/ URL.
   const [isRouteResolved, setIsRouteResolved] = useState(false);
+
+  /**
+   * Phase 2.5.2 — navigation entry point used by every page.
+   * Mutates currentPage AND pushes URL via history.pushState so
+   * refresh/back/forward all work. The raw setCurrentPage is
+   * reserved for the popstate handler and the initial mount parse
+   * (cases where the URL is already correct).
+   *
+   * Pages still receive this under the legacy prop name
+   * `setCurrentPage` so existing call sites compile without churn.
+   */
+  const navigateTo = useCallback((page: string) => {
+    setCurrentPage(page);
+    if (typeof window === "undefined") return;
+    const target = pageToUrl(page);
+    const current = window.location.pathname + window.location.search;
+    if (target !== current) {
+      window.history.pushState({ page }, "", target);
+    }
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -80,7 +165,24 @@ export default function App() {
     if (initial !== "home") {
       setCurrentPage(initial);
     }
+    // Replace the current history entry so a back-button from the
+    // first navigation lands on the parsed page rather than a
+    // stale ./. Idempotent: no-op when target === current.
+    const target = pageToUrl(initial);
+    const current = window.location.pathname + window.location.search;
+    if (target !== current) {
+      window.history.replaceState({ page: initial }, "", target);
+    }
     setIsRouteResolved(true);
+
+    const handlePop = () => {
+      const next = parsePageFromUrl(window.location);
+      // Use the raw setter — popstate already changed the URL.
+      // Calling navigateTo here would push a duplicate history entry.
+      setCurrentPage(next);
+    };
+    window.addEventListener("popstate", handlePop);
+    return () => window.removeEventListener("popstate", handlePop);
   }, []);
   const [estimateModal, setEstimateModal] = useState<{isOpen: boolean, isCorporate: boolean, initialService: string}>({
     isOpen: false,
@@ -110,31 +212,31 @@ export default function App() {
   const renderPage = () => {
     if (currentPage.startsWith("center-")) {
       const centerId = currentPage.replace("center-", "");
-      return <ServiceCenterDetail centerId={centerId} setCurrentPage={setCurrentPage} openEstimate={openEstimate} />;
+      return <ServiceCenterDetail centerId={centerId} setCurrentPage={navigateTo} openEstimate={openEstimate} />;
     }
 
     if (currentPage.startsWith("category-")) {
       const categorySlug = currentPage.replace("category-", "");
       // Lazy load or just import ServiceCategory
-      return <ServiceCategory categorySlug={categorySlug} setCurrentPage={setCurrentPage} openEstimate={openEstimate} />;
+      return <ServiceCategory categorySlug={categorySlug} setCurrentPage={navigateTo} openEstimate={openEstimate} />;
     }
 
     if (currentPage.startsWith("service-") && currentPage !== "service-centers") {
       // expected format: service-{categorySlug}/{serviceSlug}
       const fullSlug = currentPage.replace("service-", "");
       const [categorySlug, serviceSlug] = fullSlug.split("/");
-      return <ServiceDetail categorySlug={categorySlug} serviceSlug={serviceSlug} setCurrentPage={setCurrentPage} openEstimate={openEstimate} />;
+      return <ServiceDetail categorySlug={categorySlug} serviceSlug={serviceSlug} setCurrentPage={navigateTo} openEstimate={openEstimate} />;
     }
 
     if (currentPage === "cms-preview") {
-      return <CmsPage setCurrentPage={setCurrentPage} openEstimate={openEstimate} />;
+      return <CmsPage setCurrentPage={navigateTo} openEstimate={openEstimate} />;
     }
 
     // Phase 2.5a — order detail (`order-{id}`).
     if (currentPage.startsWith("order-")) {
       const id = Number(currentPage.replace("order-", ""));
       if (Number.isFinite(id) && id > 0) {
-        return <OrderDetail orderId={id} setCurrentPage={setCurrentPage} />;
+        return <OrderDetail orderId={id} setCurrentPage={navigateTo} />;
       }
     }
 
@@ -143,44 +245,44 @@ export default function App() {
       const id = Number(currentPage.replace("booking-confirmation-", ""));
       if (Number.isFinite(id) && id > 0) {
         return (
-          <BookingConfirmation orderId={id} setCurrentPage={setCurrentPage} />
+          <BookingConfirmation orderId={id} setCurrentPage={navigateTo} />
         );
       }
     }
 
     switch (currentPage) {
       case "home":
-        return <Home setCurrentPage={setCurrentPage} openEstimate={openEstimate} />;
+        return <Home setCurrentPage={navigateTo} openEstimate={openEstimate} />;
       case "services":
-        return <Services setCurrentPage={setCurrentPage} openEstimate={openEstimate} />;
+        return <Services setCurrentPage={navigateTo} openEstimate={openEstimate} />;
       case "service-centers":
-        return <ServiceCenters setCurrentPage={setCurrentPage} openEstimate={openEstimate} />;
+        return <ServiceCenters setCurrentPage={navigateTo} openEstimate={openEstimate} />;
       case "insurance":
-        return <Insurance setCurrentPage={setCurrentPage} openEstimate={openEstimate} />;
+        return <Insurance setCurrentPage={navigateTo} openEstimate={openEstimate} />;
       case "corporate":
-        return <Corporate setCurrentPage={setCurrentPage} openEstimate={() => openEstimate(true)} />;
+        return <Corporate setCurrentPage={navigateTo} openEstimate={() => openEstimate(true)} />;
       case "gallery":
-        return <Gallery setCurrentPage={setCurrentPage} openEstimate={openEstimate} />;
+        return <Gallery setCurrentPage={navigateTo} openEstimate={openEstimate} />;
       case "about":
-        return <About setCurrentPage={setCurrentPage} openEstimate={openEstimate} />;
+        return <About setCurrentPage={navigateTo} openEstimate={openEstimate} />;
       case "contact":
-        return <Contact setCurrentPage={setCurrentPage} openEstimate={openEstimate} />;
+        return <Contact setCurrentPage={navigateTo} openEstimate={openEstimate} />;
       case "offers":
-        return <Offers setCurrentPage={setCurrentPage} openEstimate={openEstimate} />;
+        return <Offers setCurrentPage={navigateTo} openEstimate={openEstimate} />;
       case "coupons":
-        return <Coupons setCurrentPage={setCurrentPage} openEstimate={openEstimate} />;
+        return <Coupons setCurrentPage={navigateTo} openEstimate={openEstimate} />;
       case "sitemap":
-        return <Sitemap setCurrentPage={setCurrentPage} openEstimate={openEstimate} />;
+        return <Sitemap setCurrentPage={navigateTo} openEstimate={openEstimate} />;
       case "cart":
-        return <Cart setCurrentPage={setCurrentPage} openAuth={openAuth} />;
+        return <Cart setCurrentPage={navigateTo} openAuth={openAuth} />;
       case "checkout":
-        return <Checkout setCurrentPage={setCurrentPage} openAuth={openAuth} />;
+        return <Checkout setCurrentPage={navigateTo} openAuth={openAuth} />;
       case "payment":
-        return <Payment setCurrentPage={setCurrentPage} />;
+        return <Payment setCurrentPage={navigateTo} />;
       case "my-bookings":
-        return <MyBookings setCurrentPage={setCurrentPage} openAuth={openAuth} />;
+        return <MyBookings setCurrentPage={navigateTo} openAuth={openAuth} />;
       default:
-        return <Home setCurrentPage={setCurrentPage} openEstimate={openEstimate} />;
+        return <Home setCurrentPage={navigateTo} openEstimate={openEstimate} />;
     }
   };
 
@@ -194,7 +296,7 @@ export default function App() {
     <div className="min-h-screen flex flex-col bg-white selection:bg-primary selection:text-white">
       <Header
         currentPage={currentPage} 
-        setCurrentPage={setCurrentPage} 
+        setCurrentPage={navigateTo} 
         openEstimate={() => openEstimate(false)}
         openAuth={openAuth}
       />
@@ -231,7 +333,7 @@ export default function App() {
         isOpen={authModal.isOpen}
         defaultTab={authModal.defaultTab}
         redirectTo={authModal.redirectTo}
-        setCurrentPage={setCurrentPage}
+        setCurrentPage={navigateTo}
         onClose={() => setAuthModal((prev) => ({ ...prev, isOpen: false }))}
       />
 

@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import PageBanner from "../components/PageBanner";
 import CancelOrderModal from "../components/CancelOrderModal";
+import VehicleBadge from "../components/VehicleBadge";
 import { useAuth } from "../hooks/useAuth";
 import { useOrdersList, useCancelOrder } from "../hooks/useOrders";
 import type { OrderResource, OrderStatus } from "../types/api";
@@ -228,6 +229,13 @@ const BookingCard: React.FC<{
           <p className="text-sm font-black text-neutral-900 tracking-widest">
             {order.order_number}
           </p>
+          {/* Phase 2.5.2 — vehicle context inline so the user can
+              tell which car a booking is for at a glance. */}
+          <VehicleBadge
+            variant="compact"
+            vehicle={order.vehicle_snapshot}
+            className="mt-1"
+          />
         </div>
         <div className="text-right">
           <span

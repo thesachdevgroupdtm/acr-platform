@@ -109,18 +109,22 @@ export default function CancelOrderModal({
               )}
             </div>
 
+            {/* Phase 2.5.2 (D-2.5.2-4) — explicit horizontal padding
+                so the long "Confirm Cancellation" label has breathing
+                room on narrow viewports; whitespace gap matches the
+                primary-button vocabulary used elsewhere in the app. */}
             <div className="px-7 sm:px-9 py-4 border-t border-border flex flex-col sm:flex-row-reverse gap-2 sm:gap-3">
               <button
                 onClick={handleSubmit}
                 disabled={pending}
-                className="flex-1 py-3.5 text-xs font-black uppercase tracking-widest bg-accent-dark text-white hover:bg-accent-dark/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                className="flex-1 px-6 py-3.5 text-xs font-black uppercase tracking-widest bg-accent-dark text-white hover:bg-accent-dark/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
               >
                 {pending ? "Cancelling…" : "Confirm Cancellation"}
               </button>
               <button
                 onClick={onClose}
                 disabled={pending}
-                className="flex-1 py-3.5 text-xs font-black uppercase tracking-widest bg-white border border-border text-neutral-700 hover:border-primary hover:text-primary transition-colors disabled:opacity-50"
+                className="flex-1 px-6 py-3.5 text-xs font-black uppercase tracking-widest bg-white border border-border text-neutral-700 hover:border-primary hover:text-primary transition-colors disabled:opacity-50 whitespace-nowrap"
               >
                 Keep Booking
               </button>

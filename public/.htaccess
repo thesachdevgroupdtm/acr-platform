@@ -1,0 +1,22 @@
+# Phase 2.5.2 — SPA fallback for Hostinger production.
+#
+# The Vite production build emits this file into dist/. Operators
+# deploy dist/ to /public_html/app/ on Hostinger. Because the SPA
+# is URL-aware (history.pushState on click navigation, popstate
+# listener for back/forward, and parsePageFromUrl on mount), Apache
+# must serve index.html for any unknown path so the front-end
+# router can take over.
+#
+# Without this rule, hard-refreshing /app/checkout, /app/order/12,
+# etc. would return a 404 and the routing fix has no effect.
+#
+# The "!-f" / "!-d" conditions ensure real files (CSS, JS, images,
+# the index.html itself) and existing directories are served
+# directly — only unmatched paths get rewritten.
+
+Options -MultiViews
+RewriteEngine On
+
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ index.html [QSA,L]

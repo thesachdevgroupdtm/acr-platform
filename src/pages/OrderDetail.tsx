@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import PageBanner from "../components/PageBanner";
 import CancelOrderModal from "../components/CancelOrderModal";
+import VehicleBadge from "../components/VehicleBadge";
 import { useOrderDetail, useCancelOrder } from "../hooks/useOrders";
 import type { OrderStatus } from "../types/api";
 
@@ -156,17 +157,16 @@ export default function OrderDetail({
             </div>
           </div>
 
-          {/* Vehicle */}
-          {v && (v.brand_name || v.model_name) && (
+          {/* Phase 2.5.2 — prominent vehicle section via shared
+              VehicleBadge for consistency with the rest of the
+              checkout/order flow. */}
+          {v && (
             <div className="bg-white border border-border mt-4 p-5 sm:p-6">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 mb-1.5">
-                Vehicle
-              </p>
-              <p className="text-sm font-bold text-neutral-900">
-                {[v.brand_name, v.model_name, v.fuel_name]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </p>
+              <VehicleBadge
+                variant="detailed"
+                vehicle={v}
+                serviceCenter={order.service_center?.name ?? null}
+              />
             </div>
           )}
 
