@@ -31,8 +31,13 @@ export const FEATURES = {
    * / re-merge case. Set true now that the protocol ships.
    */
   cartSync: true,
-  /** /checkout/place-order lands in Phase 2.5. */
-  offlineCheckout: false,
+  /**
+   * Phase 2.5a — real /checkout/place-order endpoint shipped. Was
+   * `false` from 2.1 onward as a forward-declared key; flipping it
+   * to `true` activates the real backend for the place-order flow.
+   * Stays true unless we need to dark-launch a regression.
+   */
+  offlineCheckout: true,
   /**
    * Phase 2.3.4 — restored to original client-side flow. The
    * pre-2.3.2 Checkout → Payment → BookingConfirmation experience
@@ -50,6 +55,17 @@ export const FEATURES = {
    * persistence) which matches the pre-2.3.2 behavior.
    */
   bookingsList: true,
+  /**
+   * Phase 2.5a — coupon UI hidden. The /cart/coupon endpoints still
+   * 501; the orders.coupon_id column exists but is always null.
+   * Phase 2.5b lights up coupon math + UI in one go.
+   */
+  couponsLit: false,
+  /**
+   * Phase 2.5a — payments are placeholder ("Pay at Service Center"
+   * / cash_at_center). Real gateway (Razorpay/UPI) lands in Phase 4+.
+   */
+  paymentGateway: false,
 } as const;
 
 export type FeatureFlag = keyof typeof FEATURES;

@@ -8,7 +8,9 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import PageBanner from "../components/PageBanner";
-import { useAuth, BookingRecord } from "../hooks/useAuth";
+import { useAuth } from "../hooks/useAuth";
+import { useOrdersList, useCancelOrder } from "../hooks/useOrders";
+import type { OrderResource, OrderStatus } from "../types/api";
 import { FEATURES } from "../config/features";
 import BookingsComingSoon from "./BookingsComingSoon";
 
@@ -21,14 +23,27 @@ export default function MyBookings({
   setCurrentPage,
   openAuth,
 }: MyBookingsProps) {
-  // Phase 2.3.2 — bookings list reads from AcrUser.bookings, which
-  // the pre-2.5 fake Checkout never wrote anywhere readable. Until
-  // /user/orders ships, render a ComingSoon notice instead.
+  // Phase 2.5a — bookingsList stays true; the dark-launch gate is now
+  // a no-op (real /user/orders endpoint shipped).
   if (!FEATURES.bookingsList) {
     return <BookingsComingSoon setCurrentPage={setCurrentPage} openAuth={openAuth} />;
   }
 
   const { user, isAuthenticated, logout } = useAuth();
+  const { orders, isLoading, isError } = useOrdersList({ per_page: 50 });
+  const cancelMutation = useCancelOrder();
+
+  const completed = orders.filter((o) => o.status === "completed").length;
+
+  const handleCancel = async (orderId: number) => {
+    if (!confirm("Cancel this booking? This can't be undone.")) return;
+    const reason = window.prompt("Reason (optional)") ?? null;
+    try {
+      await cancelMutation.mutateAsync({ orderId, reason });
+    } catch (e) {
+      alert("Couldn't cancel: " + (e instanceof Error ? e.message : String(e)));
+    }
+  };
 
   return (
     <>
@@ -46,7 +61,7 @@ export default function MyBookings({
             <NotLoggedIn openAuth={openAuth} setCurrentPage={setCurrentPage} />
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 lg:gap-10">
-              {/* User card sidebar */}
+              {/* Sidebar */}
               <aside className="space-y-4 lg:sticky lg:self-start lg:top-28">
                 <div className="bg-primary text-white p-6">
                   <div className="w-14 h-14 bg-white text-primary flex items-center justify-center text-2xl font-black mb-3">
@@ -56,25 +71,20 @@ export default function MyBookings({
                     {user.name}
                   </h3>
                   <p className="text-xs text-white/70 mb-1 truncate">
-                    {user.email}
+                    {user.email || "No email"}
                   </p>
                   <p className="text-xs text-white/70 mb-4">
                     +91 {user.phone}
                   </p>
                   <div className="grid grid-cols-2 gap-2 pt-4 border-t border-white/20 text-center">
                     <div>
-                      <p className="text-2xl font-black">
-                        {user.bookings.length}
-                      </p>
+                      <p className="text-2xl font-black">{orders.length}</p>
                       <p className="text-[9px] uppercase tracking-widest font-bold text-white/70">
                         Bookings
                       </p>
                     </div>
                     <div>
-                      <p className="text-2xl font-black">
-                        {user.bookings.filter((b) => b.status === "completed")
-                          .length}
-                      </p>
+                      <p className="text-2xl font-black">{completed}</p>
                       <p className="text-[9px] uppercase tracking-widest font-bold text-white/70">
                         Completed
                       </p>
@@ -106,7 +116,15 @@ export default function MyBookings({
                   </button>
                 </div>
 
-                {user.bookings.length === 0 ? (
+                {isLoading ? (
+                  <div className="bg-white border border-border py-12 text-center text-sm text-neutral-500">
+                    Loading bookings…
+                  </div>
+                ) : isError ? (
+                  <div className="bg-white border border-accent-dark/30 py-12 text-center text-sm text-accent-dark">
+                    Couldn't load bookings.
+                  </div>
+                ) : orders.length === 0 ? (
                   <div className="bg-white border border-border py-16 px-6 text-center">
                     <div className="w-14 h-14 bg-neutral-100 mx-auto mb-4 flex items-center justify-center">
                       <Package className="w-7 h-7 text-neutral-400" />
@@ -122,12 +140,19 @@ export default function MyBookings({
                       onClick={() => setCurrentPage("services")}
                       className="btn-ink btn-ink-primary px-6 py-3 text-xs font-black uppercase tracking-widest inline-flex items-center gap-2"
                     >
-                      Browse Services{" "}
-                      <ArrowRight className="w-4 h-4 btn-arrow" />
+                      Browse Services <ArrowRight className="w-4 h-4 btn-arrow" />
                     </button>
                   </div>
                 ) : (
-                  user.bookings.map((b) => <BookingCard key={b.id} b={b} />)
+                  orders.map((o) => (
+                    <BookingCard
+                      key={o.id}
+                      order={o}
+                      onView={() => setCurrentPage(`order-${o.id}`)}
+                      onCancel={() => handleCancel(o.id)}
+                      cancelling={cancelMutation.isPending}
+                    />
+                  ))
                 )}
               </div>
             </div>
@@ -138,19 +163,33 @@ export default function MyBookings({
   );
 }
 
-const BookingCard: React.FC<{ b: BookingRecord }> = ({ b }) => {
-  const statusColor =
-    b.status === "confirmed"
-      ? "bg-primary text-white"
-      : b.status === "completed"
-      ? "bg-neutral-900 text-white"
-      : "bg-accent-dark text-white";
+function statusBadge(status: OrderStatus): string {
+  switch (status) {
+    case "pending":     return "bg-amber-500 text-white";
+    case "confirmed":   return "bg-primary text-white";
+    case "in_service":  return "bg-indigo-600 text-white";
+    case "completed":   return "bg-neutral-900 text-white";
+    case "cancelled":   return "bg-neutral-400 text-white";
+    default:            return "bg-neutral-300 text-neutral-700";
+  }
+}
 
-  const date = new Date(b.createdAt).toLocaleDateString("en-IN", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
+const BookingCard: React.FC<{
+  order: OrderResource;
+  onView: () => void;
+  onCancel: () => void;
+  cancelling: boolean;
+}> = ({ order, onView, onCancel, cancelling }) => {
+  const titles =
+    order.items.map((i) => i.service_title_snapshot).filter(Boolean).join(", ") ||
+    "—";
+  const created = order.timestamps.created_at
+    ? new Date(order.timestamps.created_at).toLocaleDateString("en-IN", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })
+    : "";
 
   return (
     <div className="bg-white border border-border">
@@ -160,16 +199,18 @@ const BookingCard: React.FC<{ b: BookingRecord }> = ({ b }) => {
             Booking ID
           </p>
           <p className="text-sm font-black text-neutral-900 tracking-widest">
-            {b.id}
+            {order.order_number}
           </p>
         </div>
         <div className="text-right">
           <span
-            className={`inline-block px-2.5 py-1 text-[9px] font-bold uppercase tracking-widest ${statusColor}`}
+            className={`inline-block px-2.5 py-1 text-[9px] font-bold uppercase tracking-widest ${statusBadge(order.status)}`}
           >
-            {b.status}
+            {order.status.replace("_", " ")}
           </span>
-          <p className="text-[10px] text-neutral-400 mt-1">Booked {date}</p>
+          {created && (
+            <p className="text-[10px] text-neutral-400 mt-1">Booked {created}</p>
+          )}
         </div>
       </div>
 
@@ -178,17 +219,18 @@ const BookingCard: React.FC<{ b: BookingRecord }> = ({ b }) => {
           Services
         </p>
         <ul className="space-y-1">
-          {b.items.map((it, i) => (
+          {order.items.map((it) => (
             <li
-              key={i}
+              key={it.id}
               className="text-sm font-bold text-neutral-900 flex items-center justify-between gap-2"
             >
               <span className="flex items-center gap-2">
                 <CheckCircle2 className="w-3.5 h-3.5 text-primary shrink-0" />
-                {it.title} {it.qty > 1 && <span>× {it.qty}</span>}
+                {it.service_title_snapshot}
+                {it.quantity > 1 && <span> × {it.quantity}</span>}
               </span>
               <span className="text-neutral-500 text-xs">
-                {it.price > 0 ? `₹${it.price * it.qty}` : "Quote"}
+                ₹{it.line_total_snapshot}
               </span>
             </li>
           ))}
@@ -196,25 +238,41 @@ const BookingCard: React.FC<{ b: BookingRecord }> = ({ b }) => {
       </div>
 
       <div className="px-5 py-3 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-        <Cell icon={Calendar} label="Date" value={b.preferredDate || "TBC"} />
+        <Cell icon={Calendar} label="Date" value={order.preferred_date || "TBC"} />
+        <Cell icon={Clock} label="Time" value={order.preferred_time || "TBC"} />
         <Cell
-          icon={Clock}
-          label="Time"
-          value={
-            b.preferredTime ? b.preferredTime.replace("-", " – ") : "TBC"
-          }
+          icon={MapPin}
+          label="Center"
+          value={order.service_center?.name || "—"}
         />
-        <Cell icon={MapPin} label="Center" value={b.serviceCenter} />
         <div>
           <p className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest">
             Total
           </p>
-          <p className="text-sm font-black text-primary">₹{b.total}</p>
+          <p className="text-sm font-black text-primary">₹{order.totals.total}</p>
         </div>
+      </div>
+
+      <div className="px-5 py-3 border-t border-border flex items-center justify-end gap-3 flex-wrap">
+        {order.status === "pending" && (
+          <button
+            onClick={onCancel}
+            disabled={cancelling}
+            className="text-[10px] uppercase tracking-widest font-bold text-accent-dark hover:underline disabled:opacity-60"
+          >
+            {cancelling ? "Cancelling…" : "Cancel"}
+          </button>
+        )}
+        <button
+          onClick={onView}
+          className="btn-ink btn-ink-primary px-4 py-2 text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-1.5"
+        >
+          View Details <ArrowRight className="w-3 h-3 btn-arrow" />
+        </button>
       </div>
     </div>
   );
-}
+};
 
 function Cell({
   icon: Icon,

@@ -7,12 +7,15 @@ use App\Http\Controllers\Api\V1\Auth\SendOtpController;
 use App\Http\Controllers\Api\V1\Auth\VerifyOtpController;
 use App\Http\Controllers\Api\V1\Cart\CartController;
 use App\Http\Controllers\Api\V1\Cart\MergeCartController;
+use App\Http\Controllers\Api\V1\Checkout\CheckoutController;
 use App\Http\Controllers\Api\V1\HomeController;
 use App\Http\Controllers\Api\V1\ImportController;
 use App\Http\Controllers\Api\V1\PageController;
 use App\Http\Controllers\Api\V1\PricingController;
+use App\Http\Controllers\Api\V1\Public\ServiceCentersController;
 use App\Http\Controllers\Api\V1\ServiceController;
 use App\Http\Controllers\Api\V1\User\AddressController;
+use App\Http\Controllers\Api\V1\User\OrderController;
 use App\Http\Controllers\Api\V1\User\ProfileController;
 use App\Http\Controllers\Api\V1\VehicleController;
 use Illuminate\Support\Facades\Route;
@@ -91,5 +94,28 @@ Route::prefix('v1')->group(function () {
         // re-merge after OTP-verify path missed the X-Cart-Session
         // header). Sanctum-required; the guest UUID is in the body.
         Route::post  ('cart/merge',            MergeCartController::class)              ->middleware(['auth:sanctum', 'throttle:cart-write']);
+    });
+
+    // Phase 2.5a — service centers (public read for checkout dropdown).
+    Route::get('service-centers', [ServiceCentersController::class, 'index'])
+        ->middleware('throttle:public-read');
+
+    // Phase 2.5a — checkout pipeline (auth + cart-session so the
+    // user's active cart is auto-attached by middleware).
+    Route::middleware(['auth:sanctum', 'cart-session'])->group(function () {
+        Route::post('checkout/quote',       [CheckoutController::class, 'quote'])
+            ->middleware('throttle:user-write');
+        Route::post('checkout/place-order', [CheckoutController::class, 'placeOrder'])
+            ->middleware('throttle:user-write');
+    });
+
+    // Phase 2.5a — orders (auth required; cart-session not needed).
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::get ('user/orders',                  [OrderController::class, 'index'])
+            ->middleware('throttle:user-read');
+        Route::get ('user/orders/{order}',          [OrderController::class, 'show'])
+            ->middleware('throttle:user-read');
+        Route::post('user/orders/{order}/cancel',   [OrderController::class, 'cancel'])
+            ->middleware('throttle:user-write');
     });
 });

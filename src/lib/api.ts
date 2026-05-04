@@ -487,13 +487,19 @@ import type {
   AddressResponse,
   AddressesResponse,
   CartResponse,
+  CheckoutQuoteRequest,
+  CheckoutQuoteResponse,
   LeadCaptureRequest,
   LeadCaptureResponse,
   LoginRequest,
   LoginResponse,
+  OrderResponse,
+  OrdersListResponse,
+  PlaceOrderRequest,
   ProfileResponse,
   SendOtpRequest,
   SendOtpResponse,
+  ServiceCentersResponse,
   UpdateCartItemRequest,
   UpdateProfileRequest,
   VerifyOtpRequest,
@@ -619,3 +625,33 @@ export const deleteCartCoupon = (sessionUuid?: string | null, signal?: AbortSign
  */
 export const postCartMerge = (guestSessionUuid: string, signal?: AbortSignal) =>
   apiPost<CartResponse>("/cart/merge", { guest_session_uuid: guestSessionUuid }, signal);
+
+/* ───────────── Phase 2.5a — Service centers / Checkout / Orders ───────────── */
+
+export const fetchServiceCenters = (signal?: AbortSignal) =>
+  apiGet<ServiceCentersResponse>("/service-centers", undefined, signal);
+
+export const postCheckoutQuote = (req: CheckoutQuoteRequest, signal?: AbortSignal) =>
+  apiPost<CheckoutQuoteResponse>("/checkout/quote", req, signal);
+
+export const postPlaceOrder = (req: PlaceOrderRequest, signal?: AbortSignal) =>
+  apiPost<OrderResponse>("/checkout/place-order", req, signal);
+
+export const fetchOrders = (
+  params?: { page?: number; per_page?: number; status?: string },
+  signal?: AbortSignal,
+) => apiGet<OrdersListResponse>("/user/orders", params as Record<string, string | number | undefined>, signal);
+
+export const fetchOrder = (orderId: number, signal?: AbortSignal) =>
+  apiGet<OrderResponse>(`/user/orders/${orderId}`, undefined, signal);
+
+export const postCancelOrder = (
+  orderId: number,
+  reason?: string | null,
+  signal?: AbortSignal,
+) =>
+  apiPost<OrderResponse>(
+    `/user/orders/${orderId}/cancel`,
+    reason ? { reason } : {},
+    signal,
+  );

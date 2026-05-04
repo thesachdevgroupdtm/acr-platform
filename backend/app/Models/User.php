@@ -93,4 +93,12 @@ class User extends Authenticatable
     {
         return $this->hasOne(Cart::class)->where('status', 'active');
     }
+
+    /**
+     * Phase 2.5a — every order this user has placed.
+     */
+    public function orders(): HasMany
+    {
+        return $this->hasMany(Order::class);
+    }
 }

@@ -25,6 +25,8 @@ import Cart from "./pages/Cart";
 import Checkout from "./pages/Checkout";
 import Payment from "./pages/Payment";
 import MyBookings from "./pages/MyBookings";
+import OrderDetail from "./pages/OrderDetail";
+import BookingConfirmation from "./pages/BookingConfirmation";
 import EstimateProcess from "./components/EstimateProcess";
 import AuthModal from "./components/AuthModal";
 import { motion, AnimatePresence } from "motion/react";
@@ -79,6 +81,24 @@ export default function App() {
 
     if (currentPage === "cms-preview") {
       return <CmsPage setCurrentPage={setCurrentPage} openEstimate={openEstimate} />;
+    }
+
+    // Phase 2.5a — order detail (`order-{id}`).
+    if (currentPage.startsWith("order-")) {
+      const id = Number(currentPage.replace("order-", ""));
+      if (Number.isFinite(id) && id > 0) {
+        return <OrderDetail orderId={id} setCurrentPage={setCurrentPage} />;
+      }
+    }
+
+    // Phase 2.5a — booking confirmation (`booking-confirmation-{id}`).
+    if (currentPage.startsWith("booking-confirmation-")) {
+      const id = Number(currentPage.replace("booking-confirmation-", ""));
+      if (Number.isFinite(id) && id > 0) {
+        return (
+          <BookingConfirmation orderId={id} setCurrentPage={setCurrentPage} />
+        );
+      }
     }
 
     switch (currentPage) {

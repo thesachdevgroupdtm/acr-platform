@@ -1,4 +1,4 @@
-import { useState, useEffect, FormEvent } from "react";
+import { useState, useEffect, FormEvent, useMemo } from "react";
 import {
   ArrowRight,
   ArrowLeft,
@@ -13,21 +13,23 @@ import {
   Lock,
   Shield,
   CheckCircle2,
-  Tag,
 } from "lucide-react";
 import PageBanner from "../components/PageBanner";
 import { useCart, useCheckout } from "../hooks/useCart";
 import { useAuth } from "../hooks/useAuth";
 import { useBookingContext } from "../hooks/useBookingContext";
-import {
-  LOCATIONS,
-  OFFERS,
-  pickBestOffer,
-  computeCouponDiscount,
-} from "../data/businessData";
+import { useServiceCenters } from "../hooks/useServiceCenters";
 import { CheckoutSteps } from "./Cart";
 import { FEATURES } from "../config/features";
 import CheckoutComingSoon from "./CheckoutComingSoon";
+import { ApiError, postPlaceOrder } from "../lib/api";
+import {
+  AFTERNOON_SLOTS,
+  EVENING_SLOTS,
+  MORNING_SLOTS,
+  PREFERRED_TIME_OPTIONS,
+} from "../types/api";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface CheckoutProps {
   setCurrentPage: (page: string) => void;
@@ -41,33 +43,46 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const GST_PCT = 18;
 
 export default function Checkout({ setCurrentPage, openAuth }: CheckoutProps) {
-  // Phase 2.3.2 — gate the pre-2.5 client-side fake checkout flow.
-  // Real /checkout/place-order ships in Phase 2.5; until then the
-  // ComingSoon notice is shown so users don't get a fake invoice.
+  // Phase 2.5a — checkoutFlow stays true; the dark-launch gate is
+  // now a no-op (real backend ships). Kept for ops kill-switch.
   if (!FEATURES.checkoutFlow) {
     return <CheckoutComingSoon setCurrentPage={setCurrentPage} />;
   }
 
   const { items, subtotal, count } = useCart();
-  const { details, setDetails } = useCheckout();
+  const { details, setDetails, resetDetails } = useCheckout();
   const { user, isAuthenticated, setDefaults } = useAuth();
-  // Pull synced booking context — gives us the car the user already chose
-  // on the parent service category page, so we can save it to their profile.
   const { state: booking } = useBookingContext();
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const { centers, isLoading: centersLoading } = useServiceCenters();
+  const qc = useQueryClient();
 
-  // Phase 2.3.2 — prefill priority chain (Bug B):
-  //   1. useAuth().user            (server-verified PII; highest fidelity)
-  //   2. acr_checkout_v1 (`details`) (last form draft — already loaded into state)
-  //   3. acr_booking_ctx_v1.phone   (verified phone from Quick Estimate OTP)
-  //
-  // We only set fields that are EMPTY in `details` so the user's edits
-  // survive a re-render. Once a field is populated from any source, the
-  // user controls it.
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  // Phase 2.5a — D-2.5a-1 slot UI state. Kept separate from
+  // useCheckout's preferredTime so the canonical en-dash slot string
+  // is stored as-is for both validation and submission.
+  const [selectedSlot, setSelectedSlot] = useState<string>(
+    PREFERRED_TIME_OPTIONS.includes(details.preferredTime as string)
+      ? details.preferredTime
+      : "",
+  );
+
+  // Phase 2.5a — service center is now a numeric id, but the legacy
+  // useCheckout details.serviceCenter holds a slug ("moti-nagar"). We
+  // reconcile by:
+  //   - matching the existing slug against the API list to derive the id
+  //   - storing the id in local state for submission
+  //   - keeping the slug in useCheckout for backward-compat / draft rehydrate
+  const [selectedCenterId, setSelectedCenterId] = useState<number | null>(null);
+
+  // Pre-fill priority chain (preserved from prior phases):
+  //   1. authenticated user data
+  //   2. acr_checkout_v1 form draft (already in `details`)
+  //   3. acr_booking_ctx_v1 — verified phone from Quick Estimate
   useEffect(() => {
     const updates: Partial<typeof details> = {};
-
-    // Priority 1 — authenticated user wins for any empty field.
     if (user) {
       if (!details.name && user.name) updates.name = user.name;
       if (!details.phone && user.phone) updates.phone = user.phone;
@@ -81,62 +96,58 @@ export default function Checkout({ setCurrentPage, openAuth }: CheckoutProps) {
         updates.serviceCenter = user.defaultLocation;
       }
     }
-
-    // Priority 3 fallback — Quick Estimate captured a verified phone but
-    // the user is not logged in. Auth wins above; this only applies when
-    // user.phone is unavailable AND draft is empty.
     if (!details.phone && !updates.phone && booking.phone) {
       updates.phone = booking.phone;
     }
-
     if (Object.keys(updates).length > 0) setDetails(updates);
-    // setDetails is stable from useCheckout
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, booking.phone]);
 
+  // Resolve service-center id from slug once centers load.
+  useEffect(() => {
+    if (selectedCenterId !== null) return;
+    if (!centers.length) return;
 
-  // ---------- Coupon-aware totals (synced from Cart via useCheckout) ----------
-  // The Cart writes the chosen coupon code into the shared checkout details,
-  // so here we just resolve and apply it. Falling back to the auto best-offer
-  // means even users who skipped the coupon panel still get a discount.
-  const isFirstTime = !user || user.bookings.length === 0;
-  const cartCategorySlugs = Array.from(
-    new Set(items.map((i) => i.categorySlug).filter(Boolean))
-  ) as string[];
-  const manualCoupon = details.couponCode
-    ? OFFERS.find((c) => c.code === details.couponCode) || null
-    : null;
-  const manualDiscount = manualCoupon
-    ? computeCouponDiscount(manualCoupon, {
-        subtotal,
-        cartCategorySlugs,
-        isFirstTime,
-      })
-    : 0;
-  const auto = pickBestOffer(OFFERS, {
-    subtotal,
-    cartCategorySlugs,
-    isFirstTime,
-  });
-  const effectiveCoupon =
-    manualCoupon && manualDiscount > 0 ? manualCoupon : auto?.coupon || null;
-  const effectiveDiscount =
-    manualCoupon && manualDiscount > 0
-      ? manualDiscount
-      : auto?.discount || 0;
+    const draftSlug = details.serviceCenter || booking.location || "";
+    if (draftSlug) {
+      const match = centers.find((c) => c.slug === draftSlug);
+      if (match) {
+        setSelectedCenterId(match.id);
+        return;
+      }
+    }
+    // No prefill match — let user pick.
+  }, [centers, details.serviceCenter, booking.location, selectedCenterId]);
 
-  const subtotalAfterDiscount = Math.max(0, subtotal - effectiveDiscount);
-  const gst = Math.round(subtotalAfterDiscount * (GST_PCT / 100));
-  const total = subtotalAfterDiscount + gst;
+  // ---------- Totals (Phase 2.5a — server uses 18% GST; coupon math gated to 2.5b) ----------
+  // Cart subtotal is server-trusted. We compute GST/total locally for
+  // the summary panel; the backend re-computes authoritatively at
+  // /checkout/place-order time.
+  const gst = useMemo(() => Math.round(subtotal * (GST_PCT / 100)), [subtotal]);
+  const total = subtotal + gst;
 
   const handleChange = (
     field: keyof typeof details,
     value: string,
-    sanitize?: (v: string) => string
+    sanitize?: (v: string) => string,
   ) => {
     const cleaned = sanitize ? sanitize(value) : value;
     setDetails({ [field]: cleaned });
     if (errors[field]) setErrors((er) => ({ ...er, [field]: "" }));
+  };
+
+  const handleSlotSelect = (slot: string) => {
+    setSelectedSlot(slot);
+    setDetails({ preferredTime: slot });
+    if (errors.preferredTime) setErrors((er) => ({ ...er, preferredTime: "" }));
+  };
+
+  const handleCenterChange = (idStr: string) => {
+    const id = idStr ? Number(idStr) : null;
+    setSelectedCenterId(id);
+    const slug = id ? centers.find((c) => c.id === id)?.slug ?? "" : "";
+    setDetails({ serviceCenter: slug });
+    if (errors.serviceCenter) setErrors((er) => ({ ...er, serviceCenter: "" }));
   };
 
   const validate = () => {
@@ -149,43 +160,88 @@ export default function Checkout({ setCurrentPage, openAuth }: CheckoutProps) {
     else if (!PHONE_REGEX.test(details.phone))
       errs.phone = "Enter exactly 10 digits";
 
-    if (!details.email) errs.email = "Email is required";
-    else if (!EMAIL_REGEX.test(details.email))
+    if (details.email && !EMAIL_REGEX.test(details.email))
       errs.email = "Enter a valid email";
 
-    if (!details.address.trim()) errs.address = "Service address is required";
     if (!details.preferredDate)
       errs.preferredDate = "Pick a preferred date";
-    if (!details.preferredTime)
-      errs.preferredTime = "Pick a preferred time slot";
-    if (!details.serviceCenter)
+    if (!selectedSlot)
+      errs.preferredTime = "Please select a slot";
+    else if (!PREFERRED_TIME_OPTIONS.includes(selectedSlot))
+      errs.preferredTime = "Invalid slot selected";
+
+    if (!selectedCenterId)
       errs.serviceCenter = "Choose a service center";
 
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
 
-  const onSubmit = (e: FormEvent) => {
+  const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (items.length === 0) {
       setCurrentPage("cart");
       return;
     }
-    if (validate()) {
-      // Persist car + service-center + address to the user's profile so
-      // next time these auto-fill — true "fill once, never again".
+    if (!validate()) return;
+    if (!selectedCenterId) return;
+    if (submitting) return;
+
+    setSubmitError(null);
+    setSubmitting(true);
+
+    try {
+      const res = await postPlaceOrder({
+        preferred_date: details.preferredDate,
+        preferred_time: selectedSlot,
+        service_center_id: selectedCenterId,
+        address: details.address || null,
+        notes: details.notes || null,
+        name: details.name.trim(),
+        phone: details.phone,
+        email: details.email || null,
+      });
+
+      // Persist the user's new defaults so future bookings auto-fill.
       if (isAuthenticated) {
+        const slug = centers.find((c) => c.id === selectedCenterId)?.slug || "";
         setDefaults({
           car: booking.car || undefined,
-          location: details.serviceCenter,
+          location: slug || undefined,
         });
-        // Address persistence is gated to Phase 2.5 — the proper address
-        // picker UI lands with the order/checkout flow. The /user/addresses
-        // CRUD is live (Phase 2.2) but Checkout's free-form single-string
-        // address can't be split into the structured fields the API
-        // expects, so we no-op here until the picker is wired in.
       }
-      setCurrentPage("payment");
+
+      // Cart is now `converted` server-side — invalidate so the next
+      // /cart fetch returns an empty active cart.
+      qc.invalidateQueries({ queryKey: ["cart"] });
+      qc.invalidateQueries({ queryKey: ["orders"] });
+
+      // Reset the local checkout draft.
+      resetDetails();
+
+      // Navigate to confirmation, carrying the new order id in the
+      // route state (App routes booking-confirmation-{id}).
+      setCurrentPage(`booking-confirmation-${res.order.id}`);
+    } catch (e) {
+      const status = e instanceof ApiError ? e.status : 0;
+      const msg =
+        e instanceof ApiError
+          ? e.message
+          : "Something went wrong placing your order. Please try again.";
+
+      if (status === 429) {
+        setSubmitError(`${msg}`);
+      } else if (status === 422) {
+        setSubmitError(msg);
+      } else if (status === 403) {
+        setSubmitError(
+          "Your phone is not verified. Please log in again to verify.",
+        );
+      } else {
+        setSubmitError(msg);
+      }
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -226,8 +282,7 @@ export default function Checkout({ setCurrentPage, openAuth }: CheckoutProps) {
                 onClick={() => setCurrentPage("services")}
                 className="btn-ink btn-ink-primary px-8 py-4 text-xs font-black uppercase tracking-widest inline-flex items-center gap-2"
               >
-                Browse Services{" "}
-                <ArrowRight className="w-4 h-4 btn-arrow" />
+                Browse Services <ArrowRight className="w-4 h-4 btn-arrow" />
               </button>
             </div>
           </div>
@@ -237,8 +292,6 @@ export default function Checkout({ setCurrentPage, openAuth }: CheckoutProps) {
   }
 
   // ----- Auth guard -----
-  // Checkout is gated behind authentication: this is the strongest
-  // anti-fake-lead protection (verified phone + email + password = real account).
   if (!isAuthenticated) {
     return (
       <>
@@ -309,9 +362,7 @@ export default function Checkout({ setCurrentPage, openAuth }: CheckoutProps) {
             noValidate
             className="grid grid-cols-1 lg:grid-cols-3 gap-8 lg:gap-10 mt-10"
           >
-            {/* FORM */}
             <div className="lg:col-span-2 space-y-6">
-              {/* Logged in identity banner */}
               {user && (
                 <div className="bg-primary/5 border border-primary/20 px-4 py-3 flex items-center gap-3">
                   <CheckCircle2 className="w-5 h-5 text-primary shrink-0" />
@@ -320,12 +371,13 @@ export default function Checkout({ setCurrentPage, openAuth }: CheckoutProps) {
                       Booking as {user.name}
                     </p>
                     <p className="text-[10px] text-neutral-500 truncate">
-                      Verified · {user.email} · +91 {user.phone}
+                      Verified · {user.email || "no email"} · +91 {user.phone}
                     </p>
                   </div>
                 </div>
               )}
 
+              {/* Contact details */}
               <div className="bg-white border border-border p-5 sm:p-7">
                 <h2 className="text-xl sm:text-2xl uppercase font-black text-neutral-900 mb-1 tracking-tighter">
                   CONTACT <span className="text-primary">DETAILS.</span>
@@ -344,7 +396,7 @@ export default function Checkout({ setCurrentPage, openAuth }: CheckoutProps) {
                       value={details.name}
                       onChange={(e) =>
                         handleChange("name", e.target.value, (v) =>
-                          v.replace(/[^A-Za-z\s.'-]/g, "")
+                          v.replace(/[^A-Za-z\s.'-]/g, ""),
                         )
                       }
                       placeholder="John Doe"
@@ -361,25 +413,21 @@ export default function Checkout({ setCurrentPage, openAuth }: CheckoutProps) {
                       inputMode="numeric"
                       maxLength={10}
                       value={details.phone}
-                      onChange={(e) =>
-                        handleChange("phone", e.target.value, (v) =>
-                          v.replace(/\D/g, "").slice(0, 10)
-                        )
-                      }
-                      placeholder="10-digit number"
-                      className={fieldInput(errors.phone)}
+                      readOnly
+                      className={`${fieldInput(errors.phone)} bg-neutral-50 cursor-not-allowed`}
+                      title="Phone is your verified login identity and can't be changed here."
                     />
                     <ErrorMsg msg={errors.phone} />
                   </div>
                   <div className="sm:col-span-2">
                     <label className={fieldLabel}>
-                      <Mail className="w-3 h-3" /> Email Address *
+                      <Mail className="w-3 h-3" /> Email Address
                     </label>
                     <input
                       type="email"
                       value={details.email}
                       onChange={(e) => handleChange("email", e.target.value)}
-                      placeholder="john@example.com"
+                      placeholder="john@example.com (optional)"
                       className={fieldInput(errors.email)}
                     />
                     <ErrorMsg msg={errors.email} />
@@ -393,19 +441,17 @@ export default function Checkout({ setCurrentPage, openAuth }: CheckoutProps) {
                   SERVICE <span className="text-primary">SCHEDULE.</span>
                 </h2>
                 <p className="text-xs text-neutral-500 mb-5">
-                  Choose your preferred date, time and service center.
+                  Choose your preferred date, time slot and service center.
                 </p>
 
-                <div className="space-y-4">
+                <div className="space-y-5">
                   <div>
                     <label className={fieldLabel}>
-                      <MapPin className="w-3 h-3" /> Service Address *
+                      <MapPin className="w-3 h-3" /> Service Address (optional)
                     </label>
                     <textarea
                       value={details.address}
-                      onChange={(e) =>
-                        handleChange("address", e.target.value)
-                      }
+                      onChange={(e) => handleChange("address", e.target.value)}
                       placeholder="House / Flat number, Street, Locality, City"
                       className={`${fieldInput(errors.address)} min-h-[70px]`}
                     />
@@ -430,45 +476,52 @@ export default function Checkout({ setCurrentPage, openAuth }: CheckoutProps) {
                     </div>
                     <div>
                       <label className={fieldLabel}>
-                        <Clock className="w-3 h-3" /> Preferred Time *
+                        <MapPin className="w-3 h-3" /> Service Center *
                       </label>
                       <select
-                        value={details.preferredTime}
-                        onChange={(e) =>
-                          handleChange("preferredTime", e.target.value)
-                        }
-                        className={fieldInput(errors.preferredTime)}
+                        value={selectedCenterId ?? ""}
+                        onChange={(e) => handleCenterChange(e.target.value)}
+                        disabled={centersLoading}
+                        className={fieldInput(errors.serviceCenter)}
                       >
-                        <option value="">Select Time Slot</option>
-                        <option value="9-11">9 AM – 11 AM</option>
-                        <option value="11-13">11 AM – 1 PM</option>
-                        <option value="13-15">1 PM – 3 PM</option>
-                        <option value="15-17">3 PM – 5 PM</option>
-                        <option value="17-19">5 PM – 7 PM</option>
+                        <option value="">
+                          {centersLoading ? "Loading…" : "Choose a Service Center"}
+                        </option>
+                        {centers.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name} · {c.city}
+                          </option>
+                        ))}
                       </select>
-                      <ErrorMsg msg={errors.preferredTime} />
+                      <ErrorMsg msg={errors.serviceCenter} />
                     </div>
                   </div>
 
                   <div>
                     <label className={fieldLabel}>
-                      <MapPin className="w-3 h-3" /> Service Center *
+                      <Clock className="w-3 h-3" /> Preferred Time Slot *
                     </label>
-                    <select
-                      value={details.serviceCenter}
-                      onChange={(e) =>
-                        handleChange("serviceCenter", e.target.value)
-                      }
-                      className={fieldInput(errors.serviceCenter)}
-                    >
-                      <option value="">Choose a Service Center</option>
-                      {LOCATIONS.map((loc) => (
-                        <option key={loc.id} value={loc.id}>
-                          {loc.name}
-                        </option>
-                      ))}
-                    </select>
-                    <ErrorMsg msg={errors.serviceCenter} />
+                    <div className="space-y-3 mt-1">
+                      <SlotRow
+                        label="MORNING"
+                        slots={MORNING_SLOTS as unknown as readonly string[]}
+                        selected={selectedSlot}
+                        onSelect={handleSlotSelect}
+                      />
+                      <SlotRow
+                        label="AFTERNOON"
+                        slots={AFTERNOON_SLOTS as unknown as readonly string[]}
+                        selected={selectedSlot}
+                        onSelect={handleSlotSelect}
+                      />
+                      <SlotRow
+                        label="EVENING"
+                        slots={EVENING_SLOTS as unknown as readonly string[]}
+                        selected={selectedSlot}
+                        onSelect={handleSlotSelect}
+                      />
+                    </div>
+                    <ErrorMsg msg={errors.preferredTime} />
                   </div>
 
                   <div>
@@ -483,7 +536,6 @@ export default function Checkout({ setCurrentPage, openAuth }: CheckoutProps) {
                 </div>
               </div>
 
-              {/* Back button */}
               <button
                 type="button"
                 onClick={() => setCurrentPage("cart")}
@@ -502,7 +554,6 @@ export default function Checkout({ setCurrentPage, openAuth }: CheckoutProps) {
                   </h3>
                 </div>
 
-                {/* Items list */}
                 <div className="px-5 py-3 max-h-[200px] overflow-y-auto divide-y divide-border">
                   {items.map((item) => (
                     <div
@@ -518,9 +569,7 @@ export default function Checkout({ setCurrentPage, openAuth }: CheckoutProps) {
                         </p>
                       </div>
                       <p className="text-sm font-bold text-neutral-900 shrink-0">
-                        {item.price > 0
-                          ? `₹${item.price * item.qty}`
-                          : "Quote"}
+                        {item.price > 0 ? `₹${item.price * item.qty}` : "Quote"}
                       </p>
                     </div>
                   ))}
@@ -535,46 +584,45 @@ export default function Checkout({ setCurrentPage, openAuth }: CheckoutProps) {
                       ₹{subtotal}
                     </span>
                   </div>
-                  {effectiveDiscount > 0 && effectiveCoupon && (
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-primary flex items-center gap-1.5">
-                        <Tag className="w-3 h-3" />
-                        Discount ({effectiveCoupon.code})
-                      </span>
-                      <span className="font-bold text-primary">
-                        − ₹{effectiveDiscount}
-                      </span>
-                    </div>
-                  )}
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-neutral-500">GST ({GST_PCT}%)</span>
                     <span className="font-bold text-neutral-900">₹{gst}</span>
                   </div>
+                  {/* Phase 2.5b will surface the coupon row here. Hidden by FEATURES.couponsLit. */}
                 </div>
 
                 <div className="px-5 py-4 flex items-baseline justify-between border-t border-border">
                   <span className="text-sm font-bold uppercase tracking-tighter text-neutral-900">
                     Total
                   </span>
-                  <div className="text-right">
-                    <p className="text-2xl font-black text-primary">
-                      ₹{total}
-                    </p>
-                    {effectiveDiscount > 0 && (
-                      <p className="text-[10px] text-primary font-bold uppercase tracking-widest">
-                        You saved ₹{effectiveDiscount}
-                      </p>
-                    )}
-                  </div>
+                  <p className="text-2xl font-black text-primary">₹{total}</p>
                 </div>
 
-                <div className="px-5 pb-5">
+                <div className="px-5 py-2 bg-neutral-50 border-t border-border">
+                  <p className="text-[10px] text-neutral-500 leading-relaxed">
+                    <Shield className="inline w-3 h-3 mr-1" />
+                    Pay at the service center after work is complete. No advance
+                    payment needed.
+                  </p>
+                </div>
+
+                {submitError && (
+                  <div className="px-5 py-3 bg-accent-dark/5 border-t border-accent-dark/30">
+                    <p className="text-[11px] font-bold text-accent-dark flex items-start gap-1.5">
+                      <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                      <span>{submitError}</span>
+                    </p>
+                  </div>
+                )}
+
+                <div className="px-5 py-4 border-t border-border">
                   <button
                     type="submit"
-                    className="btn-ink btn-ink-primary w-full py-4 text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2"
+                    disabled={submitting}
+                    className="btn-ink btn-ink-primary w-full py-4 text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    Proceed to Payment{" "}
-                    <ArrowRight className="w-4 h-4 btn-arrow" />
+                    {submitting ? "Placing Order…" : "Place Order"}{" "}
+                    {!submitting && <ArrowRight className="w-4 h-4 btn-arrow" />}
                   </button>
                 </div>
               </div>
@@ -583,6 +631,45 @@ export default function Checkout({ setCurrentPage, openAuth }: CheckoutProps) {
         </div>
       </div>
     </>
+  );
+}
+
+function SlotRow({
+  label,
+  slots,
+  selected,
+  onSelect,
+}: {
+  label: string;
+  slots: readonly string[];
+  selected: string;
+  onSelect: (slot: string) => void;
+}) {
+  return (
+    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+      <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-500 sm:w-24 shrink-0">
+        {label}
+      </span>
+      <div className="flex flex-wrap gap-2">
+        {slots.map((slot) => {
+          const active = selected === slot;
+          return (
+            <button
+              key={slot}
+              type="button"
+              onClick={() => onSelect(slot)}
+              className={
+                active
+                  ? "btn-ink btn-ink-primary px-3 py-2 text-[11px] font-black uppercase tracking-tighter"
+                  : "bg-white border border-border text-neutral-700 px-3 py-2 text-[11px] font-bold uppercase tracking-tighter hover:border-primary hover:text-primary transition-colors"
+              }
+            >
+              {slot}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
