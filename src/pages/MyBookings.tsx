@@ -32,7 +32,7 @@ export default function MyBookings({
     return <BookingsComingSoon setCurrentPage={setCurrentPage} openAuth={openAuth} />;
   }
 
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, isAuthenticated, bootstrapped, logout } = useAuth();
   const { orders, isLoading, isError } = useOrdersList({ per_page: 50 });
   const cancelMutation = useCancelOrder();
   const [cancelTarget, setCancelTarget] = useState<OrderResource | null>(null);
@@ -76,7 +76,14 @@ export default function MyBookings({
 
       <div className="pb-14 pt-8">
         <div className="site-container">
-          {!isAuthenticated || !user ? (
+          {!bootstrapped ? (
+            // Phase 2.5.3 — auth-hydration skeleton (D-2.5.3-2). Shown
+            // for the brief window between mount and the stored-token
+            // → /user/profile resolution. Without this, hard-refresh
+            // on /booking-history flashed the "Login to view bookings"
+            // wall for ~5s on a slow connection.
+            <MyBookingsSkeleton />
+          ) : !isAuthenticated || !user ? (
             <NotLoggedIn openAuth={openAuth} setCurrentPage={setCurrentPage} />
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 lg:gap-10">
@@ -366,6 +373,67 @@ function NotLoggedIn({
         >
           Browse Services
         </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Phase 2.5.3 — auth-hydration skeleton matching the page chrome.
+ * Sidebar (avatar + name + 2 stats) + bookings list (3 card
+ * placeholders). All pulses use the codebase's standard
+ * `bg-neutral-200 animate-pulse` vocabulary.
+ */
+function MyBookingsSkeleton() {
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 lg:gap-10">
+      {/* Sidebar skeleton */}
+      <aside className="space-y-4">
+        <div className="bg-primary/5 border border-primary/10 p-6">
+          <div className="w-14 h-14 bg-neutral-200 animate-pulse mb-3" />
+          <div className="h-5 w-2/3 bg-neutral-200 animate-pulse mb-2" />
+          <div className="h-3 w-1/2 bg-neutral-200 animate-pulse mb-1" />
+          <div className="h-3 w-1/3 bg-neutral-200 animate-pulse mb-4" />
+          <div className="grid grid-cols-2 gap-2 pt-4 border-t border-neutral-200">
+            <div className="space-y-1">
+              <div className="h-7 w-10 bg-neutral-200 animate-pulse mx-auto" />
+              <div className="h-2 w-12 bg-neutral-200 animate-pulse mx-auto" />
+            </div>
+            <div className="space-y-1">
+              <div className="h-7 w-10 bg-neutral-200 animate-pulse mx-auto" />
+              <div className="h-2 w-12 bg-neutral-200 animate-pulse mx-auto" />
+            </div>
+          </div>
+        </div>
+        <div className="h-10 w-full bg-neutral-100 animate-pulse" />
+      </aside>
+
+      {/* Booking-card skeletons */}
+      <div className="lg:col-span-2 space-y-3">
+        <div className="h-8 w-48 bg-neutral-200 animate-pulse mb-4" />
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="bg-white border border-border">
+            <div className="px-5 py-3 border-b border-border flex items-center justify-between gap-3">
+              <div className="space-y-1">
+                <div className="h-2 w-16 bg-neutral-200 animate-pulse" />
+                <div className="h-4 w-32 bg-neutral-200 animate-pulse" />
+              </div>
+              <div className="h-5 w-20 bg-neutral-200 animate-pulse" />
+            </div>
+            <div className="px-5 py-4 border-b border-border space-y-2">
+              <div className="h-3 w-1/2 bg-neutral-200 animate-pulse" />
+              <div className="h-3 w-2/3 bg-neutral-200 animate-pulse" />
+            </div>
+            <div className="px-5 py-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[0, 1, 2, 3].map((j) => (
+                <div key={j} className="space-y-1">
+                  <div className="h-2 w-12 bg-neutral-200 animate-pulse" />
+                  <div className="h-3 w-16 bg-neutral-200 animate-pulse" />
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

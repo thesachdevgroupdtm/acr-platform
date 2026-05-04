@@ -27,7 +27,7 @@ const SERVICE_CHARGE_PCT = 0; // free service charge for now
 export default function Cart({ setCurrentPage, openAuth }: CartProps) {
   const { items, updateQty, removeItem, subtotal, count, clearCart, cart } =
     useCart();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, bootstrapped } = useAuth();
 
   // Phase 2.5.1 (D-2.5.1-5) — coupon state is server-authoritative.
   // No more local auto-apply against the OFFERS constant; the
@@ -46,7 +46,11 @@ export default function Cart({ setCurrentPage, openAuth }: CartProps) {
 
   // Gate: checkout requires an authenticated account (anti-fake-lead).
   // Guests get prompted to login or sign up before proceeding.
+  // Phase 2.5.3 — gate the click on `bootstrapped` so a logged-in
+  // user clicking before the profile fetch resolves doesn't get
+  // bounced through the auth modal.
   const handleCheckout = () => {
+    if (!bootstrapped) return;
     if (!isAuthenticated) {
       openAuth("login", "checkout");
       return;
@@ -233,11 +237,24 @@ export default function Cart({ setCurrentPage, openAuth }: CartProps) {
                   </div>
 
                   <div className="px-5 pb-5">
+                    {/* Phase 2.5.3 — render the button unconditionally
+                        so the layout doesn't shift; while !bootstrapped
+                        the label collapses to a neutral placeholder
+                        and the button is disabled. Snaps to the
+                        correct label in a single render once auth
+                        resolves — no flicker between Login → Proceed. */}
                     <button
                       onClick={handleCheckout}
-                      className="btn-ink btn-ink-primary w-full py-4 text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2"
+                      disabled={!bootstrapped}
+                      className="btn-ink btn-ink-primary w-full py-4 text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
                     >
-                      {isAuthenticated ? (
+                      {!bootstrapped ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="inline-block w-1.5 h-1.5 bg-white/70 rounded-full animate-pulse" />
+                          <span className="inline-block w-1.5 h-1.5 bg-white/70 rounded-full animate-pulse [animation-delay:120ms]" />
+                          <span className="inline-block w-1.5 h-1.5 bg-white/70 rounded-full animate-pulse [animation-delay:240ms]" />
+                        </span>
+                      ) : isAuthenticated ? (
                         <>
                           Proceed to Checkout{" "}
                           <ArrowRight className="w-4 h-4 btn-arrow" />
@@ -248,7 +265,7 @@ export default function Cart({ setCurrentPage, openAuth }: CartProps) {
                         </>
                       )}
                     </button>
-                    {!isAuthenticated && (
+                    {bootstrapped && !isAuthenticated && (
                       <p className="text-[10px] text-neutral-500 text-center mt-2">
                         New here?{" "}
                         <button

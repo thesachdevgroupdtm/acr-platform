@@ -219,11 +219,39 @@ export function useAuth() {
   }, []);
 
   useEffect(() => {
-    refreshFromServer().finally(() => setBootstrapped(true));
+    let cancelled = false;
+    let bootstrappedLocal = false;
+
+    // Phase 2.5.3 (D-2.5.3-3) — 10s safety timeout. If the profile
+    // fetch hangs (network failure, sleeping VPN, dropped TCP),
+    // flip to the unauthenticated state with the stored token
+    // cleared so the UI doesn't sit on a skeleton forever. The
+    // user re-logs in on the next interaction.
+    const timeoutId = window.setTimeout(() => {
+      if (cancelled || bootstrappedLocal) return;
+      bootstrappedLocal = true;
+      // eslint-disable-next-line no-console
+      console.warn(
+        "[useAuth] Bootstrap timeout (10s); falling back to unauthenticated state.",
+      );
+      setToken(null);
+      setUser(null);
+      setBootstrapped(true);
+    }, 10_000);
+
+    refreshFromServer().finally(() => {
+      if (cancelled) return;
+      bootstrappedLocal = true;
+      window.clearTimeout(timeoutId);
+      setBootstrapped(true);
+    });
+
     const onTokenUpdate = () => { void refreshFromServer(); };
     window.addEventListener("acr-token-updated", onTokenUpdate);
     window.addEventListener(EVENT, onTokenUpdate);
     return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
       window.removeEventListener("acr-token-updated", onTokenUpdate);
       window.removeEventListener(EVENT, onTokenUpdate);
     };

@@ -14,6 +14,7 @@ import PageBanner from "../components/PageBanner";
 import CancelOrderModal from "../components/CancelOrderModal";
 import VehicleBadge from "../components/VehicleBadge";
 import { useOrderDetail, useCancelOrder } from "../hooks/useOrders";
+import { useAuth } from "../hooks/useAuth";
 import type { OrderStatus } from "../types/api";
 
 interface OrderDetailProps {
@@ -42,6 +43,7 @@ export default function OrderDetail({
   setCurrentPage,
 }: OrderDetailProps) {
   const { order, isLoading, isError } = useOrderDetail(orderId);
+  const { bootstrapped } = useAuth();
   const cancelMutation = useCancelOrder();
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
@@ -63,7 +65,13 @@ export default function OrderDetail({
     setCancelError(null);
   };
 
-  if (isLoading) {
+  // Phase 2.5.3 — show the skeleton both while React Query is
+  // fetching AND while useAuth is still bootstrapping. Otherwise a
+  // hard-refresh of /order/{id} with a token that hasn't been
+  // validated yet briefly renders the "We couldn't load that order"
+  // error state if the cached query fires before the token is
+  // confirmed valid.
+  if (isLoading || !bootstrapped) {
     return (
       <>
         <PageBanner
@@ -77,8 +85,10 @@ export default function OrderDetail({
             { label: "Details" },
           ]}
         />
-        <div className="py-20 text-center text-sm text-neutral-500">
-          Loading…
+        <div className="pb-14 pt-8">
+          <div className="site-container max-w-3xl">
+            <OrderDetailSkeleton />
+          </div>
         </div>
       </>
     );
@@ -322,5 +332,63 @@ function Row({
         <p className="text-sm text-neutral-900 break-words">{value}</p>
       </div>
     </div>
+  );
+}
+
+/**
+ * Phase 2.5.3 — auth-hydration / data-loading skeleton matching the
+ * OrderDetail layout: header card, vehicle row, services list,
+ * schedule rows, totals + payment notice.
+ */
+function OrderDetailSkeleton() {
+  return (
+    <>
+      <div className="h-3 w-32 bg-neutral-200 animate-pulse mb-5" />
+
+      <div className="bg-white border border-border p-5 sm:p-7">
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-2">
+            <div className="h-2 w-20 bg-neutral-200 animate-pulse" />
+            <div className="h-7 w-44 bg-neutral-200 animate-pulse" />
+          </div>
+          <div className="h-6 w-24 bg-neutral-200 animate-pulse" />
+        </div>
+      </div>
+
+      <div className="bg-white border border-border mt-4 p-5 sm:p-6 space-y-2">
+        <div className="h-3 w-20 bg-neutral-200 animate-pulse" />
+        <div className="h-5 w-2/3 bg-neutral-200 animate-pulse" />
+        <div className="h-3 w-1/2 bg-neutral-200 animate-pulse" />
+      </div>
+
+      <div className="bg-white border border-border mt-4">
+        <div className="px-5 py-4 border-b border-border">
+          <div className="h-5 w-44 bg-neutral-200 animate-pulse" />
+        </div>
+        <div className="divide-y divide-border">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="px-5 py-3 flex items-center justify-between">
+              <div className="h-4 w-1/2 bg-neutral-100 animate-pulse" />
+              <div className="h-4 w-16 bg-neutral-100 animate-pulse" />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-white border border-border mt-4 p-5 sm:p-6 space-y-3">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="space-y-1">
+            <div className="h-2 w-24 bg-neutral-200 animate-pulse" />
+            <div className="h-4 w-3/4 bg-neutral-100 animate-pulse" />
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-white border border-border mt-4 px-5 py-4 space-y-2">
+        <div className="h-3 bg-neutral-100 animate-pulse" />
+        <div className="h-3 bg-neutral-100 animate-pulse" />
+        <div className="h-6 w-24 bg-neutral-200 animate-pulse" />
+      </div>
+    </>
   );
 }

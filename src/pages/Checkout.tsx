@@ -53,7 +53,7 @@ export default function Checkout({ setCurrentPage, openAuth }: CheckoutProps) {
 
   const { items, subtotal, count, cart } = useCart();
   const { details, setDetails, resetDetails } = useCheckout();
-  const { user, isAuthenticated, setDefaults } = useAuth();
+  const { user, isAuthenticated, bootstrapped, setDefaults } = useAuth();
   const { state: booking } = useBookingContext();
   const { centers, isLoading: centersLoading } = useServiceCenters();
   const qc = useQueryClient();
@@ -287,6 +287,32 @@ export default function Checkout({ setCurrentPage, openAuth }: CheckoutProps) {
                 Browse Services <ArrowRight className="w-4 h-4 btn-arrow" />
               </button>
             </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // ----- Hydration gate (Phase 2.5.3) -----
+  // Until useAuth resolves the stored token, we don't know whether
+  // the user is authenticated. Show a skeleton matching the page
+  // chrome so a logged-in user doesn't see the "Login to Continue"
+  // wall flash on hard-refresh.
+  if (!bootstrapped) {
+    return (
+      <>
+        <PageBanner
+          title="Checkout"
+          breadcrumbs={[
+            { label: "Home", onClick: () => setCurrentPage("home") },
+            { label: "Cart", onClick: () => setCurrentPage("cart") },
+            { label: "Checkout" },
+          ]}
+        />
+        <div className="pb-14 pt-8">
+          <div className="site-container">
+            <CheckoutSteps current={2} setCurrentPage={setCurrentPage} />
+            <CheckoutSkeleton />
           </div>
         </div>
       </>
@@ -732,5 +758,63 @@ function ErrorMsg({ msg }: { msg?: string }) {
     <p className="text-[10px] font-bold text-accent-dark mt-1 flex items-center gap-1">
       <AlertCircle className="w-3 h-3" /> {msg}
     </p>
+  );
+}
+
+/**
+ * Phase 2.5.3 — auth-hydration skeleton matching the Checkout
+ * left-form / right-summary two-column layout. Shown for the
+ * brief window between mount and useAuth resolving the stored
+ * token. Pulses use the codebase's standard
+ * `bg-neutral-200 animate-pulse` vocabulary.
+ */
+function CheckoutSkeleton() {
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 lg:gap-10 mt-10">
+      <div className="lg:col-span-2 space-y-6">
+        <div className="bg-white border border-border p-5 sm:p-7 space-y-4">
+          <div className="h-6 w-1/2 bg-neutral-200 animate-pulse" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="h-12 bg-neutral-100 animate-pulse" />
+            <div className="h-12 bg-neutral-100 animate-pulse" />
+            <div className="sm:col-span-2 h-12 bg-neutral-100 animate-pulse" />
+          </div>
+        </div>
+        <div className="bg-white border border-border p-5 sm:p-7 space-y-4">
+          <div className="h-6 w-1/2 bg-neutral-200 animate-pulse" />
+          <div className="h-20 bg-neutral-100 animate-pulse" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="h-12 bg-neutral-100 animate-pulse" />
+            <div className="h-12 bg-neutral-100 animate-pulse" />
+          </div>
+          <div className="space-y-2">
+            <div className="h-9 bg-neutral-100 animate-pulse" />
+            <div className="h-9 bg-neutral-100 animate-pulse" />
+            <div className="h-9 bg-neutral-100 animate-pulse" />
+          </div>
+        </div>
+      </div>
+      <aside className="space-y-4">
+        <div className="bg-primary/5 border border-primary/10 p-4">
+          <div className="h-3 w-20 bg-neutral-200 animate-pulse mb-2" />
+          <div className="h-5 w-2/3 bg-neutral-200 animate-pulse" />
+        </div>
+        <div className="bg-white border border-border">
+          <div className="px-5 py-4 border-b border-border h-12 bg-neutral-50 animate-pulse" />
+          <div className="px-5 py-3 space-y-3">
+            <div className="h-4 bg-neutral-100 animate-pulse" />
+            <div className="h-4 bg-neutral-100 animate-pulse" />
+          </div>
+          <div className="px-5 py-4 border-t border-border space-y-2">
+            <div className="h-4 bg-neutral-100 animate-pulse" />
+            <div className="h-4 bg-neutral-100 animate-pulse" />
+            <div className="h-6 w-24 bg-neutral-200 animate-pulse" />
+          </div>
+          <div className="px-5 py-4 border-t border-border">
+            <div className="h-12 bg-neutral-200 animate-pulse" />
+          </div>
+        </div>
+      </aside>
+    </div>
   );
 }

@@ -117,7 +117,7 @@ export default function Header({ currentPage, setCurrentPage, openEstimate, open
 
   // Cart and auth hooks - drive the header e-commerce icons
   const { count: cartCount } = useCart();
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, isAuthenticated, bootstrapped, logout } = useAuth();
 
   // ── Service categories + their sub-services come from a single
   //    /home query. Sub-services arrive nested under each category in
@@ -215,7 +215,16 @@ export default function Header({ currentPage, setCurrentPage, openEstimate, open
                 we don't surface controls that lead to a "coming soon" modal.
                 The user menu branch never shows because isAuthenticated is
                 gated to false in the hook. */}
-            {!FEATURES.auth ? null : !isAuthenticated ? (
+            {!FEATURES.auth ? null : !bootstrapped ? (
+              // Phase 2.5.3 — small avatar pulse during the auth
+              // hydration window so the header doesn't flicker
+              // between "Login / Sign Up" buttons and the user menu
+              // on hard-refresh.
+              <div className="flex items-center gap-1.5" aria-busy="true">
+                <div className="w-5 h-5 bg-white/30 animate-pulse" />
+                <div className="hidden sm:block h-3 w-16 bg-white/30 animate-pulse" />
+              </div>
+            ) : !isAuthenticated ? (
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => openAuth("login")}
