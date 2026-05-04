@@ -506,8 +506,26 @@ export const postLeadCapture = (req: LeadCaptureRequest, signal?: AbortSignal) =
 export const postSendOtp = (req: SendOtpRequest, signal?: AbortSignal) =>
   apiPost<SendOtpResponse>("/auth/send-otp", req, signal);
 
-export const postVerifyOtp = (req: VerifyOtpRequest, signal?: AbortSignal) =>
-  apiPost<VerifyOtpResponse>("/auth/verify-otp", req, signal);
+/**
+ * Phase 2.4 — verify-otp may carry an X-Cart-Session header so the
+ * server's cart-merge hook fires server-side before the token is
+ * issued. Caller passes the current guest UUID (from
+ * localStorage); a missing UUID means no-merge attempt. The
+ * useAuth hook already does a defensive postCartMerge after this
+ * call resolves, so even if the header is dropped (proxy strip,
+ * CORS quirk) the cart still merges via the explicit endpoint.
+ */
+export const postVerifyOtp = (
+  req: VerifyOtpRequest,
+  guestSessionUuid?: string | null,
+  signal?: AbortSignal,
+) =>
+  api<VerifyOtpResponse>("/auth/verify-otp", {
+    method: "POST",
+    body: req,
+    signal,
+    headers: guestSessionUuid ? { "X-Cart-Session": guestSessionUuid } : undefined,
+  });
 
 export const postLogin = (req: LoginRequest, signal?: AbortSignal) =>
   apiPost<LoginResponse>("/auth/login", req, signal);
@@ -585,3 +603,19 @@ export const postCartCoupon = (
 
 export const deleteCartCoupon = (sessionUuid?: string | null, signal?: AbortSignal) =>
   api<CartResponse>("/cart/coupon", { method: "DELETE", signal, headers: cartHeaders(sessionUuid) });
+
+/**
+ * Phase 2.4 — POST /cart/merge.
+ *
+ * Merges a guest cart (identified by `guestSessionUuid`) into the
+ * authenticated user's cart. Sanctum-required; the api() helper
+ * auto-attaches the bearer token. Body carries the guest UUID.
+ *
+ * The OTP-verify path (verifyOtp) also performs an automatic
+ * merge via the X-Cart-Session header — both paths converge on
+ * the same idempotent server-side service, so calling this
+ * explicitly after login is safe (no-op when the guest cart was
+ * already merged at OTP-verify time).
+ */
+export const postCartMerge = (guestSessionUuid: string, signal?: AbortSignal) =>
+  apiPost<CartResponse>("/cart/merge", { guest_session_uuid: guestSessionUuid }, signal);

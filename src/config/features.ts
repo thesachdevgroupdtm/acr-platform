@@ -23,8 +23,14 @@ export const FEATURES = {
    * for the login flow.
    */
   auth: true,
-  /** /cart/* (server-authoritative cart) lands in Phase 2.3. */
-  cartSync: false,
+  /**
+   * Phase 2.4 — server-side cart merge protocol live; client and
+   * server cart stay synchronized through the OTP-verify hook
+   * (X-Cart-Session header → server-side merge before token issue)
+   * and the explicit POST /cart/merge endpoint for the multi-device
+   * / re-merge case. Set true now that the protocol ships.
+   */
+  cartSync: true,
   /** /checkout/place-order lands in Phase 2.5. */
   offlineCheckout: false,
   /**

@@ -6,8 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\V1\UserResource;
 use App\Models\OtpVerification;
 use App\Models\User;
+use App\Services\Cart\CartMergeService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 /**
  * POST /api/v1/auth/verify-otp
@@ -24,10 +27,18 @@ use Illuminate\Http\Request;
  * On success: marks user.is_verified_phone (or _email) = true,
  * stamps last_login_at, issues a Sanctum token named 'app'.
  *
- * Cart merge (commit 2.4) is intentionally NOT in scope of 2.1.
+ * Phase 2.4 — best-effort cart merge: when the verify request
+ * carries an X-Cart-Session header (a guest UUID), the active
+ * guest cart is merged into the user's cart before token issuance
+ * so the user sees their pre-login items immediately. Merge
+ * failure is logged but does NOT block login.
  */
 class VerifyOtpController extends Controller
 {
+    public function __construct(private CartMergeService $cartMerge)
+    {
+    }
+
     public function __invoke(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -65,7 +76,7 @@ class VerifyOtpController extends Controller
                 'ip'          => $request->ip(),
             ]);
 
-            return $this->finishVerification($user, $channel);
+            return $this->finishVerification($user, $channel, $request);
         }
 
         // ── NORMAL PATH ────────────────────────────────────────────
@@ -107,7 +118,7 @@ class VerifyOtpController extends Controller
             ], 404);
         }
 
-        return $this->finishVerification($user, $channel);
+        return $this->finishVerification($user, $channel, $request);
     }
 
     private function findUserByDestination(string $channel, string $destination): ?User
@@ -117,7 +128,7 @@ class VerifyOtpController extends Controller
             ->first();
     }
 
-    private function finishVerification(User $user, string $channel): JsonResponse
+    private function finishVerification(User $user, string $channel, Request $request): JsonResponse
     {
         if ($channel === 'phone') {
             $user->is_verified_phone = true;
@@ -126,6 +137,24 @@ class VerifyOtpController extends Controller
         }
         $user->last_login_at = now();
         $user->save();
+
+        // Phase 2.4 — best-effort guest→user cart merge before token
+        // issuance. The request may carry an X-Cart-Session header
+        // identifying the user's pre-login guest cart. Merge failure
+        // is logged but never blocks login (the user can re-merge
+        // explicitly via POST /cart/merge).
+        $guestUuid = $request->header('X-Cart-Session');
+        if ($guestUuid && Str::isUuid($guestUuid)) {
+            try {
+                $this->cartMerge->mergeGuestIntoUser($guestUuid, $user->id);
+            } catch (\Throwable $e) {
+                Log::warning('Cart merge during OTP verify failed', [
+                    'user_id'    => $user->id,
+                    'guest_uuid' => $guestUuid,
+                    'error'      => $e->getMessage(),
+                ]);
+            }
+        }
 
         $token = $user->createToken('app')->plainTextToken;
 

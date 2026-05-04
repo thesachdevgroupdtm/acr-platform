@@ -26,6 +26,7 @@ import {
   fetchAddresses,
   fetchProfile,
   postAddress,
+  postCartMerge,
   postLeadCapture,
   postLogin,
   postLogout,
@@ -317,10 +318,34 @@ export function useAuth() {
         return { success: false, error: "Verification is coming soon." };
       }
       try {
-        const res: VerifyOtpResponse = await postVerifyOtp(input);
+        // Phase 2.4 — pass the current guest cart UUID through the
+        // X-Cart-Session header. The server's verify-otp hook
+        // merges the guest cart into the user cart server-side
+        // BEFORE returning the token, so the freshly-authenticated
+        // session sees its pre-login items immediately.
+        const guestUuid =
+          typeof window !== "undefined"
+            ? window.localStorage.getItem("acr_cart_session")
+            : null;
+
+        const res: VerifyOtpResponse = await postVerifyOtp(input, guestUuid);
         setToken(res.token);
         const u = presentUser(res.user);
         setUser(u);
+
+        // Defense in depth: if the header was stripped en route (CORS
+        // quirk, edge proxy) the explicit /cart/merge call brings
+        // any orphaned guest cart over. The server-side service is
+        // idempotent — a second merge of the same UUID is a no-op
+        // because the guest cart is already 'converted'.
+        if (guestUuid) {
+          postCartMerge(guestUuid).catch((err) => {
+            // Non-blocking — login already succeeded.
+            // eslint-disable-next-line no-console
+            console.warn("[Phase 2.4] Cart merge after OTP failed", err);
+          });
+        }
+
         return { success: true, user: u };
       } catch (e) {
         return { success: false, error: extractError(e) };
