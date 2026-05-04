@@ -38,8 +38,13 @@ class Kernel extends HttpKernel
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
         ],
 
+        // 'api' => [
+        //   Phase 2.1.2 — EnsureFrontendRequestsAreStateful intentionally OFF.
+        //   Frontend uses pure Bearer-token auth (Sanctum personal access tokens),
+        //   no cookie sessions. Re-enable if a future flow needs cookie auth
+        //   (e.g. OAuth redirect, web-only admin panel sharing the API).
+        // \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
         'api' => [
-            \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
             \Illuminate\Routing\Middleware\ThrottleRequests::class.':api',
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
         ],
