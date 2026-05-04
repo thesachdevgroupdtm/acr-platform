@@ -11,30 +11,39 @@ use Illuminate\Support\Facades\Log;
  * Phase 2.4 — server-side cart merge protocol per
  * /PHASE2_CONTRACT.md §6.5(d) and §5.3 #18.
  *
+ * Phase 2.5.1 (D-2.5.1-2) — semantics changed to LAST CART WINS.
+ *
+ * Why: the previous additive merge surfaced stale items from a
+ * prior user-cart session whenever a guest logged in (or merged
+ * across devices), often pairing the same service with two
+ * different vehicles in one cart. Combined with the new
+ * one-vehicle-per-cart UI rule (D-2.5.1-1), additive merge
+ * produced impossible UI states. Replacement is the simplest
+ * resolution — the user's most recent cart intent (the guest
+ * session they just used) is the one that survives.
+ *
  * Called from two places:
  *  1. VerifyOtpController — on successful OTP verify, if the
  *     request carried an X-Cart-Session header.
  *  2. MergeCartController — explicit POST /cart/merge for the
  *     re-merge / multi-device case.
  *
- * Both paths converge here. The implementation is idempotent:
- * re-running the same merge after the first one finishes is a
- * no-op because the guest cart is marked status='converted'.
+ * The implementation is idempotent: re-running after the first
+ * merge finishes is a no-op because the guest cart is marked
+ * status='converted'.
  *
  * Algorithm (transaction-locked):
  *   1. SELECT … FOR UPDATE both carts.
- *   2. For each guest item:
- *        - tuple match on user cart → bump matched item's quantity.
- *        - no match → reparent the row (UPDATE cart_id).
- *   3. Mark guest cart 'converted' + expires_at = now().
- *   4. Bump user cart expires_at to now()->addDays(90).
+ *   2. If the guest cart has no items: no-op (preserve user cart).
+ *   3. Otherwise:
+ *        - DELETE every existing user_cart item.
+ *        - REPARENT every guest item to user_cart (UPDATE cart_id).
+ *   4. Mark guest cart 'converted' + expires_at = now().
+ *   5. Bump user cart expires_at to now()->addDays(90).
  *
- * Tuple key: (kind, ref_id, brand_id, model_id, fuel_id) — the
- * same dedup key CartController::addItem uses for same-cart re-add.
- * Quantities are summed; the user-cart's unit_price_snapshot wins
- * (the authenticated session has been on the platform longer and
- * may have older prices honored). Metadata is preserved on the
- * surviving row.
+ * The previous tuple-match dedup is intentionally gone. Reparenting
+ * the guest rows preserves their snapshots (price, meta, vehicle)
+ * untouched.
  */
 class CartMergeService
 {
@@ -71,7 +80,8 @@ class CartMergeService
                     ->first();
             }
 
-            // No guest cart on file — nothing to merge.
+            // No guest cart on file — nothing to merge. The user's
+            // existing cart is preserved.
             if (!$guestCart) {
                 return $userCart->load(['items.service', 'items.brand', 'items.carModel', 'items.fuel']);
             }
@@ -84,30 +94,35 @@ class CartMergeService
                 return $userCart->load(['items.service', 'items.brand', 'items.carModel', 'items.fuel']);
             }
 
-            $guestItems = $guestCart->items()->get();
-            $userItems  = $userCart->items()->get()->keyBy(
-                fn (CartItem $i) => $this->tupleKey($i)
-            );
+            $guestItemsCount = $guestCart->items()->count();
 
-            $merged = 0;
-            $moved  = 0;
+            // Guest cart is empty — preserve the user's cart untouched.
+            if ($guestItemsCount === 0) {
+                $guestCart->status     = 'converted';
+                $guestCart->expires_at = now();
+                $guestCart->save();
 
-            foreach ($guestItems as $guestItem) {
-                $key = $this->tupleKey($guestItem);
-                if ($userItems->has($key)) {
-                    /** @var CartItem $userItem */
-                    $userItem = $userItems->get($key);
-                    $userItem->quantity = min(99, $userItem->quantity + $guestItem->quantity);
-                    $userItem->save();
-                    $guestItem->delete();
-                    $merged++;
-                } else {
-                    $guestItem->cart_id = $userCart->id;
-                    $guestItem->save();
-                    $userItems->put($key, $guestItem);
-                    $moved++;
-                }
+                $userCart->expires_at = now()->addDays(90);
+                $userCart->save();
+
+                Log::info('Cart merge: empty guest cart, preserving user cart', [
+                    'user_id'       => $userId,
+                    'guest_uuid'    => $guestUuid,
+                    'guest_cart_id' => $guestCart->id,
+                    'user_cart_id'  => $userCart->id,
+                ]);
+
+                return $userCart->refresh()->load(['items.service', 'items.brand', 'items.carModel', 'items.fuel']);
             }
+
+            // Last-cart-wins: wipe user cart, reparent guest rows.
+            $deletedCount = CartItem::query()
+                ->where('cart_id', $userCart->id)
+                ->delete();
+
+            $movedCount = CartItem::query()
+                ->where('cart_id', $guestCart->id)
+                ->update(['cart_id' => $userCart->id]);
 
             $guestCart->status     = 'converted';
             $guestCart->expires_at = now();
@@ -116,13 +131,13 @@ class CartMergeService
             $userCart->expires_at = now()->addDays(90);
             $userCart->save();
 
-            Log::info('Cart merge completed', [
-                'user_id'        => $userId,
-                'guest_uuid'     => $guestUuid,
-                'guest_cart_id'  => $guestCart->id,
-                'user_cart_id'   => $userCart->id,
-                'merged_items'   => $merged,
-                'moved_items'    => $moved,
+            Log::info('Cart merge: last-cart-wins', [
+                'user_id'             => $userId,
+                'guest_uuid'          => $guestUuid,
+                'guest_cart_id'       => $guestCart->id,
+                'user_cart_id'        => $userCart->id,
+                'replaced_user_items' => $deletedCount,
+                'moved_guest_items'   => $movedCount,
             ]);
 
             return $userCart->refresh()->load([
@@ -132,20 +147,5 @@ class CartMergeService
                 'items.fuel',
             ]);
         });
-    }
-
-    /**
-     * Same dedup key CartController::addItem uses. Nulls are stable
-     * (a no-vehicle item matches another no-vehicle item).
-     */
-    private function tupleKey(CartItem $item): string
-    {
-        return implode('|', [
-            $item->kind(),
-            $item->refId() ?? 'null',
-            $item->brand_id ?? 'null',
-            $item->model_id ?? 'null',
-            $item->fuel_id  ?? 'null',
-        ]);
     }
 }

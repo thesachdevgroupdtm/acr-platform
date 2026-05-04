@@ -1,4 +1,5 @@
 import type * as React from "react";
+import { useState } from "react";
 import {
   ArrowRight,
   Calendar,
@@ -8,6 +9,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import PageBanner from "../components/PageBanner";
+import CancelOrderModal from "../components/CancelOrderModal";
 import { useAuth } from "../hooks/useAuth";
 import { useOrdersList, useCancelOrder } from "../hooks/useOrders";
 import type { OrderResource, OrderStatus } from "../types/api";
@@ -32,16 +34,32 @@ export default function MyBookings({
   const { user, isAuthenticated, logout } = useAuth();
   const { orders, isLoading, isError } = useOrdersList({ per_page: 50 });
   const cancelMutation = useCancelOrder();
+  const [cancelTarget, setCancelTarget] = useState<OrderResource | null>(null);
+  const [cancelError, setCancelError] = useState<string | null>(null);
 
   const completed = orders.filter((o) => o.status === "completed").length;
 
-  const handleCancel = async (orderId: number) => {
-    if (!confirm("Cancel this booking? This can't be undone.")) return;
-    const reason = window.prompt("Reason (optional)") ?? null;
+  const openCancelModal = (order: OrderResource) => {
+    setCancelError(null);
+    setCancelTarget(order);
+  };
+
+  const closeCancelModal = () => {
+    if (cancelMutation.isPending) return;
+    setCancelTarget(null);
+    setCancelError(null);
+  };
+
+  const submitCancel = async (reason: string | null) => {
+    if (!cancelTarget) return;
+    setCancelError(null);
     try {
-      await cancelMutation.mutateAsync({ orderId, reason });
+      await cancelMutation.mutateAsync({ orderId: cancelTarget.id, reason });
+      setCancelTarget(null);
     } catch (e) {
-      alert("Couldn't cancel: " + (e instanceof Error ? e.message : String(e)));
+      setCancelError(
+        e instanceof Error ? e.message : "Couldn't cancel — please try again.",
+      );
     }
   };
 
@@ -149,8 +167,8 @@ export default function MyBookings({
                       key={o.id}
                       order={o}
                       onView={() => setCurrentPage(`order-${o.id}`)}
-                      onCancel={() => handleCancel(o.id)}
-                      cancelling={cancelMutation.isPending}
+                      onCancel={() => openCancelModal(o)}
+                      cancelling={cancelMutation.isPending && cancelTarget?.id === o.id}
                     />
                   ))
                 )}
@@ -159,6 +177,15 @@ export default function MyBookings({
           )}
         </div>
       </div>
+
+      <CancelOrderModal
+        open={cancelTarget !== null}
+        orderNumber={cancelTarget?.order_number ?? ""}
+        onConfirm={submitCancel}
+        onClose={closeCancelModal}
+        pending={cancelMutation.isPending}
+        errorMessage={cancelError}
+      />
     </>
   );
 }

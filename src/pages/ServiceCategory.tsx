@@ -30,7 +30,9 @@ import {
 } from "../data/businessData";
 import { useBrands, useModels, useFuels } from "../hooks/useVehicle";
 import PageBanner from "../components/PageBanner";
+import VehicleReplaceModal from "../components/VehicleReplaceModal";
 import { useCart } from "../hooks/useCart";
+import { VehicleConflictError, type VehicleConflictDetails } from "../lib/errors";
 import { useAuth } from "../hooks/useAuth";
 import { useBookingContext } from "../hooks/useBookingContext";
 import {
@@ -130,8 +132,10 @@ export default function ServiceCategory({
   const category = apiCategory;
 
   // ---------- Cart ----------
-  const { addItem, count, isInCart, findCartItem, removeItem } = useCart();
+  const { addItem, count, isInCart, findCartItem, removeItem, replaceVehicleInCart } = useCart();
   const [addedFlash, setAddedFlash] = useState<string | null>(null);
+  const [vehicleConflict, setVehicleConflict] = useState<VehicleConflictDetails | null>(null);
+  const [replacing, setReplacing] = useState(false);
 
   // ---------- Auth (drives phone prefill + OTP skip) ----------
   const { user, isAuthenticated } = useAuth();
@@ -303,20 +307,38 @@ export default function ServiceCategory({
   };
 
   // ---------- Add-to-cart handler with brief flash feedback ----------
-  const handleAddToCart = (sub: ApiSubService) => {
-    addItem({
-      serviceId: String(sub.id),
-      title: sub.title,
-      price: Number(sub.price) || 0,
-      categorySlug: category.slug,
-      car: bookingCar || undefined,
-      location: selectedLocationName,
-      brand_id: bookingCar?.brand_id,
-      model_id: bookingCar?.model_id,
-      fuel_id:  bookingCar?.fuel_id,
-    });
-    setAddedFlash(String(sub.id));
-    window.setTimeout(() => setAddedFlash(null), 1800);
+  const handleAddToCart = async (sub: ApiSubService) => {
+    try {
+      await addItem({
+        serviceId: String(sub.id),
+        title: sub.title,
+        price: Number(sub.price) || 0,
+        categorySlug: category.slug,
+        car: bookingCar || undefined,
+        location: selectedLocationName,
+        brand_id: bookingCar?.brand_id,
+        model_id: bookingCar?.model_id,
+        fuel_id:  bookingCar?.fuel_id,
+      });
+      setAddedFlash(String(sub.id));
+      window.setTimeout(() => setAddedFlash(null), 1800);
+    } catch (err) {
+      if (err instanceof VehicleConflictError) {
+        setVehicleConflict(err.details);
+      }
+      // Other errors already logged by useCart.
+    }
+  };
+
+  const confirmReplaceVehicle = async () => {
+    if (!vehicleConflict) return;
+    setReplacing(true);
+    try {
+      await replaceVehicleInCart(vehicleConflict.pendingItem);
+      setVehicleConflict(null);
+    } finally {
+      setReplacing(false);
+    }
   };
 
   // ---------- Booking handlers ----------
@@ -1647,6 +1669,14 @@ export default function ServiceCategory({
           </div>
         )}
       </AnimatePresence>
+
+      <VehicleReplaceModal
+        open={vehicleConflict !== null}
+        details={vehicleConflict}
+        onConfirm={confirmReplaceVehicle}
+        onClose={() => setVehicleConflict(null)}
+        pending={replacing}
+      />
     </>
   );
 }

@@ -9,9 +9,9 @@ import {
   Package,
   CheckCircle2,
   AlertCircle,
-  X,
 } from "lucide-react";
 import PageBanner from "../components/PageBanner";
+import CancelOrderModal from "../components/CancelOrderModal";
 import { useOrderDetail, useCancelOrder } from "../hooks/useOrders";
 import type { OrderStatus } from "../types/api";
 
@@ -43,22 +43,23 @@ export default function OrderDetail({
   const { order, isLoading, isError } = useOrderDetail(orderId);
   const cancelMutation = useCancelOrder();
   const [showCancelModal, setShowCancelModal] = useState(false);
-  const [cancelReason, setCancelReason] = useState("");
   const [cancelError, setCancelError] = useState<string | null>(null);
 
-  const handleCancel = async () => {
+  const handleCancel = async (reason: string | null) => {
     if (!order) return;
     setCancelError(null);
     try {
-      await cancelMutation.mutateAsync({
-        orderId: order.id,
-        reason: cancelReason.trim() || null,
-      });
+      await cancelMutation.mutateAsync({ orderId: order.id, reason });
       setShowCancelModal(false);
-      setCancelReason("");
     } catch (e) {
       setCancelError(e instanceof Error ? e.message : "Couldn't cancel");
     }
+  };
+
+  const closeCancelModal = () => {
+    if (cancelMutation.isPending) return;
+    setShowCancelModal(false);
+    setCancelError(null);
   };
 
   if (isLoading) {
@@ -290,56 +291,14 @@ export default function OrderDetail({
         </div>
       </div>
 
-      {/* Cancel modal */}
-      {showCancelModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white max-w-md w-full">
-            <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-              <h3 className="text-base font-black uppercase tracking-tighter text-neutral-900">
-                Cancel Booking
-              </h3>
-              <button
-                onClick={() => setShowCancelModal(false)}
-                className="text-neutral-400 hover:text-neutral-700"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-5 space-y-3">
-              <p className="text-sm text-neutral-700">
-                Are you sure you want to cancel <b>{order.order_number}</b>? This
-                can't be undone.
-              </p>
-              <textarea
-                value={cancelReason}
-                onChange={(e) => setCancelReason(e.target.value)}
-                placeholder="Reason (optional)"
-                className="w-full bg-white border border-border p-3 text-sm focus:border-primary outline-none min-h-[70px]"
-              />
-              {cancelError && (
-                <p className="text-[11px] font-bold text-accent-dark flex items-center gap-1.5">
-                  <AlertCircle className="w-3.5 h-3.5" /> {cancelError}
-                </p>
-              )}
-            </div>
-            <div className="px-5 py-4 border-t border-border flex items-center justify-end gap-3">
-              <button
-                onClick={() => setShowCancelModal(false)}
-                className="text-xs uppercase tracking-widest font-bold text-neutral-500 hover:text-neutral-900"
-              >
-                Keep Booking
-              </button>
-              <button
-                onClick={handleCancel}
-                disabled={cancelMutation.isPending}
-                className="bg-accent-dark text-white px-5 py-2.5 text-xs font-black uppercase tracking-widest disabled:opacity-60"
-              >
-                {cancelMutation.isPending ? "Cancelling…" : "Yes, Cancel"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <CancelOrderModal
+        open={showCancelModal}
+        orderNumber={order.order_number}
+        onConfirm={handleCancel}
+        onClose={closeCancelModal}
+        pending={cancelMutation.isPending}
+        errorMessage={cancelError}
+      />
     </>
   );
 }

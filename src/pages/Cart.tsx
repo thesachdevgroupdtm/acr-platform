@@ -1,6 +1,4 @@
-import { useMemo, useState } from "react";
 import type * as React from "react";
-import { motion, AnimatePresence } from "motion/react";
 import {
   ShoppingCart,
   Minus,
@@ -13,18 +11,11 @@ import {
   CheckCircle2,
   Tag,
   Lock,
-  X,
-  Sparkles,
 } from "lucide-react";
 import PageBanner from "../components/PageBanner";
-import { useCart, useCheckout } from "../hooks/useCart";
+import CouponInput from "../components/CouponInput";
+import { useCart } from "../hooks/useCart";
 import { useAuth } from "../hooks/useAuth";
-import {
-  OFFERS,
-  pickBestOffer,
-  computeCouponDiscount,
-  OfferCoupon,
-} from "../data/businessData";
 
 interface CartProps {
   setCurrentPage: (page: string) => void;
@@ -32,105 +23,23 @@ interface CartProps {
 }
 
 const SERVICE_CHARGE_PCT = 0; // free service charge for now
-const GST_PCT = 18; // 18% GST on services in India
 
 export default function Cart({ setCurrentPage, openAuth }: CartProps) {
-  const { items, updateQty, removeItem, subtotal, count, clearCart } =
+  const { items, updateQty, removeItem, subtotal, count, clearCart, cart } =
     useCart();
-  const { details: checkout, setDetails: setCheckout } = useCheckout();
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated } = useAuth();
 
-  // ---------- Coupons (auto-fetch + manual override) ----------
-  // We compute a snapshot of context once per render and feed it into
-  // pickBestOffer so the "best" offer always reflects the current cart.
-  const isFirstTime = !user || user.bookings.length === 0;
-  const cartCategorySlugs = useMemo(
-    () =>
-      Array.from(
-        new Set(items.map((i) => i.categorySlug).filter(Boolean))
-      ) as string[],
-    [items]
-  );
-
-  const bestOffer = useMemo(
-    () =>
-      pickBestOffer(OFFERS, {
-        subtotal,
-        cartCategorySlugs,
-        isFirstTime,
-      }),
-    [subtotal, cartCategorySlugs, isFirstTime]
-  );
-
-  // Manually-applied coupon code persists across Cart→Checkout→Payment via
-  // useCheckout (localStorage-backed). Empty string = auto-pick best.
-  const [showOfferPanel, setShowOfferPanel] = useState(false);
-  const [couponInput, setCouponInput] = useState("");
-  const [couponError, setCouponError] = useState("");
-
-  // Resolve manually-applied coupon (if any) and verify it still applies
-  const appliedCoupon = useMemo<OfferCoupon | null>(
-    () =>
-      checkout.couponCode
-        ? OFFERS.find((c) => c.code === checkout.couponCode) || null
-        : null,
-    [checkout.couponCode]
-  );
-  const appliedDiscount = useMemo(() => {
-    if (!appliedCoupon) return 0;
-    return computeCouponDiscount(appliedCoupon, {
-      subtotal,
-      cartCategorySlugs,
-      isFirstTime,
-    });
-  }, [appliedCoupon, subtotal, cartCategorySlugs, isFirstTime]);
-
-  // If user manually applied something but it no longer applies, fall
-  // back to the best auto-pick. Otherwise honour the manual choice.
-  const effectiveCoupon =
-    appliedCoupon && appliedDiscount > 0
-      ? appliedCoupon
-      : bestOffer?.coupon || null;
-  const effectiveDiscount =
-    appliedCoupon && appliedDiscount > 0
-      ? appliedDiscount
-      : bestOffer?.discount || 0;
-
-  const applyCouponCode = () => {
-    const code = couponInput.trim().toUpperCase();
-    if (!code) {
-      setCouponError("Enter a coupon code");
-      return;
-    }
-    const found = OFFERS.find((c) => c.code === code);
-    if (!found) {
-      setCouponError("Invalid code");
-      return;
-    }
-    const d = computeCouponDiscount(found, {
-      subtotal,
-      cartCategorySlugs,
-      isFirstTime,
-    });
-    if (d <= 0) {
-      setCouponError("This code doesn't apply to your cart");
-      return;
-    }
-    setCheckout({ couponCode: found.code });
-    setCouponError("");
-    setCouponInput("");
-    setShowOfferPanel(false);
-  };
-
-  const removeCoupon = () => {
-    setCheckout({ couponCode: "" });
-  };
+  // Phase 2.5.1 (D-2.5.1-5) — coupon state is server-authoritative.
+  // No more local auto-apply against the OFFERS constant; the
+  // CouponInput component reads cart.totals.coupon directly. While
+  // the /cart/coupon backend is 501 (until 2.5b), totals.coupon
+  // stays null and totals.discount stays 0.
+  const totals = cart?.totals;
+  const effectiveDiscount = totals?.discount ?? 0;
+  const effectiveCoupon = totals?.coupon ?? null;
 
   // Phase 2.3.3 — GST removed from Cart per contract Decision D-B.
-  // Cart is pre-tax. GST renders at Checkout/Payment (Phase 2.5).
-  // GST_PCT is intentionally kept imported above so when 2.5 lights
-  // up Checkout/Payment they continue to compile against the same
-  // constant without a flag-flip churn.
+  // Cart is pre-tax; GST renders at Checkout.
   const serviceCharge = Math.round(subtotal * (SERVICE_CHARGE_PCT / 100));
   const subtotalAfterDiscount = Math.max(0, subtotal - effectiveDiscount);
   const total = subtotalAfterDiscount + serviceCharge;
@@ -354,61 +263,8 @@ export default function Cart({ setCurrentPage, openAuth }: CartProps) {
                   </div>
                 </div>
 
-                {/* Auto-applied coupon card */}
-                {effectiveCoupon ? (
-                  <div className="bg-primary/5 border border-primary/30 p-4">
-                    <div className="flex items-start gap-3">
-                      <Sparkles className="w-5 h-5 text-primary shrink-0 mt-0.5" />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                          <p className="text-xs font-black uppercase text-neutral-900 tracking-tighter">
-                            {effectiveCoupon.code}
-                          </p>
-                          {effectiveCoupon.badge && (
-                            <span className="bg-primary text-white text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5">
-                              {effectiveCoupon.badge}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-[11px] text-neutral-600 leading-relaxed">
-                          {effectiveCoupon.description}
-                        </p>
-                        <div className="flex items-center gap-3 mt-2">
-                          <button
-                            onClick={() => setShowOfferPanel(true)}
-                            className="text-[10px] font-bold uppercase tracking-widest text-primary hover:underline"
-                          >
-                            Change coupon
-                          </button>
-                          {appliedCoupon && (
-                            <button
-                              onClick={removeCoupon}
-                              className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 hover:text-accent-dark"
-                            >
-                              Remove
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setShowOfferPanel(true)}
-                    className="w-full bg-neutral-50 border border-border p-4 flex items-center gap-3 hover:border-primary transition-colors group"
-                  >
-                    <Tag className="w-5 h-5 text-primary shrink-0" />
-                    <div className="flex-1 min-w-0 text-left">
-                      <p className="text-xs font-black uppercase text-neutral-900 tracking-tighter">
-                        Apply Coupon
-                      </p>
-                      <p className="text-[10px] text-neutral-500">
-                        {OFFERS.length} offers available
-                      </p>
-                    </div>
-                    <ArrowRight className="w-4 h-4 text-primary group-hover:translate-x-1 transition-transform" />
-                  </button>
-                )}
+                {/* Phase 2.5.1 — coupon input (manual; backend 501 until 2.5b). */}
+                <CouponInput totals={totals} variant="cart" />
 
                 {/* Trust strip */}
                 <div className="bg-white p-5 border border-border space-y-3">
@@ -421,149 +277,6 @@ export default function Cart({ setCurrentPage, openAuth }: CartProps) {
           )}
         </div>
       </div>
-
-      {/* ─────────── OFFERS PANEL (slide-over) ─────────── */}
-      <AnimatePresence>
-        {showOfferPanel && (
-          <div className="fixed inset-0 z-[10000] flex items-center justify-center p-3 sm:p-5">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowOfferPanel(false)}
-              className="absolute inset-0 bg-neutral-900/95 backdrop-blur-sm"
-            />
-            <motion.div
-              initial={{ opacity: 0, y: 30, scale: 0.96 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 30, scale: 0.96 }}
-              transition={{ duration: 0.25, ease: "easeOut" }}
-              className="relative w-full max-w-md bg-white border border-border shadow-2xl flex flex-col h-[600px] max-h-[92vh]"
-            >
-              {/* Header */}
-              <div className="px-5 py-4 border-b border-border flex items-center justify-between shrink-0">
-                <h3 className="text-lg font-black uppercase tracking-tighter text-neutral-900">
-                  AVAILABLE <span className="text-primary">OFFERS.</span>
-                </h3>
-                <button
-                  onClick={() => setShowOfferPanel(false)}
-                  className="w-8 h-8 flex items-center justify-center text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              {/* Manual code entry */}
-              <div className="px-5 py-4 border-b border-border shrink-0">
-                <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1.5">
-                  Have a coupon code?
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={couponInput}
-                    onChange={(e) => {
-                      setCouponInput(e.target.value.toUpperCase());
-                      if (couponError) setCouponError("");
-                    }}
-                    placeholder="ENTER CODE"
-                    className={`flex-1 bg-white border ${
-                      couponError ? "border-accent-dark" : "border-border"
-                    } px-3 py-2 text-sm uppercase tracking-widest font-bold focus:border-primary outline-none`}
-                  />
-                  <button
-                    onClick={applyCouponCode}
-                    className="bg-neutral-900 text-white px-4 text-[10px] font-bold uppercase tracking-widest hover:bg-primary transition-colors"
-                  >
-                    Apply
-                  </button>
-                </div>
-                {couponError && (
-                  <p className="text-[10px] font-bold text-accent-dark mt-1">
-                    {couponError}
-                  </p>
-                )}
-              </div>
-
-              {/* Available offers */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                {OFFERS.map((c) => {
-                  const d = computeCouponDiscount(c, {
-                    subtotal,
-                    cartCategorySlugs,
-                    isFirstTime,
-                  });
-                  const applies = d > 0;
-                  const isApplied = effectiveCoupon?.id === c.id;
-                  return (
-                    <div
-                      key={c.id}
-                      className={`border p-4 transition-colors ${
-                        isApplied
-                          ? "border-primary bg-primary/5"
-                          : applies
-                          ? "border-border hover:border-primary"
-                          : "border-border bg-neutral-50 opacity-60"
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3 mb-2">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className="text-sm font-black uppercase tracking-tighter text-neutral-900">
-                              {c.code}
-                            </p>
-                            {c.badge && (
-                              <span className="bg-primary text-white text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5">
-                                {c.badge}
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-xs font-bold text-neutral-700 mt-0.5">
-                            {c.title}
-                          </p>
-                        </div>
-                        {applies && (
-                          <p className="text-sm font-black text-primary shrink-0">
-                            ₹{d}
-                          </p>
-                        )}
-                      </div>
-                      <p className="text-[11px] text-neutral-500 leading-relaxed mb-3">
-                        {c.description}
-                      </p>
-                      {applies ? (
-                        isApplied ? (
-                          <p className="text-[10px] font-bold uppercase tracking-widest text-primary flex items-center gap-1">
-                            <CheckCircle2 className="w-3 h-3" /> Applied
-                          </p>
-                        ) : (
-                          <button
-                            onClick={() => {
-                              setCheckout({ couponCode: c.code });
-                              setShowOfferPanel(false);
-                            }}
-                            className="text-[10px] font-bold uppercase tracking-widest text-primary hover:underline"
-                          >
-                            Apply this coupon →
-                          </button>
-                        )
-                      ) : (
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">
-                          {c.minOrder && subtotal < c.minOrder
-                            ? `Min order ₹${c.minOrder}`
-                            : c.firstTimeOnly && !isFirstTime
-                            ? "First-time customers only"
-                            : "Not applicable to this cart"}
-                        </p>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
     </>
   );
 }

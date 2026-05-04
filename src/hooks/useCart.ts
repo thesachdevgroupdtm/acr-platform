@@ -42,6 +42,7 @@ import type {
   CartItemResource,
   CartResource,
 } from "../types/api";
+import { VehicleConflictError } from "../lib/errors";
 
 /* ─────────────────── Public types (legacy, preserved) ─────────────────── */
 
@@ -158,13 +159,12 @@ export function useCart() {
 
   /**
    * Phase 2.3.2 — Add-to-Cart button toggle (Bug A).
-   *
-   * Returns true when the cart already holds a line for the given
-   * (kind, ref_id, brand_id?, model_id?, fuel_id?) tuple. Vehicle
-   * IDs are matched strictly: undefined in the query equals null on
-   * the server row (i.e. no-vehicle line). Pass all three vehicle
-   * IDs when the caller has a selected vehicle so the toggle tracks
-   * the same line `addItem` would dedup against.
+   * Phase 2.5.1 (D-2.5.1-1) — match on (kind, ref_id) only. The cart
+   * now holds at most one vehicle, so the vehicle tuple is constant
+   * across all rows; including it in the toggle key was creating
+   * spurious "not in cart" states whenever the user changed
+   * vehicle. Callers may still pass brand_id/model_id/fuel_id for
+   * source-compat — they're ignored.
    */
   const isInCart = useCallback(
     (q: {
@@ -176,28 +176,16 @@ export function useCart() {
     }): boolean => {
       if (!cart) return false;
       const targetKind = q.kind ?? "service";
-      return cart.items.some((it) => {
-        if (it.kind !== targetKind) return false;
-        if (it.ref_id !== q.ref_id) return false;
-        const ib = it.vehicle?.brand_id ?? null;
-        const im = it.vehicle?.model_id ?? null;
-        const ifu = it.vehicle?.fuel_id  ?? null;
-        const qb = q.brand_id ?? null;
-        const qm = q.model_id ?? null;
-        const qf = q.fuel_id  ?? null;
-        return ib === qb && im === qm && ifu === qf;
-      });
+      return cart.items.some(
+        (it) => it.kind === targetKind && it.ref_id === q.ref_id,
+      );
     },
     [cart],
   );
 
   /**
-   * Phase 2.3.3 — toggle-remove companion to `isInCart`. Returns the
-   * matching CartItemResource (with its server `id`) so callers can
-   * call `removeItem(item.id)` on a second click without having to
-   * reach into the legacy `items` array. Same matching rules as
-   * `isInCart`: kind + ref_id + vehicle tuple, with `undefined`
-   * collapsing to `null` for "no-vehicle" line equality.
+   * Phase 2.3.3 — toggle-remove companion. Phase 2.5.1 — same key
+   * narrowing as `isInCart` (kind + ref_id only).
    */
   const findCartItem = useCallback(
     (q: {
@@ -210,18 +198,9 @@ export function useCart() {
       if (!cart) return null;
       const targetKind = q.kind ?? "service";
       return (
-        cart.items.find((it) => {
-          if (it.kind !== targetKind) return false;
-          if (it.ref_id !== q.ref_id) return false;
-          const ib = it.vehicle?.brand_id ?? null;
-          const im = it.vehicle?.model_id ?? null;
-          const ifu = it.vehicle?.fuel_id  ?? null;
-          return (
-            ib === (q.brand_id ?? null) &&
-            im === (q.model_id ?? null) &&
-            ifu === (q.fuel_id  ?? null)
-          );
-        }) ?? null
+        cart.items.find(
+          (it) => it.kind === targetKind && it.ref_id === q.ref_id,
+        ) ?? null
       );
     },
     [cart],
@@ -267,14 +246,27 @@ export function useCart() {
    * Adds a service to the cart. Pass `brand_id`/`model_id`/`fuel_id`
    * (all three) for a priced add; otherwise the server uses the
    * service's `base_price` and 422s if that is unset.
+   *
+   * Phase 2.5.1 (D-2.5.1-1) — one-vehicle-per-cart enforcement.
+   * Throws `VehicleConflictError` (from src/lib/errors) when the
+   * cart already holds rows for a different vehicle than the
+   * incoming request. Callers must catch this and prompt the user
+   * via `<VehicleReplaceModal>`; on confirm, replay the request
+   * through `replaceVehicleInCart`.
+   *
+   * Returns a Promise so callers can `await` and `try/catch`.
+   * Existing fire-and-forget callers (no await) continue to work —
+   * a swallowed VehicleConflictError just leaves the cart unchanged,
+   * which is the correct fallback if the page hasn't been migrated
+   * to the prompt flow yet.
    */
   const addItem = useCallback(
-    (item: Omit<CartItem, "id" | "qty"> & {
+    async (item: Omit<CartItem, "id" | "qty"> & {
       qty?: number;
       brand_id?: number;
       model_id?: number;
       fuel_id?: number;
-    }) => {
+    }): Promise<void> => {
       const refId = Number(item.serviceId);
       if (!Number.isFinite(refId) || refId <= 0) return;
 
@@ -290,20 +282,97 @@ export function useCart() {
       if (item.car) meta.car = item.car;
       if (item.location) meta.location = item.location;
 
-      void addMutation.mutateAsync({
+      const req: AddCartItemRequest = {
         kind:     "service",
         ref_id:   refId,
         quantity: item.qty ?? 1,
         vehicle,
         meta,
-      }).catch((e) => {
+      };
+
+      // One-vehicle-per-cart conflict check. Looks up the cart's
+      // first vehicle-bearing row; if its (brand,model,fuel) tuple
+      // differs from the request's, throw and let the caller
+      // prompt. A request without a vehicle never conflicts (gets
+      // base-price treatment server-side); a cart line without a
+      // vehicle never conflicts either.
+      if (cart && vehicle) {
+        const existing = cart.items.find(
+          (it) =>
+            it.vehicle?.brand_id != null &&
+            it.vehicle?.model_id != null &&
+            it.vehicle?.fuel_id != null,
+        );
+        if (existing && existing.vehicle) {
+          const sameVehicle =
+            existing.vehicle.brand_id === vehicle.brand_id &&
+            existing.vehicle.model_id === vehicle.model_id &&
+            existing.vehicle.fuel_id === vehicle.fuel_id;
+          if (!sameVehicle) {
+            throw new VehicleConflictError({
+              existingVehicle: {
+                brand_id: existing.vehicle.brand_id,
+                model_id: existing.vehicle.model_id,
+                fuel_id:  existing.vehicle.fuel_id,
+                // Pull human names from cart-item meta when present —
+                // the server resource only carries IDs.
+                brand_name: (existing.meta?.car as { brand?: string } | undefined)?.brand ?? null,
+                model_name: (existing.meta?.car as { model?: string } | undefined)?.model ?? null,
+                fuel_name:  (existing.meta?.car as { fuel?:  string } | undefined)?.fuel  ?? null,
+              },
+              newVehicle: {
+                brand_id: vehicle.brand_id,
+                model_id: vehicle.model_id,
+                fuel_id:  vehicle.fuel_id,
+                brand_name: item.car?.brand ?? null,
+                model_name: item.car?.model ?? null,
+                fuel_name:  item.car?.fuel  ?? null,
+              },
+              pendingItem: req,
+            });
+          }
+        }
+      }
+
+      try {
+        await addMutation.mutateAsync(req);
+      } catch (e) {
         if (typeof console !== "undefined") {
           const msg = e instanceof ApiError ? e.message : String(e);
           console.warn("[useCart] addItem failed:", msg);
         }
-      });
+        throw e;
+      }
     },
-    [addMutation],
+    [addMutation, cart],
+  );
+
+  /**
+   * Phase 2.5.1 — replay an `AddCartItemRequest` after the user has
+   * confirmed a vehicle replacement. Sequentially deletes existing
+   * items, then posts the new one. There's no /cart wipe endpoint
+   * yet (Phase 2.3 deviation #5); N×DELETE is correct and idempotent.
+   */
+  const replaceVehicleInCart = useCallback(
+    async (pendingItem: AddCartItemRequest): Promise<void> => {
+      if (!cart) {
+        await addMutation.mutateAsync(pendingItem);
+        return;
+      }
+      // Best-effort sequential clear; an individual delete failure
+      // shouldn't block the eventual add — the next /cart fetch
+      // will reflect whatever survived.
+      for (const it of cart.items) {
+        try {
+          await deleteCartItemApi(it.id, activeSessionUuid());
+        } catch {
+          /* swallow; see comment above */
+        }
+      }
+      await addMutation.mutateAsync(pendingItem);
+      qc.invalidateQueries({ queryKey: ["cart"] });
+    },
+    [cart, addMutation, qc],
   );
 
   const updateQty = useCallback(
@@ -339,15 +408,32 @@ export function useCart() {
     invalidate();
   }, [cart, invalidate]);
 
-  /* ─────── Coupons (501 until 2.6) ─────── */
+  /* ─────── Coupons (501 until Phase 2.5b) ───────
+   * The /cart/coupon endpoints are 501 stubs in this commit (real
+   * coupon backend lands in 2.5b). The frontend treats applyCoupon
+   * as a "coming soon" surface: the UI renders the input + Apply
+   * button, the user types a code and clicks Apply, and we surface
+   * a friendly message instead of pretending the coupon applied.
+   * When 2.5b lands, this stub is replaced with a real
+   * postCartCoupon call and the local state plumbing already works.
+   */
+  const applyCoupon = useCallback(
+    async (_code: string): Promise<{ success: false; error: string }> => ({
+      success: false,
+      error:
+        "Coupon system launching soon — coupons will be available shortly. Please proceed without coupon for now.",
+    }),
+    [],
+  );
 
-  const applyCoupon = useCallback(async (_code: string): Promise<{ success: false; error: string }> => {
-    return { success: false, error: "Coupons are coming soon (Phase 2.6)." };
-  }, []);
-
-  const removeCoupon = useCallback(async (): Promise<{ success: false; error: string }> => {
-    return { success: false, error: "Coupons are coming soon (Phase 2.6)." };
-  }, []);
+  const removeCoupon = useCallback(
+    async (): Promise<{ success: false; error: string }> => ({
+      success: false,
+      error:
+        "Coupon system launching soon. There's nothing to remove yet.",
+    }),
+    [],
+  );
 
   return {
     items,
@@ -364,7 +450,10 @@ export function useCart() {
     /** Phase 2.3.3 — companion lookup so callers can toggle-remove via
      *  `removeItem(findCartItem(...).id)` on a second click. */
     findCartItem,
-    /** Coupon stubs — will return 501-equivalent until 2.6. */
+    /** Phase 2.5.1 — replay an add request after the user confirms a
+     *  vehicle replacement. Wipes existing items, then posts. */
+    replaceVehicleInCart,
+    /** Coupon stubs — will return 501-equivalent until 2.5b. */
     applyCoupon,
     removeCoupon,
     isLoading: cartQuery.isLoading,
@@ -388,8 +477,19 @@ function useTokenFlag(): boolean {
   return hasToken;
 }
 
-/* ─────────────────── useCheckout (unchanged from Phase 2.1) ─────────────────── */
-
+/* ─────────────────── useCheckout (Phase 2.5.1 — couponCode removed) ───────────────────
+ *
+ * Phase 2.5.1 (D-2.5.1-5) — `couponCode` was removed from this
+ * draft because the legacy auto-apply path it powered is gone.
+ * Coupon state now lives on the server cart (via the eventual
+ * Phase 2.5b /cart/coupon endpoints); the frontend reads
+ * cart.totals.coupon directly and never persists a code locally.
+ *
+ * `readCheckout` strips the legacy `couponCode` field on every
+ * read, so existing browsers carrying it will see it disappear
+ * silently after one render. Eventually safe to remove the strip
+ * once we're confident no live user has a stale draft.
+ */
 export interface CheckoutDetails {
   name: string;
   phone: string;
@@ -399,8 +499,6 @@ export interface CheckoutDetails {
   preferredTime: string;
   serviceCenter: string;
   notes: string;
-  /** Coupon code applied to the cart (null/empty = none / auto-pick best). */
-  couponCode: string;
 }
 
 // Phase 2.5 review: consider sessionStorage instead of localStorage
@@ -418,14 +516,19 @@ const EMPTY_CHECKOUT: CheckoutDetails = {
   preferredTime: "",
   serviceCenter: "",
   notes: "",
-  couponCode: "",
 };
 
 const readCheckout = (): CheckoutDetails => {
   try {
     if (typeof window === "undefined") return EMPTY_CHECKOUT;
     const raw = window.localStorage.getItem(CHECKOUT_KEY);
-    return raw ? { ...EMPTY_CHECKOUT, ...JSON.parse(raw) } : EMPTY_CHECKOUT;
+    if (!raw) return EMPTY_CHECKOUT;
+    // One-time strip of the legacy couponCode field (Phase 2.5.1).
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if ("couponCode" in parsed) {
+      delete parsed.couponCode;
+    }
+    return { ...EMPTY_CHECKOUT, ...(parsed as Partial<CheckoutDetails>) };
   } catch {
     return EMPTY_CHECKOUT;
   }

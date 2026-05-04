@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   CheckCircle2,
   ArrowRight,
@@ -20,11 +20,13 @@ import {
   LOCATIONS,
 } from "../data/businessData";
 import PageBanner from "../components/PageBanner";
+import VehicleReplaceModal from "../components/VehicleReplaceModal";
 import { useCart } from "../hooks/useCart";
 import { useBookingContext } from "../hooks/useBookingContext";
 import { useAuth } from "../hooks/useAuth";
 import { fetchServiceDetail } from "../lib/api";
 import { useApiQuery } from "../hooks/useApiQuery";
+import { VehicleConflictError, type VehicleConflictDetails } from "../lib/errors";
 
 interface ServiceDetailProps {
   categorySlug: string;
@@ -39,7 +41,9 @@ export default function ServiceDetail({
   setCurrentPage,
   openEstimate,
 }: ServiceDetailProps) {
-  const { addItem, count, findCartItem, removeItem } = useCart();
+  const { addItem, count, findCartItem, removeItem, replaceVehicleInCart } = useCart();
+  const [vehicleConflict, setVehicleConflict] = useState<VehicleConflictDetails | null>(null);
+  const [replacing, setReplacing] = useState(false);
   // Pull synced booking state from parent ServiceCategory page
   const { state: booking } = useBookingContext();
   const { user, isAuthenticated } = useAuth();
@@ -137,22 +141,41 @@ export default function ServiceDetail({
       ? `Starting at ₹${priceState.value}`
       : "Get Custom Quote";
 
-  const handleAddToCart = () => {
-    addItem({
-      serviceId: String(service.id),
-      title: service.title,
-      // Phase 2.3.5 — addItem's `price` is a legacy display hint;
-      // the server re-snapshots authoritatively from service_prices
-      // on every POST /cart/items. We pass the resolved vehicle
-      // price when available; the backend ignores it for pricing.
-      price: priceState.kind === "price" ? priceState.value : 0,
-      categorySlug: category.slug,
-      car: booking.car || undefined,
-      location: selectedLocationName,
-      brand_id: booking.car?.brand_id,
-      model_id: booking.car?.model_id,
-      fuel_id:  booking.car?.fuel_id,
-    });
+  const handleAddToCart = async () => {
+    try {
+      await addItem({
+        serviceId: String(service.id),
+        title: service.title,
+        // Phase 2.3.5 — addItem's `price` is a legacy display hint;
+        // the server re-snapshots authoritatively from service_prices
+        // on every POST /cart/items. We pass the resolved vehicle
+        // price when available; the backend ignores it for pricing.
+        price: priceState.kind === "price" ? priceState.value : 0,
+        categorySlug: category.slug,
+        car: booking.car || undefined,
+        location: selectedLocationName,
+        brand_id: booking.car?.brand_id,
+        model_id: booking.car?.model_id,
+        fuel_id:  booking.car?.fuel_id,
+      });
+    } catch (err) {
+      if (err instanceof VehicleConflictError) {
+        setVehicleConflict(err.details);
+        return;
+      }
+      // Other errors (ApiError, etc.) are already logged by useCart.
+    }
+  };
+
+  const confirmReplaceVehicle = async () => {
+    if (!vehicleConflict) return;
+    setReplacing(true);
+    try {
+      await replaceVehicleInCart(vehicleConflict.pendingItem);
+      setVehicleConflict(null);
+    } finally {
+      setReplacing(false);
+    }
   };
 
   const goToParentForBooking = () => {
@@ -929,6 +952,14 @@ export default function ServiceDetail({
           </div>
         </div>
       </div>
+
+      <VehicleReplaceModal
+        open={vehicleConflict !== null}
+        details={vehicleConflict}
+        onConfirm={confirmReplaceVehicle}
+        onClose={() => setVehicleConflict(null)}
+        pending={replacing}
+      />
     </>
   );
 }

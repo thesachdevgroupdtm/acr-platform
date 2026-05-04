@@ -159,6 +159,16 @@ export default function BookingConfirmation({
                   ₹{order.totals.subtotal}
                 </span>
               </div>
+              {/* Phase 2.5.1 — conditional coupon line. Renders once
+                  Phase 2.5b populates the discount on placement. */}
+              {order.totals.discount > 0 && (
+                <div className="flex items-center justify-between">
+                  <span className="text-primary">Coupon Applied</span>
+                  <span className="font-bold text-primary">
+                    − ₹{order.totals.discount}
+                  </span>
+                </div>
+              )}
               <div className="flex items-center justify-between">
                 <span className="text-neutral-500">GST</span>
                 <span className="font-bold text-neutral-900">

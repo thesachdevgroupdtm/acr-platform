@@ -23,6 +23,7 @@ import { CheckoutSteps } from "./Cart";
 import { FEATURES } from "../config/features";
 import CheckoutComingSoon from "./CheckoutComingSoon";
 import { ApiError, postPlaceOrder } from "../lib/api";
+import CouponInput from "../components/CouponInput";
 import {
   AFTERNOON_SLOTS,
   EVENING_SLOTS,
@@ -49,7 +50,7 @@ export default function Checkout({ setCurrentPage, openAuth }: CheckoutProps) {
     return <CheckoutComingSoon setCurrentPage={setCurrentPage} />;
   }
 
-  const { items, subtotal, count } = useCart();
+  const { items, subtotal, count, cart } = useCart();
   const { details, setDetails, resetDetails } = useCheckout();
   const { user, isAuthenticated, setDefaults } = useAuth();
   const { state: booking } = useBookingContext();
@@ -584,11 +585,25 @@ export default function Checkout({ setCurrentPage, openAuth }: CheckoutProps) {
                       ₹{subtotal}
                     </span>
                   </div>
+                  {(cart?.totals.discount ?? 0) > 0 && cart?.totals.coupon && (
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-primary">
+                        Discount ({cart.totals.coupon.code})
+                      </span>
+                      <span className="font-bold text-primary">
+                        − ₹{cart.totals.discount}
+                      </span>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-neutral-500">GST ({GST_PCT}%)</span>
                     <span className="font-bold text-neutral-900">₹{gst}</span>
                   </div>
-                  {/* Phase 2.5b will surface the coupon row here. Hidden by FEATURES.couponsLit. */}
+                </div>
+
+                {/* Phase 2.5.1 — coupon input. Backend 501 until 2.5b. */}
+                <div className="px-5 py-3 border-t border-border">
+                  <CouponInput totals={cart?.totals} variant="summary" />
                 </div>
 
                 <div className="px-5 py-4 flex items-baseline justify-between border-t border-border">

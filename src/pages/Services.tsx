@@ -14,7 +14,9 @@ import {
 } from "lucide-react";
 import PageBanner from "../components/PageBanner";
 import BookingSidebar from "../components/BookingSidebar";
+import VehicleReplaceModal from "../components/VehicleReplaceModal";
 import { useCart } from "../hooks/useCart";
+import { VehicleConflictError, type VehicleConflictDetails } from "../lib/errors";
 import { useBookingContext } from "../hooks/useBookingContext";
 import {
   fetchServices,
@@ -34,7 +36,9 @@ const STICKY_OFFSET_PX = 132;
 const SECTION_NAV_OFFSET_PX = 112; // height of header alone
 
 export default function Services({ setCurrentPage }: ServicesProps) {
-  const { addItem, count, findCartItem, removeItem } = useCart();
+  const { addItem, count, findCartItem, removeItem, replaceVehicleInCart } = useCart();
+  const [vehicleConflict, setVehicleConflict] = useState<VehicleConflictDetails | null>(null);
+  const [replacing, setReplacing] = useState(false);
   const { state: booking } = useBookingContext();
 
   // ---------- API: categories list (skeleton-first, never static) ----------
@@ -145,20 +149,37 @@ export default function Services({ setCurrentPage }: ServicesProps) {
   }, [pricingQuery.data]);
   const pricingLoading = vehicleSelected && pricingQuery.isFetching && pricingQuery.data === undefined;
 
-  const handleAddToCart = (sub: CategorySubService, categorySlug: string) => {
-    addItem({
-      serviceId: String(sub.id),
-      title: sub.title,
-      price: Number(sub.base_price) || 0,
-      categorySlug,
-      car: booking.car || undefined,
-      location: booking.location || undefined,
-      brand_id: booking.car?.brand_id,
-      model_id: booking.car?.model_id,
-      fuel_id:  booking.car?.fuel_id,
-    });
-    setAddedFlash(String(sub.id));
-    setTimeout(() => setAddedFlash(null), 1800);
+  const handleAddToCart = async (sub: CategorySubService, categorySlug: string) => {
+    try {
+      await addItem({
+        serviceId: String(sub.id),
+        title: sub.title,
+        price: Number(sub.base_price) || 0,
+        categorySlug,
+        car: booking.car || undefined,
+        location: booking.location || undefined,
+        brand_id: booking.car?.brand_id,
+        model_id: booking.car?.model_id,
+        fuel_id:  booking.car?.fuel_id,
+      });
+      setAddedFlash(String(sub.id));
+      setTimeout(() => setAddedFlash(null), 1800);
+    } catch (err) {
+      if (err instanceof VehicleConflictError) {
+        setVehicleConflict(err.details);
+      }
+    }
+  };
+
+  const confirmReplaceVehicle = async () => {
+    if (!vehicleConflict) return;
+    setReplacing(true);
+    try {
+      await replaceVehicleInCart(vehicleConflict.pendingItem);
+      setVehicleConflict(null);
+    } finally {
+      setReplacing(false);
+    }
   };
 
   return (
@@ -365,6 +386,14 @@ export default function Services({ setCurrentPage }: ServicesProps) {
           </div>
         </div>
       </div>
+
+      <VehicleReplaceModal
+        open={vehicleConflict !== null}
+        details={vehicleConflict}
+        onConfirm={confirmReplaceVehicle}
+        onClose={() => setVehicleConflict(null)}
+        pending={replacing}
+      />
     </>
   );
 }

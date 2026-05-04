@@ -29,12 +29,59 @@ import OrderDetail from "./pages/OrderDetail";
 import BookingConfirmation from "./pages/BookingConfirmation";
 import EstimateProcess from "./components/EstimateProcess";
 import AuthModal from "./components/AuthModal";
+import RouteResolutionLoader from "./components/RouteResolutionLoader";
 import { motion, AnimatePresence } from "motion/react";
 import { BUSINESS_INFO } from "./data/businessData";
 import { MessageCircle } from "lucide-react";
 
+/**
+ * Phase 2.5.1 — minimal pathname → currentPage mapping. Used only
+ * on initial mount so that hard-refreshing /checkout, /order-12,
+ * etc. lands directly on the right page instead of briefly
+ * flashing Home (the default state). Click navigation continues to
+ * use the existing `setCurrentPage` flow without URL sync — the
+ * full router migration is a Phase 3 deliverable.
+ */
+function parsePageFromUrl(loc: Location): string {
+  const raw = (loc.pathname || "/").replace(/\/+$/, "");
+  if (raw === "" || raw === "/") return "home";
+
+  // Strip the leading slash and accept the same string vocabulary
+  // the rest of the app uses for its `currentPage` state. Pages
+  // like "service-{cat}/{sub}" stay as one token.
+  const stripped = raw.replace(/^\//, "");
+
+  // Aliases — operators sometimes link to URLs the app doesn't
+  // emit but which clearly map to a known page.
+  if (stripped === "booking-history") return "my-bookings";
+
+  // /order/123 → order-123  (and similar /booking-confirmation/123)
+  const orderMatch = stripped.match(/^order\/(\d+)$/);
+  if (orderMatch) return `order-${orderMatch[1]}`;
+  const confMatch = stripped.match(/^booking-confirmation\/(\d+)$/);
+  if (confMatch) return `booking-confirmation-${confMatch[1]}`;
+
+  return stripped;
+}
+
 export default function App() {
   const [currentPage, setCurrentPage] = useState("home");
+  // Phase 2.5.1 — render gate. False until the URL has been parsed
+  // on mount (one tick). Prevents the Home flash on hard-refresh
+  // of any non-/ URL.
+  const [isRouteResolved, setIsRouteResolved] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      setIsRouteResolved(true);
+      return;
+    }
+    const initial = parsePageFromUrl(window.location);
+    if (initial !== "home") {
+      setCurrentPage(initial);
+    }
+    setIsRouteResolved(true);
+  }, []);
   const [estimateModal, setEstimateModal] = useState<{isOpen: boolean, isCorporate: boolean, initialService: string}>({
     isOpen: false,
     isCorporate: false,
@@ -137,9 +184,15 @@ export default function App() {
     }
   };
 
+  // Phase 2.5.1 — hold render until the initial URL parse has run.
+  // See parsePageFromUrl + the mount effect above for context.
+  if (!isRouteResolved) {
+    return <RouteResolutionLoader />;
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-white selection:bg-primary selection:text-white">
-      <Header 
+      <Header
         currentPage={currentPage} 
         setCurrentPage={setCurrentPage} 
         openEstimate={() => openEstimate(false)}
