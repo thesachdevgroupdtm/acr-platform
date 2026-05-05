@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import PageBanner from "../components/PageBanner";
 import BookingSidebar from "../components/BookingSidebar";
+import SmartMiniCart from "../components/SmartMiniCart";
 import VehicleReplaceModal from "../components/VehicleReplaceModal";
 import { useCart } from "../hooks/useCart";
 import { VehicleConflictError, type VehicleConflictDetails } from "../lib/errors";
@@ -342,28 +343,9 @@ export default function Services({ setCurrentPage }: ServicesProps) {
                   />
                 ))}
 
-              {/* Floating cart summary at the bottom */}
-              {count > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="bg-neutral-50 border border-border p-4 flex items-center justify-between gap-4"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <ShoppingCart className="w-5 h-5 text-primary shrink-0" />
-                    <p className="text-sm font-bold text-neutral-900 tracking-tighter truncate">
-                      {count} {count === 1 ? "service" : "services"} in your
-                      cart
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setCurrentPage("cart")}
-                    className="bg-primary text-white px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest hover:bg-primary-dark transition-colors flex items-center gap-2 shrink-0"
-                  >
-                    View Cart <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                </motion.div>
-              )}
+              {/* Phase 2.5.5 — mid-page cart summary strip removed per
+                  UX audit (D-2.5.5-2). Same role moved to the
+                  contextual SmartMiniCart in the right sidebar. */}
 
               {/* Trust strip */}
               <section className="bg-white border border-border p-6 sm:p-8 grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6 text-center">
@@ -375,7 +357,10 @@ export default function Services({ setCurrentPage }: ServicesProps) {
             </main>
 
             {/* ───── BOOKING SIDEBAR ───── */}
-            <aside className="order-1 lg:order-2">
+            <aside className="order-1 lg:order-2 space-y-5">
+              {/* Phase 2.5.5 — contextual mini-cart, sibling to the
+                  BookingSidebar (D-2.5.5-3). */}
+              <SmartMiniCart setCurrentPage={setCurrentPage} />
               <BookingSidebar
                 titleStart="EXPERIENCE THE BEST"
                 titleAccent="CAR SERVICES"

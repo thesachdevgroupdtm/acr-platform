@@ -30,6 +30,7 @@ import {
 } from "../data/businessData";
 import { useBrands, useModels, useFuels } from "../hooks/useVehicle";
 import PageBanner from "../components/PageBanner";
+import SmartMiniCart from "../components/SmartMiniCart";
 import VehicleReplaceModal from "../components/VehicleReplaceModal";
 import { useCart } from "../hooks/useCart";
 import { VehicleConflictError, type VehicleConflictDetails } from "../lib/errors";
@@ -603,6 +604,10 @@ export default function ServiceCategory({
             className="flex gap-1 sm:gap-2 overflow-x-auto"
             style={{ scrollbarWidth: "none" }}
           >
+            {/* Phase 2.5.5 — sub-nav is section-anchors only (D-2.5.5-1).
+                The previous "CART (N)" link was redundant with the
+                top-header cart icon and the contextual SmartMiniCart
+                in the right sidebar; removed per UX audit. */}
             {SECTION_NAV.map((s) => (
               <button
                 key={s.id}
@@ -616,14 +621,6 @@ export default function ServiceCategory({
                 {s.label}
               </button>
             ))}
-            {count > 0 && (
-              <button
-                onClick={() => setCurrentPage("cart")}
-                className="ml-auto flex items-center gap-2 text-[10px] sm:text-xs uppercase tracking-widest font-bold py-4 px-3 sm:px-5 text-primary whitespace-nowrap shrink-0"
-              >
-                <ShoppingCart className="w-4 h-4" /> Cart ({count})
-              </button>
-            )}
           </div>
         </div>
       </nav>
@@ -877,27 +874,11 @@ export default function ServiceCategory({
                   required. Final quote provided after vehicle inspection.
                 </p>
 
-                {count > 0 && pricesShown && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="mt-5 bg-neutral-50 border border-border p-4 flex items-center justify-between gap-4"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <ShoppingCart className="w-5 h-5 text-primary shrink-0" />
-                      <p className="text-sm font-bold text-neutral-900 tracking-tighter truncate">
-                        {count} {count === 1 ? "service" : "services"} in your
-                        cart
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => setCurrentPage("cart")}
-                      className="bg-primary text-white px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest hover:bg-primary-dark transition-colors flex items-center gap-2 shrink-0"
-                    >
-                      View Cart <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
-                  </motion.div>
-                )}
+                {/* Phase 2.5.5 — the mid-page "X service in your cart"
+                    strip lived here (D-2.5.5-2). Removed per UX audit;
+                    the contextual SmartMiniCart in the right sidebar
+                    now owns this surface, and the page flows directly
+                    from price-list to "Services Included". */}
               </section>
 
               {/* SERVICES INCLUDED */}
@@ -1132,6 +1113,11 @@ export default function ServiceCategory({
               className="order-1 lg:order-2 lg:sticky lg:self-start space-y-5"
               style={{ top: `${STICKY_OFFSET_PX + 60}px` }}
             >
+              {/* Phase 2.5.5 — contextual mini-cart, sibling to the
+                  Re-Check Prices card. Renders only when the cart has
+                  items (D-2.5.5-3). */}
+              <SmartMiniCart setCurrentPage={setCurrentPage} />
+
               <div className="bg-white p-5 sm:p-6 border border-border shadow-xl">
                 <h2 className="text-xl sm:text-2xl font-black uppercase tracking-tighter text-neutral-900 mb-1 leading-tight">
                   Experience The Best{" "}
@@ -1337,30 +1323,9 @@ export default function ServiceCategory({
                 </div>
               </div>
 
-              {/* CART SUMMARY card (only when items exist) */}
-              {count > 0 && (
-                <motion.button
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  onClick={() => setCurrentPage("cart")}
-                  className="w-full bg-white border border-primary p-4 flex items-center justify-between hover:bg-primary/5 transition-colors group"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="bg-primary/5 p-2">
-                      <ShoppingCart className="w-5 h-5 text-primary" />
-                    </div>
-                    <div className="text-left">
-                      <p className="text-xs font-black uppercase text-neutral-900 tracking-tighter">
-                        View Cart
-                      </p>
-                      <p className="text-[10px] text-neutral-500">
-                        {count} {count === 1 ? "service" : "services"} added
-                      </p>
-                    </div>
-                  </div>
-                  <ArrowRight className="w-4 h-4 text-primary group-hover:translate-x-1 transition-transform" />
-                </motion.button>
-              )}
+              {/* Phase 2.5.5 — bottom-of-sidebar VIEW CART card removed
+                  per UX audit. SmartMiniCart at the top of this aside
+                  now owns the cart-summary role (D-2.5.5-3). */}
 
               {/* TRUST BADGES */}
               <div className="bg-white p-5 sm:p-6 border border-border shadow-xl">

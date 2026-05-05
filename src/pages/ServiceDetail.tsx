@@ -20,6 +20,7 @@ import {
   LOCATIONS,
 } from "../data/businessData";
 import PageBanner from "../components/PageBanner";
+import SmartMiniCart from "../components/SmartMiniCart";
 import VehicleReplaceModal from "../components/VehicleReplaceModal";
 import { useCart } from "../hooks/useCart";
 import { useBookingContext } from "../hooks/useBookingContext";
@@ -667,6 +668,11 @@ export default function ServiceDetail({
 
             {/* Sidebar */}
             <aside className="space-y-6 lg:sticky lg:top-32 lg:self-start">
+              {/* Phase 2.5.5 — contextual mini-cart, sibling to the
+                  booking context card. Renders only when the cart
+                  has items (D-2.5.5-3). */}
+              <SmartMiniCart setCurrentPage={setCurrentPage} />
+
               {/* Synced booking context card — shows the SAME details
                   the user already filled on the parent category page.
                   No re-asking for car / location / phone. */}
@@ -878,28 +884,9 @@ export default function ServiceDetail({
                 )}
               </div>
 
-              {/* Cart access — only when items exist */}
-              {count > 0 && (
-                <button
-                  onClick={() => setCurrentPage("cart")}
-                  className="w-full bg-white border border-primary p-4 flex items-center justify-between hover:bg-primary/5 transition-colors group"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="bg-primary/5 p-2">
-                      <ShoppingCart className="w-5 h-5 text-primary" />
-                    </div>
-                    <div className="text-left">
-                      <p className="text-xs font-black uppercase text-neutral-900 tracking-tighter">
-                        View Cart
-                      </p>
-                      <p className="text-[10px] text-neutral-500">
-                        {count} {count === 1 ? "service" : "services"} added
-                      </p>
-                    </div>
-                  </div>
-                  <ArrowRight className="w-4 h-4 text-primary group-hover:translate-x-1 transition-transform" />
-                </button>
-              )}
+              {/* Phase 2.5.5 — bottom-of-sidebar VIEW CART card removed
+                  per UX audit. SmartMiniCart at the top of this aside
+                  now owns the cart-summary role (D-2.5.5-3). */}
 
               {/* Trust badges */}
               <div className="bg-white p-5 sm:p-6 border border-border shadow-xl">
