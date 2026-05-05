@@ -27,6 +27,7 @@ import MyBookings from "./pages/MyBookings";
 import OrderDetail from "./pages/OrderDetail";
 import BookingConfirmation from "./pages/BookingConfirmation";
 import NotFound from "./pages/NotFound";
+import Testimonials from "./pages/Testimonials";
 import EstimateProcess from "./components/EstimateProcess";
 import AuthModal from "./components/AuthModal";
 import SessionExpiredToast from "./components/SessionExpiredToast";
@@ -285,6 +286,8 @@ export default function App() {
       // hits on /payment fall through to the default Home route.
       case "my-bookings":
         return <MyBookings setCurrentPage={navigateTo} openAuth={openAuth} />;
+      case "testimonials":
+        return <Testimonials setCurrentPage={navigateTo} />;
       case "not-found":
         return <NotFound setCurrentPage={navigateTo} />;
       default:

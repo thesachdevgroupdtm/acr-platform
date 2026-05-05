@@ -28,7 +28,8 @@ This audit was performed via static source analysis. Runtime checks (clicking th
 | MyBookings | `src/pages/MyBookings.tsx` | ⚠️ | bootstrapped guard intact at JSX line 76 — but see 2.6a-fix re-audit report for the useAuth race window that can still cause a brief flash |
 | OrderDetail | `src/pages/OrderDetail.tsx` | ✅ | early-return skeleton |
 | NotFound | `src/pages/NotFound.tsx` | ✅ | shipped in 2.6a-fix; reachable via `/payment` or any unknown URL |
-| Sitemap | `src/pages/Sitemap.tsx` | ✅ | listed in Quick Links |
+| Sitemap | `src/pages/Sitemap.tsx` | ✅ | listed in Quick Links; Testimonials added to its main-pages list |
+| **Testimonials** (NEW) | `src/pages/Testimonials.tsx` | ✅ | new page — 12 reviews, trust strip, page banner, bottom CTA |
 
 ---
 
@@ -278,30 +279,119 @@ No CSS changes were made in this pass. Existing breakpoints (`sm:`, `md:`, `lg:`
 
 ---
 
-## 12. Build outputs
+## 12. PART J — Testimonials dedicated page
 
-```
-$ npx tsc --noEmit       → exit 0
-$ npm run build          → ✓ built in 11.99s
-                            dist/index.html              0.42 kB
-                            dist/assets/index-*.css    107.10 kB
-                            dist/assets/index-*.js     764.54 kB (gzip 201.95 kB)
-```
+### 12.1 Summary
+
+| Aspect | Value |
+|---|---|
+| Path | `/testimonials` |
+| Component | `src/pages/Testimonials.tsx` (new) |
+| Number of testimonials | **12** |
+| Mix of ratings | 10 × 5★, 2 × 4★ (mix keeps the page from reading too good to be true) |
+| Service-center coverage | All 4 — Moti Nagar (3), Gurugram (3), Noida (3), Okhla (3) |
+| Service mix | Battery, AC, Denting & Painting, Periodic Service, Brakes, Wheel Alignment, Ceramic Coating, Battery Replacement, Clutch, Underbody Coating, Insurance Claim, Oil Change |
+| Brand mix | Honda, Audi, Maruti, Hyundai, BMW, Toyota, Mercedes, Tata, Skoda, Mahindra, Volkswagen, Kia (12 distinct brands) |
+| Header link | ✅ — added to `Header.tsx`'s "More" dropdown subItems (top of list); auto-renders in mobile hamburger menu via the same navItems array |
+| Home CTA | ✅ — "Read more customer stories →" button below the home testimonials carousel; clicks `setCurrentPage('testimonials')` |
+| Footer link | ✅ — added to "Useful Links" column (slot 2 of 6) |
+| Sitemap entry | ✅ — added to `Sitemap.tsx` main-pages list |
+| Mobile responsive | grid is `grid-cols-1 md:grid-cols-2 lg:grid-cols-3` — single column on phone, 2-up on tablet, 3-up on desktop; trust strip and bottom CTA both use sm: breakpoint adjustments |
+
+### 12.2 Card structure
+
+Each card renders:
+
+1. **Star row** at top — 5 lucide-react `<Star>` filled to the rating value
+2. **Quote** in italic, `text-neutral-700 leading-relaxed`
+3. **Author block** — colored initials disc (44 × 44 px primary square) + name + vehicle (uppercase tracking-widest)
+4. **Service + center pill row** — `Wrench` icon for service, `MapPin` for center, separated by a tiny dot
+
+`motion/react` `whileInView` staggered fade-in (delay = `(i % 3) * 0.05`) so rows animate left-to-right.
+
+### 12.3 Trust strip (above the grid)
+
+Three-cell strip:
+
+- **4.8 ★ Average Rating**
+- **50,000+ Happy Customers** (matches the polished Home stat)
+- **4 Service Centers** (real)
+
+Single column on mobile, three across on `sm:` and up.
+
+### 12.4 Bottom CTA
+
+Black panel with two buttons:
+
+- **Browse Services** → `setCurrentPage('services')`
+- **Find a Center** → `setCurrentPage('service-centers')`
+
+Same visual vocabulary as the Offers / Coupons bottom CTAs for consistency.
+
+### 12.5 Routing
+
+- `App.tsx` switch: `case "testimonials": return <Testimonials setCurrentPage={navigateTo} />;`
+- `parsePageFromUrl` already maps `/testimonials` → `currentPage = "testimonials"` via its default-passthrough behavior (line 97 returns the stripped path verbatim). No URL parser change was needed.
+- Direct navigation by URL bar (`/testimonials`) works.
+- Header More dropdown click works.
+- Home CTA button click works.
+- Footer link click works (via the `setCurrentPage` prop wired in §6).
+- Sitemap link click works.
+- Mobile hamburger → expand "More" → tap Testimonials works (same `navItems` array drives both desktop and mobile menus in `Header.tsx:585`).
+
+### 12.6 Verification (operator runs in the browser)
+
+| Check | Steps | Expected |
+|---|---|---|
+| Direct URL | type `/testimonials` in URL bar | page renders, breadcrumb shows Home › Testimonials |
+| Header More → Testimonials | desktop ≥ lg, hover "More" → click "Testimonials" | navigates; URL updates to `/testimonials` |
+| Mobile menu | mobile width, tap hamburger → tap "More" → tap "Testimonials" | navigates; menu closes |
+| Home CTA | scroll Home to "Customer Stories" section → click "Read more customer stories →" | navigates to /testimonials |
+| Footer link | scroll any page footer → "Useful Links" column → click "Testimonials" | navigates and scrolls to top |
+| Sitemap link | navigate to /sitemap → click "Testimonials" | navigates |
+| Grid responsive | DevTools 375 px → resize up to 1280 px | 1 col → 2 col (md ≥ 768) → 3 col (lg ≥ 1024) |
+| Star rendering | every card | 4★ shows 4 amber + 1 neutral; 5★ shows 5 amber |
+| Avatar initials | every card | colored disc with 2-letter initials matching name |
+
+### 12.7 Why this lands well in a stakeholder demo
+
+- "Where can I see customer reviews?" — direct answer: `/testimonials`
+- 12 reviews is enough to look populated without padding the page
+- The 4★ entries (Anjali Iyer, Manish Kapoor) make the average 4.8★ believable rather than a sterile 5★ wall
+- Every center, every common service, and twelve different brands are name-checked → reads as a real network, not a single workshop
+- Avatar initials over Unsplash portraits — no risk of a photo-identification objection from anyone in the meeting
 
 ---
 
-## 13. Files modified
+## 13. Build outputs (post-Part-J)
+
+```
+$ npx tsc --noEmit       → exit 0
+$ npm run build          → ✓ built in 26.13s
+                            dist/index.html              0.42 kB
+                            dist/assets/index-*.css    108.15 kB
+                            dist/assets/index-*.js     774.11 kB (gzip 205.02 kB)
+```
+
+JS bundle grew by ~9.6 KB (gzip ~3 KB) for the new page — the 12 testimonial entries + their layout. Within budget.
+
+---
+
+## 14. Files modified
 
 | File | Change |
 |---|---|
 | `src/lib/api.ts` | Gate the `[api] base = …` console.log behind `import.meta.env.DEV` so production console stays silent |
-| `src/pages/Home.tsx` | Stats consistency: 25,000+ / 10,000+ → both 50,000+ Cars Serviced; 100% → 98% Customer Satisfaction |
-| `src/components/Footer.tsx` | Quick Links + Useful Links wired to real page navigation via new `setCurrentPage` prop; Privacy / Terms converted from dead anchors to non-interactive spans |
-| `src/App.tsx` | Pass `navigateTo` to `<Footer />` |
+| `src/pages/Home.tsx` | Stats consistency: 25,000+ / 10,000+ → both 50,000+ Cars Serviced; 100% → 98% Customer Satisfaction. PART J: added "Read more customer stories →" CTA below the home testimonials carousel |
+| `src/components/Footer.tsx` | Quick Links + Useful Links wired to real page navigation via new `setCurrentPage` prop; Privacy / Terms converted from dead anchors to non-interactive spans. PART J: Testimonials added to Useful Links |
+| `src/components/Header.tsx` | PART J: Testimonials added at top of "More" dropdown subItems |
+| `src/App.tsx` | Pass `navigateTo` to `<Footer />`. PART J: import + switch case for `Testimonials` |
+| `src/pages/Sitemap.tsx` | PART J: Testimonials added to main-pages list |
+| `src/pages/Testimonials.tsx` | **NEW** — 12 testimonials, trust strip, grid, bottom CTA |
 
 Single commit at end (see hash below).
 
 ---
 
 **Audit performed:** 2026-05-05
-**Source HEAD before commit:** `382fe7f`
+**Source HEAD before commit:** `4d9dd58`

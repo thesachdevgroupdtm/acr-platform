@@ -985,6 +985,17 @@ export default function Home({ setCurrentPage, openEstimate }: HomeProps) {
               </div>
             </div>
           </div>
+
+          {/* Demo-readiness — link to dedicated /testimonials page. */}
+          <div className="mt-10 flex justify-center">
+            <button
+              onClick={() => setCurrentPage("testimonials")}
+              className="text-xs font-bold uppercase tracking-widest text-primary hover:underline inline-flex items-center gap-1.5"
+            >
+              Read more customer stories
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
       </section>
 

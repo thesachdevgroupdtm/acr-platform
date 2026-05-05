@@ -22,6 +22,7 @@ const QUICK_LINKS: Array<{ label: string; page: string }> = [
 
 const USEFUL_LINKS: Array<{ label: string; page: string }> = [
   { label: "Service Centers",     page: "service-centers" },
+  { label: "Testimonials",        page: "testimonials" },
   { label: "Offers & Discounts",  page: "offers" },
   { label: "Corporate Tie-ups",   page: "corporate" },
   { label: "Coupons",             page: "coupons" },

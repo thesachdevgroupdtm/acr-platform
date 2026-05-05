@@ -44,7 +44,7 @@ export default function Sitemap({ setCurrentPage }: SitemapProps) {
             <div>
               <h3 className="text-xl font-black uppercase text-primary-dark mb-6 border-b border-border pb-4">Main Pages</h3>
               <ul className="space-y-4">
-                {["Home", "Services", "Service Centers", "Insurance", "Corporate", "Gallery", "About", "Contact", "Offers", "Coupons"].map(page => (
+                {["Home", "Services", "Service Centers", "Insurance", "Corporate", "Gallery", "About", "Contact", "Offers", "Coupons", "Testimonials"].map(page => (
                   <li key={page}>
                     <button
                       onClick={() => setCurrentPage(page.toLowerCase().replace(' ', '-'))}

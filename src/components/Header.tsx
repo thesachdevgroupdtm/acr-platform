@@ -149,11 +149,12 @@ export default function Header({ currentPage, setCurrentPage, openEstimate, open
     { name: "Insurance", id: "insurance" },
     { name: "Corporate", id: "corporate" },
     { name: "Gallery", id: "gallery" },
-    { 
-      name: "More", 
-      id: "more", 
+    {
+      name: "More",
+      id: "more",
       hasDropdown: true,
       subItems: [
+        { name: "Testimonials", id: "testimonials" },
         { name: "Offers & Deals", id: "offers" },
         { name: "Coupons", id: "coupons" },
         { name: "SEO Page Preview", id: "cms-preview" },
