@@ -1,3 +1,4 @@
+import type * as React from "react";
 import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -29,6 +30,7 @@ import {
   LOCATIONS,
 } from "../data/businessData";
 import { useBrands, useModels, useFuels } from "../hooks/useVehicle";
+import { useSubNavSync } from "../hooks/useSubNavSync";
 import PageBanner from "../components/PageBanner";
 import VehicleReplaceModal from "../components/VehicleReplaceModal";
 import { useCart } from "../hooks/useCart";
@@ -140,8 +142,21 @@ export default function ServiceCategory({
   // ---------- Auth (drives phone prefill + OTP skip) ----------
   const { user, isAuthenticated } = useAuth();
 
-  // ---------- Section nav scroll spy ----------
-  const [activeSection, setActiveSection] = useState<string>("overview");
+  // ---------- Section nav scroll spy (Phase 2.5.6) ----------
+  // useSubNavSync handles IntersectionObserver scroll-spy AND
+  // auto-horizontal-scroll of the sub-nav so the active link
+  // stays visible. SECTION_NAV is a stable const, so the section
+  // ids list is also stable.
+  const sectionIds = useMemo(() => SECTION_NAV.map((s) => s.id), []);
+  const {
+    activeSection,
+    setActiveSection,
+    scrollToSection,
+    navRef: subNavRef,
+  } = useSubNavSync({
+    sectionIds,
+    stickyOffsetPx: STICKY_OFFSET_PX,
+  });
 
   // ---------- Shared booking context (syncs with ServiceDetail child page) ----------
   // The user fills location/car/phone ONCE here on the parent category page
@@ -203,24 +218,12 @@ export default function ServiceCategory({
   const apiModelRows = modelsQuery.data?.models ?? [];
   const apiFuelRows  = fuelsQuery.data?.fuels   ?? [];
 
-  // ---------- Section nav scroll spy ----------
+  // ---------- Section nav scroll spy (moved into useSubNavSync) ----------
+  // Re-bind active to "overview" when navigating between categories
+  // so the underline doesn't carry over from the prior page.
   useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((e) => e.isIntersecting)
-          .sort(
-            (a, b) => a.boundingClientRect.top - b.boundingClientRect.top
-          );
-        if (visible[0]) setActiveSection(visible[0].target.id);
-      },
-      { rootMargin: "-30% 0px -60% 0px", threshold: 0 }
-    );
-    SECTION_NAV.forEach((s) => {
-      const el = document.getElementById(s.id);
-      if (el) observer.observe(el);
-    });
-    return () => observer.disconnect();
+    setActiveSection("overview");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [categorySlug]);
 
   // ---------- Pre-verify booking card for logged-in users ----------
@@ -298,13 +301,7 @@ export default function ServiceCategory({
   // rendering branches handle skeletons explicitly.
   const brandList = apiBrandRows.map((b) => b.title);
 
-  const scrollToSection = (id: string) => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    const top =
-      el.getBoundingClientRect().top + window.scrollY - (STICKY_OFFSET_PX + 60);
-    window.scrollTo({ top, behavior: "smooth" });
-  };
+  // scrollToSection now provided by useSubNavSync above.
 
   // ---------- Add-to-cart handler with brief flash feedback ----------
   const handleAddToCart = async (sub: ApiSubService) => {
@@ -600,6 +597,7 @@ export default function ServiceCategory({
       >
         <div className="site-container">
           <div
+            ref={subNavRef as React.RefObject<HTMLDivElement>}
             className="flex gap-1 sm:gap-2 overflow-x-auto"
             style={{ scrollbarWidth: "none" }}
           >
@@ -610,6 +608,7 @@ export default function ServiceCategory({
             {SECTION_NAV.map((s) => (
               <button
                 key={s.id}
+                data-subnav-link={s.id}
                 onClick={() => scrollToSection(s.id)}
                 className={`text-[10px] sm:text-xs uppercase tracking-widest font-bold py-4 px-3 sm:px-5 whitespace-nowrap border-b-2 transition-colors shrink-0 ${
                   activeSection === s.id

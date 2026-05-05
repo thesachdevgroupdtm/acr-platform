@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type * as React from "react";
 import { motion } from "motion/react";
 import {
@@ -25,6 +25,7 @@ import {
 } from "../lib/api";
 import { useApiQuery } from "../hooks/useApiQuery";
 import { usePricingFor } from "../hooks/usePricing";
+import { useSubNavSync } from "../hooks/useSubNavSync";
 
 interface ServicesProps {
   setCurrentPage: (page: string) => void;
@@ -59,46 +60,21 @@ export default function Services({ setCurrentPage }: ServicesProps) {
     servicesQuery.data?.categories ?? [];
   const isLoadingCategories = servicesQuery.isLoading;
 
-  // Active section for the sticky horizontal nav
-  const [activeSection, setActiveSection] = useState<string>("");
+  // ---------- Sub-nav sync (Phase 2.5.6) ----------
+  // IntersectionObserver-driven scroll-spy + auto-scroll the
+  // horizontal sub-nav so the active link stays visible when the
+  // page scrolls past categories that are off-screen in the nav.
+  // See src/hooks/useSubNavSync.ts.
+  const sectionIds = useMemo(
+    () => apiCategories.map((c) => c.slug),
+    [apiCategories],
+  );
+  const { activeSection, scrollToSection, navRef } = useSubNavSync({
+    sectionIds,
+    stickyOffsetPx: SECTION_NAV_OFFSET_PX,
+  });
+
   const [addedFlash, setAddedFlash] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!activeSection && apiCategories.length > 0) {
-      setActiveSection(apiCategories[0].slug);
-    }
-  }, [apiCategories, activeSection]);
-
-  // ---------- Section scroll-spy (binds once categories arrive) ----------
-  useEffect(() => {
-    if (apiCategories.length === 0) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((e) => e.isIntersecting)
-          .sort(
-            (a, b) => a.boundingClientRect.top - b.boundingClientRect.top
-          );
-        if (visible[0]) setActiveSection(visible[0].target.id);
-      },
-      { rootMargin: "-30% 0px -60% 0px", threshold: 0 }
-    );
-    apiCategories.forEach((c) => {
-      const el = document.getElementById(c.slug);
-      if (el) observer.observe(el);
-    });
-    return () => observer.disconnect();
-  }, [apiCategories]);
-
-  // ---------- Helpers ----------
-  const scrollToSection = (slug: string) => {
-    const el = document.getElementById(slug);
-    if (!el) return;
-    const top =
-      el.getBoundingClientRect().top + window.scrollY - (SECTION_NAV_OFFSET_PX + 60);
-    window.scrollTo({ top, behavior: "smooth" });
-    setActiveSection(slug);
-  };
 
   // Set of category IDs that have at least one priced service for the
   // current vehicle. Comes from /services' `available_category_ids`,
@@ -199,6 +175,7 @@ export default function Services({ setCurrentPage }: ServicesProps) {
       >
         <div className="site-container">
           <div
+            ref={navRef as React.RefObject<HTMLDivElement>}
             className="flex gap-1 sm:gap-2 overflow-x-auto"
             style={{ scrollbarWidth: "none" }}
           >
@@ -212,6 +189,7 @@ export default function Services({ setCurrentPage }: ServicesProps) {
               : apiCategories.map((c) => (
                   <button
                     key={c.id}
+                    data-subnav-link={c.slug}
                     onClick={() => scrollToSection(c.slug)}
                     className={`text-[10px] sm:text-xs uppercase tracking-widest font-bold py-4 px-3 sm:px-5 whitespace-nowrap border-b-2 transition-colors shrink-0 ${
                       activeSection === c.slug
