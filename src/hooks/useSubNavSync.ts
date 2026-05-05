@@ -81,7 +81,23 @@ interface UseSubNavSyncResult {
   navRef: RefObject<HTMLElement | null>;
 }
 
-const ROOT_MARGIN = "-15% 0px -55% 0px"; // 30%-tall band, upper-middle viewport
+// Phase 2.5.10 — activation timing tuning. The activation line —
+// where a section becomes "active" as the user scrolls down —
+// moved from 15% to 25% of viewport height so the heading
+// activates while it's still comfortably in the user's upper-third
+// reading zone, NOT after it has nearly scrolled off the top.
+//
+// Operator's pre-2.5.10 symptom: "I'm clearly reading the section
+// but the sub-nav still says the previous one."
+//
+// The two constants are derived from each other: ROOT_MARGIN's
+// top inset (in %) drives the activation line at runtime
+// (`window.innerHeight * ACTIVATION_LINE_RATIO`). Always tune
+// them together.
+const ROOT_MARGIN_TOP_PCT = 25;       // 2.5.10: was 15
+const ROOT_MARGIN_BOTTOM_PCT = 50;    // 2.5.10: was 55
+const ROOT_MARGIN = `-${ROOT_MARGIN_TOP_PCT}% 0px -${ROOT_MARGIN_BOTTOM_PCT}% 0px`;
+const ACTIVATION_LINE_RATIO = ROOT_MARGIN_TOP_PCT / 100;
 
 export function useSubNavSync({
   stickyOffsetPx,
@@ -160,7 +176,7 @@ export function useSubNavSync({
         // 3. Activation line at 15% of viewport (matches rootMargin
         //    top inset). Sections whose top has crossed the line
         //    going up are "passed".
-        const activationLine = window.innerHeight * 0.15;
+        const activationLine = window.innerHeight * ACTIVATION_LINE_RATIO;
         const passed = measured.filter((m) => m.top <= activationLine);
 
         // 4. Pick the most-recently-passed section (largest top
