@@ -1,6 +1,6 @@
 # Demo-readiness audit — Phase 2.6a polish pass
 
-This audit was performed via static source analysis. Runtime checks (clicking through every page in a live browser, watching the Network tab, mobile viewport spot-checks) require an operator-driven session — the relevant items are flagged "OPERATOR" below with the exact steps to run.
+This is a cumulative report covering three commits: `4d9dd58` (initial polish), `6621452` (Testimonials page), and the current commit (FAQ accordion fix). Static source analysis throughout. Runtime checks (clicking through every page in a live browser, watching the Network tab, mobile viewport spot-checks) require an operator-driven session — the relevant items are flagged "OPERATOR" below with the exact steps to run.
 
 ---
 
@@ -363,17 +363,130 @@ Same visual vocabulary as the Offers / Coupons bottom CTAs for consistency.
 
 ---
 
-## 13. Build outputs (post-Part-J)
+## 13. PART A — Site-wide FAQ accordion fix
+
+### 13.1 Audit findings (FAQ surfaces in the codebase)
+
+| Surface | File | Pre-fix render pattern | Bug |
+|---|---|---|---|
+| Service category page | `src/pages/ServiceCategory.tsx:1027–1041` | Always-visible cards (every Q + A rendered unconditionally) | No accordion at all — every answer permanently visible |
+| Service detail page | `src/pages/ServiceDetail.tsx:644–658` | Same — always-visible cards | Same |
+| CmsPage (SEO landing template) | `src/pages/CmsPage.tsx:369–390` | Chevron icon rendered + cursor-pointer styling, but answer rendered unconditionally underneath | Visual lie — chevron implied a toggle but nothing was wired |
+| Home page | `src/pages/Home.tsx:1227–1255` | Real accordion (single-open via `faqOpenIndex` state, motion height transition, chevron rotation) | **Initial state was `useState<number \| null>(0)`** — first FAQ opened on every page mount. Violates "all closed on load." |
+| Insurance page | `src/pages/Insurance.tsx:97–104` | "Have Questions?" CTA only — no FAQ items rendered | n/a (no items, nothing to fix) |
+
+### 13.2 Canonical behavior (now applied uniformly)
+
+- **All FAQs CLOSED on page load** — initial `openIndex = null`
+- **Click question** → that one opens; any previously-open one closes (single-open-at-a-time)
+- **Click open question** → toggles closed
+- **Chevron** rotates 180° + tints primary when open
+- **Smooth animation** via `motion/react` `<AnimatePresence initial={false}>` with `height: 0 → auto` + `opacity: 0 → 1`, 250ms `easeOut`
+
+### 13.3 New shared component — `src/components/FAQAccordion.tsx`
+
+```tsx
+export interface FAQItem { q: string; a: string; }
+
+interface FAQAccordionProps {
+  faqs: FAQItem[];
+  className?: string;  // defaults to "space-y-3"
+}
+
+export default function FAQAccordion({ faqs, className }: FAQAccordionProps) {
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const toggle = (i: number) =>
+    setOpenIndex((prev) => (prev === i ? null : i));
+
+  return (
+    <div className={className ?? "space-y-3"}>
+      {faqs.map((faq, i) => {
+        const isOpen = openIndex === i;
+        return (
+          <div className={`bg-white border ${isOpen ? "border-primary/40" : "border-border"}`}>
+            <button
+              onClick={() => toggle(i)}
+              aria-expanded={isOpen}
+              aria-controls={`faq-panel-${i}`}
+              className="w-full flex items-start gap-3 p-5 sm:p-6 text-left hover:bg-neutral-50"
+            >
+              <MessageSquare className="text-primary w-5 h-5 mt-0.5 shrink-0" />
+              <span className="flex-1 ...">{faq.q}</span>
+              <ChevronDown className={`... ${isOpen ? "rotate-180 text-primary" : ""}`} />
+            </button>
+            <AnimatePresence initial={false}>
+              {isOpen && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.25, ease: "easeOut" }}
+                  className="overflow-hidden"
+                >
+                  <p>{faq.a}</p>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+```
+
+Full file at `src/components/FAQAccordion.tsx` (97 lines).
+
+### 13.4 Pages migrated
+
+| Page | Change |
+|---|---|
+| `src/pages/ServiceCategory.tsx` | Replaced 15-line inline FAQ map with `<FAQAccordion faqs={faqs} />`. Local `MessageSquare` SVG helper at line 1661 deleted (was the icon for the inline rendering — FAQAccordion uses the lucide-react one). |
+| `src/pages/ServiceDetail.tsx` | Same — inline FAQ map → `<FAQAccordion faqs={faqs} />`. Local `MessageSquare` helper at line 1051 deleted. |
+| `src/pages/CmsPage.tsx` | Inline FAQ map (with the fake-chevron bug) replaced by `<FAQAccordion faqs={[…]} />` carrying the same 6 questions. `ChevronDown` removed from lucide imports — was unused after migration. |
+| `src/pages/Home.tsx` | Kept the page's bespoke FAQ rendering (different visual treatment, no MessageSquare). Single-line fix: `useState<number \| null>(0)` → `useState<number \| null>(null)` so all 3 home FAQs default-closed. |
+
+The home page's FAQ block stays out of the shared component because its visual treatment differs (no icon, different border vocabulary, fits the home-page flow). Migrating it would force a visual change that's outside the scope of "fix the bug." Behavior is now the same across all four surfaces.
+
+### 13.5 Verification (operator runs)
+
+| Check | Steps | Expected |
+|---|---|---|
+| Hard-refresh + all-closed | `/category/car-battery` hard-refresh → scroll to "Common Questions" | every FAQ collapsed; chevrons all point down |
+| Open first | click first question | smooth height expand + opacity fade-in; chevron rotates 180° + turns primary |
+| Single-open | click second while first is open | first collapses, second opens — only one open at a time |
+| Toggle close | click open question | collapses; chevron rotates back |
+| Same on /services/{cat}/{sub} | repeat above on a service detail page | identical behavior |
+| Home page FAQ | hard-refresh `/` → scroll to "Frequently Asked" | **all** three closed (was: first was open by default) |
+| CmsPage | navigate to a CMS page (`/cms-preview`) | 6 FAQs all closed; chevrons rotate on click; only one opens at a time |
+| Mobile touch | DevTools mobile mode → tap a FAQ | same toggle behavior on touch as on click |
+| Keyboard / a11y | `Tab` to FAQ button → `Enter` | toggles; `aria-expanded` reflects state |
+
+### 13.6 Files in PART A
+
+| File | Change |
+|---|---|
+| `src/components/FAQAccordion.tsx` | **NEW** — shared accordion component |
+| `src/pages/ServiceCategory.tsx` | inline FAQ map → `<FAQAccordion>`; local MessageSquare helper deleted |
+| `src/pages/ServiceDetail.tsx` | inline FAQ map → `<FAQAccordion>`; local MessageSquare helper deleted |
+| `src/pages/CmsPage.tsx` | inline FAQ map → `<FAQAccordion>`; unused ChevronDown import dropped |
+| `src/pages/Home.tsx` | `useState(0)` → `useState(null)` so all FAQs default-closed |
+
+---
+
+## 14. Build outputs (post-PART-A)
 
 ```
 $ npx tsc --noEmit       → exit 0
-$ npm run build          → ✓ built in 26.13s
+$ npm run build          → ✓ built in 13.43s
                             dist/index.html              0.42 kB
-                            dist/assets/index-*.css    108.15 kB
-                            dist/assets/index-*.js     774.11 kB (gzip 205.02 kB)
+                            dist/assets/index-*.css    108.30 kB
+                            dist/assets/index-*.js     773.19 kB (gzip 204.89 kB)
 ```
 
-JS bundle grew by ~9.6 KB (gzip ~3 KB) for the new page — the 12 testimonial entries + their layout. Within budget.
+JS bundle slightly smaller than the prior `6621452` build (-0.92 KB) — replacing three inline FAQ implementations with a shared component removed enough duplication to offset the new component's footprint.
+
+Cumulative bundle since `4d9dd58`: +12 KB JS / +3 KB gzip total for the testimonials page + FAQ component.
 
 ---
 
@@ -388,10 +501,27 @@ JS bundle grew by ~9.6 KB (gzip ~3 KB) for the new page — the 12 testimonial e
 | `src/App.tsx` | Pass `navigateTo` to `<Footer />`. PART J: import + switch case for `Testimonials` |
 | `src/pages/Sitemap.tsx` | PART J: Testimonials added to main-pages list |
 | `src/pages/Testimonials.tsx` | **NEW** — 12 testimonials, trust strip, grid, bottom CTA |
+| `src/components/FAQAccordion.tsx` | **NEW** (PART A) — shared accordion: default-closed, single-open, motion height transition |
+| `src/pages/Home.tsx` | (PART A) FAQ initial state `0` → `null` so all closed on load |
+| `src/pages/CmsPage.tsx` | (PART A) inline always-visible FAQ map → `<FAQAccordion>`; ChevronDown import dropped |
 
-Single commit at end (see hash below).
+Single commit per phase. Three commits cumulative:
+- `4d9dd58` — initial demo-readiness polish
+- `6621452` — Testimonials page + integration
+- (current) — site-wide FAQ accordion fix
+
+---
+
+## 15. Things still imperfect (operator pre-demo awareness)
+
+1. **`useAuth.ts` bootstrap microtask race** — see `PHASE2_6A_FIX_REPORT.md §4`. Page guards are intact but a transient `bootstrapped=true && user=null` render is theoretically possible under React's batching corner cases. Workaround: hard-refresh `/booking-history` once before the meeting to warm the cache.
+2. **Sub-nav scrollspy timing** — Phase 2.5.10 deferred. Active-section indicator may lag by half a section on fast scroll. Not blocking demo.
+3. **Single-bundle JS (773 KB / 205 KB gzip)** — Vite warns >500 KB. Code-splitting is a Phase 2.6b concern, not a demo concern.
+4. **Privacy / Terms pages don't exist** — footer labels are non-interactive spans (already addressed in `4d9dd58`).
+5. **Backend admin panel not built** — Phase 4. If a stakeholder asks "where do we manage coupons / orders," the answer is "Phase 4 ships the operator dashboard."
+6. **Backend demo-data seed not auto-run** — operator must run the tinker snippet in §8 of this report before the meeting. If skipped, MyBookings on a fresh demo user is empty (still functional, just less compelling visually).
 
 ---
 
 **Audit performed:** 2026-05-05
-**Source HEAD before commit:** `4d9dd58`
+**Source HEAD before commit:** `6621452`

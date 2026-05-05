@@ -1,9 +1,10 @@
 import React, { useState } from "react";
 import { motion } from "motion/react";
 import PageBanner from "../components/PageBanner";
+import FAQAccordion from "../components/FAQAccordion";
 import { 
   CheckCircle2, ArrowRight, Phone, MessageCircle, HelpCircle, Star, 
-  MapPin, Shield, Zap, Award, Wrench, ThumbsUp, ChevronDown, Loader2
+  MapPin, Shield, Zap, Award, Wrench, ThumbsUp, Loader2
 } from "lucide-react";
 
 interface CmsPageProps {
@@ -366,28 +367,16 @@ export default function CmsPage({ setCurrentPage }: CmsPageProps) {
             </h2>
           </div>
           
-          <div className="space-y-4">
-            {[
+          <FAQAccordion
+            faqs={[
               { q: "Is my Volvo warranty valid if serviced here?", a: "We use 100% Genuine OEM parts and manufacturer-approved synthetic oils, ensuring your factory warranty remains unaffected as per the 'Right to Repair' guidelines." },
               { q: "Do you use authentic Volvo diagnostic software?", a: "Yes, we exclusively use VIDA diagnostic systems specifically designed for comprehensive Volvo scanning, programming, and fault finding." },
               { q: "How much time does a routine service take?", a: "A standard periodic maintenance service takes around 4-5 hours. We recommend booking an appointment to ensure zero waiting time." },
               { q: "Do you offer pick up and drop facilities?", a: "Yes, we offer complimentary pick up and drop services across major locations in Delhi NCR for scheduled maintenance and major repairs." },
               { q: "Is a cashless insurance facility available?", a: "We have tie-ups with all major private and PSU insurance companies providing hassle-free, cashless claim processing." },
-              { q: "Can I just drop by for a quick checkup?", a: "While we highly recommend booking in advance to minimize waiting, walk-ins for minor issues and quick diagnoses are always welcome." }
-            ].map((faq: any, i: number) => (
-              <div key={i} className="bg-neutral-50 border border-border p-6 shadow-sm hover:border-primary/30 transition-colors">
-                 <div className="flex justify-between items-center cursor-pointer group">
-                    <h3 className="text-sm md:text-base font-black text-neutral-900 uppercase tracking-tight pr-8 group-hover:text-primary transition-colors">
-                       {faq.q}
-                    </h3>
-                    <ChevronDown className="w-5 h-5 text-neutral-400 shrink-0" />
-                 </div>
-                <p className="text-neutral-600 leading-relaxed font-medium mt-4 text-sm md:text-base">
-                  {faq.a}
-                </p>
-              </div>
-            ))}
-          </div>
+              { q: "Can I just drop by for a quick checkup?", a: "While we highly recommend booking in advance to minimize waiting, walk-ins for minor issues and quick diagnoses are always welcome." },
+            ]}
+          />
         </div>
       </section>
 

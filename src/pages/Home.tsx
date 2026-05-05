@@ -73,7 +73,10 @@ export default function Home({ setCurrentPage, openEstimate }: HomeProps) {
   const [isLocationHovered, setIsLocationHovered] = useState(false);
   const [activeLocationIndex, setActiveLocationIndex] = useState(0);
   const [expandedLocationIndex, setExpandedLocationIndex] = useState<number | null>(null);
-  const [faqOpenIndex, setFaqOpenIndex] = useState<number | null>(0);
+  // Demo-readiness — all FAQs default-closed on page load (was 0,
+  // which opened the first one). Matches the canonical accordion
+  // behavior used by the shared FAQAccordion on inner pages.
+  const [faqOpenIndex, setFaqOpenIndex] = useState<number | null>(null);
 
   const categories = ["All Services", ...serviceCategories.map(c => c.title)];
 
