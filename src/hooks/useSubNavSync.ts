@@ -1,88 +1,113 @@
 /**
- * useSubNavSync — Phase 2.5.6.
+ * useSubNavSync — Phase 2.5.6 + 2.5.7.
  *
  * Two-way sync between a sticky horizontal sub-nav and the page-body
- * sections it anchors to. Two responsibilities, one hook:
+ * sections it anchors to. Three responsibilities, one hook:
  *
- *   1. Scroll-spy: an IntersectionObserver watches each section in the
- *      page body. When a section's heading enters the upper-middle band
- *      of the viewport (rootMargin '-30% 0px -60% 0px'), it becomes the
- *      active section. The sub-nav reads `activeSection` to draw the
- *      blue underline on the current link.
+ *   1. Scroll-spy: an IntersectionObserver watches every element
+ *      in the page body that carries `data-subnav-section="{slug}"`.
+ *      When a section's heading enters the upper-middle band of the
+ *      viewport (rootMargin '-15% 0px -55% 0px'), it becomes the
+ *      active section. The sub-nav reads `activeSlug` to draw the
+ *      blue underline on the matching link.
  *
- *   2. Auto-scroll: when `activeSection` changes — whether from page
- *      scroll OR from a click handler — the active link in the sub-nav
- *      is scrolled into view via `scrollIntoView({ inline: 'center' })`.
- *      So if the user is reading section #10 of 12 and that link was
- *      off-screen in the horizontal nav, the nav scrolls itself to
- *      reveal the active link. Standard scrollspy-with-self-scroll
- *      pattern (Apple docs, Stripe docs, MDN sidebar).
+ *   2. Auto-scroll: when `activeSlug` changes — whether from page
+ *      scroll OR from the optimistic click setter — the active
+ *      link in the sub-nav is scrolled into view via
+ *      `scrollIntoView({ inline: 'center' })`. So if the user is
+ *      reading section #10 of 12 and that link was off-screen in
+ *      the horizontal nav, the nav scrolls itself to reveal it.
+ *      Standard scrollspy-with-self-scroll pattern.
  *
- * Sub-nav links MUST carry `data-subnav-link={sectionId}` for the
- * auto-scroll to find them. Sections in the page body are matched
- * via `document.getElementById(sectionId)` (existing convention on
- * Services.tsx and ServiceCategory.tsx).
+ *   3. Click-driven page scroll: `scrollToSection(slug)` smooth-
+ *      scrolls the page to a section, accounting for the sticky
+ *      chrome (header + this sub-nav). Pre-sets `activeSlug`
+ *      optimistically so the underline updates before the smooth
+ *      scroll completes. Click handlers should call this AND
+ *      preventDefault() on any anchor.
  *
- * The exposed `scrollToSection(id)` helper handles click-driven page
- * navigation: it smooth-scrolls the page to the section, accounting
- * for the sticky-header offset (default 60px on top of the caller's
- * `stickyOffsetPx`), and proactively sets `activeSection` so the UI
- * doesn't lag the IntersectionObserver fire.
+ * Sub-nav links MUST carry `data-subnav-link={slug}` so the
+ * auto-scroll can find them. Page-body sections MUST carry
+ * `data-subnav-section={slug}` so the observer can find them.
+ *
+ * Phase 2.5.7 — `rebindKey` is the most important parameter on
+ * routed pages that render a skeleton placeholder during data
+ * load. The IntersectionObserver effect runs once on mount; if
+ * the section nodes don't exist at that moment (skeleton-only
+ * first render), the observer registers nothing and stays dead
+ * for the lifetime of the component. The consumer must bump
+ * `rebindKey` when data arrives — typically via a token like
+ * `${slug}:${isLoading ? "loading" : "ready"}`.
  */
-import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 
 interface UseSubNavSyncOptions {
-  /** Slugs/ids of every page-body section the sub-nav anchors to.
-   *  Order matters only for the initial-active fallback; the observer
-   *  picks whichever is currently topmost-visible. */
-  sectionIds: string[];
-  /** Sticky-nav vertical offset for click-driven page scrolls. */
+  /** Sticky-chrome offset for click-driven page scrolls. The hook
+   *  scrolls to `top: section.top + scrollY - (stickyOffsetPx + 16)`
+   *  so the heading lands just below the sticky chrome with a
+   *  16px breathing-room. */
   stickyOffsetPx: number;
-  /** When true, auto-scroll the sub-nav to centre the active link.
-   *  Defaults to true; pages can opt out for testing. */
+  /** Auto-scroll the sub-nav to centre the active link. Defaults
+   *  to true; pages can opt out for testing. */
   autoScrollNav?: boolean;
-  /** Optional opaque token (commonly the URL slug or
-   *  `${cat}/${sub}` pair) that forces the IntersectionObserver to
-   *  re-bind whenever it changes. Necessary on routed pages whose
-   *  section DOM nodes get replaced on navigation but whose
-   *  sectionIds list stays the same — without this, the observer
-   *  watches detached nodes after navigation and the active state
-   *  never updates. */
+  /** Opaque token that forces the observer to re-bind whenever it
+   *  changes. Two cases need this:
+   *    - Routed pages whose section DOM gets replaced on
+   *      navigation (parent component reused, props changed).
+   *    - Pages with skeleton-first loading where the sections
+   *      only appear in the DOM after data arrives.
+   *  Compose with both: `${slug}:${isLoading ? 0 : 1}`. */
   rebindKey?: string | number | null;
 }
 
 interface UseSubNavSyncResult {
-  activeSection: string;
-  setActiveSection: (id: string) => void;
-  scrollToSection: (id: string) => void;
-  /** Attach to the <nav> element wrapping the sub-nav links. */
+  /** Currently active section slug; "" until the first observation. */
+  activeSlug: string;
+  /** Optimistic setter — call from click handlers so the underline
+   *  moves before the smooth scroll lands. The observer will
+   *  reconcile on the next intersection cycle. */
+  setActiveSlugManual: (slug: string) => void;
+  /** Click-driven page scroll. Use in onClick handlers in place of
+   *  raw scrollIntoView so the sticky-chrome offset is honoured. */
+  scrollToSection: (slug: string) => void;
+  /** Attach to the horizontally-scrolling container that holds the
+   *  sub-nav links (the element with `overflow-x-auto`). */
   navRef: RefObject<HTMLElement | null>;
 }
 
-const ROOT_MARGIN = "-30% 0px -60% 0px"; // upper-middle viewport band
+const ROOT_MARGIN = "-15% 0px -55% 0px"; // 30%-tall band, upper-middle viewport
 
 export function useSubNavSync({
-  sectionIds,
   stickyOffsetPx,
   autoScrollNav = true,
   rebindKey = null,
 }: UseSubNavSyncOptions): UseSubNavSyncResult {
-  const [activeSection, setActiveSection] = useState<string>("");
+  const [activeSlug, setActiveSlug] = useState<string>("");
   const navRef = useRef<HTMLElement | null>(null);
 
-  // Initial active fallback — first id wins when nothing has been
-  // observed yet. Run on every change to sectionIds so async data
-  // flows (e.g. Services.tsx loading categories from API) seed the
-  // active state once the list arrives.
+  /* ─────────── Scroll-spy ─────────── */
   useEffect(() => {
-    if (!activeSection && sectionIds.length > 0) {
-      setActiveSection(sectionIds[0]);
-    }
-  }, [sectionIds, activeSection]);
+    const sections = document.querySelectorAll<HTMLElement>(
+      "[data-subnav-section]",
+    );
+    if (sections.length === 0) return;
 
-  // Scroll-spy.
-  useEffect(() => {
-    if (sectionIds.length === 0) return;
+    // Initial-active fallback — first registered section wins until
+    // the observer's first callback overrides. Runs inside the IO
+    // effect (not a separate effect) so it only applies once
+    // sections actually exist in the DOM.
+    setActiveSlug((current) => {
+      if (current) return current;
+      const firstSlug = sections[0].getAttribute("data-subnav-section");
+      return firstSlug ?? "";
+    });
+
     const observer = new IntersectionObserver(
       (entries) => {
         const visible = entries
@@ -90,59 +115,57 @@ export function useSubNavSync({
           .sort(
             (a, b) => a.boundingClientRect.top - b.boundingClientRect.top,
           );
-        if (visible[0]) setActiveSection(visible[0].target.id);
+        if (visible[0]) {
+          const slug = visible[0].target.getAttribute("data-subnav-section");
+          if (slug) setActiveSlug(slug);
+        }
       },
-      { rootMargin: ROOT_MARGIN, threshold: 0 },
+      { rootMargin: ROOT_MARGIN, threshold: [0, 0.1] },
     );
-    sectionIds.forEach((id) => {
-      const el = document.getElementById(id);
-      if (el) observer.observe(el);
-    });
-    return () => observer.disconnect();
-    // Effect re-runs when:
-    //  - the slug list itself changes (page swaps to a different
-    //    set of anchors), OR
-    //  - rebindKey changes (caller signalled a DOM swap on a routed
-    //    page — see Phase 2.5.7 ServiceCategory / ServiceDetail).
-    // sectionIds object identity alone is unreliable as a dep
-    // because callers commonly memoise it with `[]`.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sectionIds.join("|"), rebindKey]);
 
-  // Auto-scroll the sub-nav so the active link stays visible.
+    sections.forEach((s) => observer.observe(s));
+    return () => observer.disconnect();
+  }, [rebindKey]);
+
+  /* ─────────── Optimistic click setter ─────────── */
+  const setActiveSlugManual = useCallback((slug: string) => {
+    setActiveSlug(slug);
+  }, []);
+
+  /* ─────────── Auto-scroll active link into nav ─────────── */
   useEffect(() => {
     if (!autoScrollNav) return;
-    if (!activeSection || !navRef.current) return;
+    if (!activeSlug || !navRef.current) return;
     const link = navRef.current.querySelector<HTMLElement>(
-      `[data-subnav-link="${CSS.escape(activeSection)}"]`,
+      `[data-subnav-link="${CSS.escape(activeSlug)}"]`,
     );
     if (!link) return;
-    // block: 'nearest' — never scrolls the page vertically (the nav is
-    // sticky and we don't want to fight the user's vertical scroll).
-    // inline: 'center' — centres the active link inside the nav's
-    // horizontal scroll container; if the link is already visible the
-    // browser typically no-ops. behavior: 'smooth' — animated.
+    // block: 'nearest' — never disturbs vertical page scroll.
+    // inline: 'center' — centres the active link in the nav viewport.
+    // behavior: 'smooth' — animated.
     link.scrollIntoView({
       behavior: "smooth",
       block: "nearest",
       inline: "center",
     });
-  }, [activeSection, autoScrollNav]);
+  }, [activeSlug, autoScrollNav]);
 
+  /* ─────────── Click-driven page scroll ─────────── */
   const scrollToSection = useCallback(
-    (id: string) => {
-      const el = document.getElementById(id);
+    (slug: string) => {
+      const el = document.querySelector<HTMLElement>(
+        `[data-subnav-section="${CSS.escape(slug)}"]`,
+      );
       if (!el) return;
+      // 16px breathing-room under the sticky chrome.
       const top =
-        el.getBoundingClientRect().top + window.scrollY - (stickyOffsetPx + 60);
+        el.getBoundingClientRect().top + window.scrollY - (stickyOffsetPx + 16);
       window.scrollTo({ top, behavior: "smooth" });
-      // Pre-set so the underline updates immediately rather than waiting
-      // for the IntersectionObserver to fire after the smooth scroll
-      // completes; the observer will re-confirm on its own.
-      setActiveSection(id);
+      // Optimistic — observer will reconcile when smooth-scroll settles.
+      setActiveSlug(slug);
     },
     [stickyOffsetPx],
   );
 
-  return { activeSection, setActiveSection, scrollToSection, navRef };
+  return { activeSlug, setActiveSlugManual, scrollToSection, navRef };
 }

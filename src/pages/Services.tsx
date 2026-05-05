@@ -69,18 +69,20 @@ export default function Services({ setCurrentPage }: ServicesProps) {
     servicesQuery.data?.categories ?? [];
   const isLoadingCategories = servicesQuery.isLoading;
 
-  // ---------- Sub-nav sync (Phase 2.5.6) ----------
+  // ---------- Sub-nav sync (Phase 2.5.6 + 2.5.7) ----------
   // IntersectionObserver-driven scroll-spy + auto-scroll the
-  // horizontal sub-nav so the active link stays visible when the
-  // page scrolls past categories that are off-screen in the nav.
+  // horizontal sub-nav. Sections in the page body are matched by
+  // `data-subnav-section` attribute (set in the JSX below).
+  // rebindKey toggles when categories arrive from the API so the
+  // observer rebinds on the now-rendered sections.
   // See src/hooks/useSubNavSync.ts.
-  const sectionIds = useMemo(
-    () => apiCategories.map((c) => c.slug),
-    [apiCategories],
-  );
-  const { activeSection, scrollToSection, navRef } = useSubNavSync({
-    sectionIds,
+  const {
+    activeSlug: activeSection,
+    scrollToSection,
+    navRef,
+  } = useSubNavSync({
     stickyOffsetPx: SECTION_NAV_OFFSET_PX,
+    rebindKey: `services:${apiCategories.length}`,
   });
 
   const [addedFlash, setAddedFlash] = useState<string | null>(null);
@@ -416,6 +418,7 @@ const CategorySection: React.FC<CategorySectionProps> = ({
   return (
     <section
       id={category.slug}
+      data-subnav-section={category.slug}
       data-section="pricing"
       className="scroll-mt-40"
     >

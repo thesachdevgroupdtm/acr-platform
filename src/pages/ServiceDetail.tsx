@@ -68,21 +68,6 @@ export default function ServiceDetail({
   const { state: booking } = useBookingContext();
   const { user, isAuthenticated } = useAuth();
 
-  // Phase 2.5.7 — in-page sub-nav scroll-spy + auto-scroll. The
-  // rebindKey ensures the IntersectionObserver re-binds whenever
-  // the user navigates between services (the section DOM nodes
-  // get replaced even though the slug list is constant).
-  const sectionIds = useMemo(() => SECTIONS.map((s) => s.id), []);
-  const {
-    activeSection,
-    scrollToSection,
-    navRef: subNavRef,
-  } = useSubNavSync({
-    sectionIds,
-    stickyOffsetPx: SECTION_NAV_OFFSET_PX,
-    rebindKey: `${categorySlug}/${serviceSlug}`,
-  });
-
   // ---------- API: service detail (skeleton-first) ----------
   const carIds = useMemo(
     () => ({
@@ -97,6 +82,21 @@ export default function ServiceDetail({
     (signal) =>
       fetchServiceDetail(categorySlug, serviceSlug, carIds, signal)
   );
+
+  // Phase 2.5.7 — in-page sub-nav scroll-spy + auto-scroll. The
+  // rebindKey composes the URL pair (so navigation between services
+  // re-binds) AND the loading state (so the observer re-binds when
+  // the page transitions from skeleton to loaded sections — without
+  // this, the observer registers nothing on first mount and stays
+  // dead, leaving the underline pinned to OVERVIEW forever).
+  const {
+    activeSlug: activeSection,
+    scrollToSection,
+    navRef: subNavRef,
+  } = useSubNavSync({
+    stickyOffsetPx: SECTION_NAV_OFFSET_PX,
+    rebindKey: `${categorySlug}/${serviceSlug}:${detailQuery.isLoading ? "loading" : "ready"}`,
+  });
 
   if (detailQuery.isLoading) {
     return (
@@ -407,6 +407,7 @@ export default function ServiceDetail({
               {/* OVERVIEW */}
               <section
                 id="overview"
+                data-subnav-section="overview"
                 className="bg-neutral-50 p-6 sm:p-8 border border-border scroll-mt-44"
               >
                 <h2 className="text-2xl sm:text-3xl uppercase font-black text-neutral-900 mb-5">
@@ -463,7 +464,7 @@ export default function ServiceDetail({
               </section>
 
               {/* SERVICES INCLUDED */}
-              <section id="included" className="scroll-mt-44">
+              <section id="included" data-subnav-section="included" className="scroll-mt-44">
                 <h2 className="text-2xl sm:text-3xl uppercase font-black text-neutral-900 mb-5">
                   SERVICES <span className="text-primary">INCLUDED.</span>
                 </h2>
@@ -521,7 +522,7 @@ export default function ServiceDetail({
               </section>
 
               {/* PROCESS */}
-              <section id="process" className="scroll-mt-44">
+              <section id="process" data-subnav-section="process" className="scroll-mt-44">
                 <h2 className="text-2xl sm:text-3xl uppercase font-black text-neutral-900 mb-5">
                   THE <span className="text-primary">PROCESS.</span>
                 </h2>
@@ -610,7 +611,7 @@ export default function ServiceDetail({
               </section>
 
               {/* FAQs */}
-              <section id="faqs" className="scroll-mt-44">
+              <section id="faqs" data-subnav-section="faqs" className="scroll-mt-44">
                 <h2 className="text-2xl sm:text-3xl uppercase font-black text-neutral-900 mb-5">
                   COMMON <span className="text-primary">QUESTIONS.</span>
                 </h2>
@@ -668,6 +669,7 @@ export default function ServiceDetail({
               {/* CUSTOMER REVIEWS */}
               <section
                 id="reviews"
+                data-subnav-section="reviews"
                 className="pt-12 border-t border-border scroll-mt-44"
               >
                 <h2 className="text-2xl sm:text-3xl uppercase font-black text-neutral-900 mb-5">

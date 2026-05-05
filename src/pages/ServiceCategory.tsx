@@ -144,26 +144,28 @@ export default function ServiceCategory({
   // ---------- Auth (drives phone prefill + OTP skip) ----------
   const { user, isAuthenticated } = useAuth();
 
-  // ---------- Section nav scroll spy (Phase 2.5.6) ----------
-  // useSubNavSync handles IntersectionObserver scroll-spy AND
-  // auto-horizontal-scroll of the sub-nav so the active link
-  // stays visible. SECTION_NAV is a stable const, so the section
-  // ids list is also stable.
-  const sectionIds = useMemo(() => SECTION_NAV.map((s) => s.id), []);
+  // ---------- Section nav scroll spy (Phase 2.5.7 hard-fix) ----------
+  // useSubNavSync queries `[data-subnav-section]` to find sections.
+  // The rebindKey combines the categorySlug AND the loading state
+  // so the IntersectionObserver re-binds:
+  //   - when the user navigates between categories (DOM nodes get
+  //     replaced even though slug list is unchanged), AND
+  //   - when the page transitions from skeleton to loaded content
+  //     (the `if (isLoadingDetail) return <Skeleton/>` early return
+  //     means sections don't exist on first mount — without
+  //     re-binding, the observer registers nothing and stays dead
+  //     for the lifetime of the component).
+  // The latter was the actual bug operator hit: the underline
+  // stayed on OVERVIEW because the observer never observed the
+  // real sections.
   const {
-    activeSection,
-    setActiveSection,
+    activeSlug: activeSection,
+    setActiveSlugManual,
     scrollToSection,
     navRef: subNavRef,
   } = useSubNavSync({
-    sectionIds,
     stickyOffsetPx: STICKY_OFFSET_PX,
-    // Phase 2.5.7 — rebind the observer when the user navigates
-    // between categories. Without this, the observer keeps watching
-    // the previous category's section nodes (now detached from DOM)
-    // and the active state never updates again — the bug operator
-    // reported as "stuck on OVERVIEW".
-    rebindKey: categorySlug,
+    rebindKey: `${categorySlug}:${detailQuery.isLoading ? "loading" : "ready"}`,
   });
 
   // ---------- Shared booking context (syncs with ServiceDetail child page) ----------
@@ -226,11 +228,12 @@ export default function ServiceCategory({
   const apiModelRows = modelsQuery.data?.models ?? [];
   const apiFuelRows  = fuelsQuery.data?.fuels   ?? [];
 
-  // ---------- Section nav scroll spy (moved into useSubNavSync) ----------
-  // Re-bind active to "overview" when navigating between categories
-  // so the underline doesn't carry over from the prior page.
+  // ---------- Section nav active reset on category navigation ----------
+  // When the user navigates between categories, snap the underline
+  // to OVERVIEW immediately — the IntersectionObserver will reconcile
+  // once the new sections render and observation kicks in.
   useEffect(() => {
-    setActiveSection("overview");
+    setActiveSlugManual("overview");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [categorySlug]);
 
@@ -639,6 +642,7 @@ export default function ServiceCategory({
               {/* OVERVIEW */}
               <section
                 id="overview"
+                data-subnav-section="overview"
                 className="bg-neutral-50 p-6 sm:p-8 border border-border scroll-mt-40"
               >
                 <h2 className="text-2xl sm:text-3xl uppercase font-black text-neutral-900 mb-5">
@@ -687,7 +691,7 @@ export default function ServiceCategory({
               </section>
 
               {/* PRICING TABLE — with Add to Cart per row */}
-              <section id="pricing" className="scroll-mt-40">
+              <section id="pricing" data-subnav-section="pricing" className="scroll-mt-40">
                 <div className="flex items-baseline justify-between flex-wrap gap-2 mb-2">
                   <h2 className="text-2xl sm:text-3xl uppercase font-black text-neutral-900">
                     {category.title}{" "}
@@ -888,7 +892,7 @@ export default function ServiceCategory({
               </section>
 
               {/* SERVICES INCLUDED */}
-              <section id="services" className="scroll-mt-40">
+              <section id="services" data-subnav-section="services" className="scroll-mt-40">
                 <h2 className="text-2xl sm:text-3xl uppercase font-black text-neutral-900 mb-5">
                   SERVICES <span className="text-primary">INCLUDED.</span>
                 </h2>
@@ -946,7 +950,7 @@ export default function ServiceCategory({
               </section>
 
               {/* PROCESS */}
-              <section id="process" className="scroll-mt-40">
+              <section id="process" data-subnav-section="process" className="scroll-mt-40">
                 <h2 className="text-2xl sm:text-3xl uppercase font-black text-neutral-900 mb-5">
                   HOW IT <span className="text-primary">WORKS.</span>
                 </h2>
@@ -979,7 +983,7 @@ export default function ServiceCategory({
               </section>
 
               {/* CUSTOMER REVIEWS */}
-              <section id="reviews" className="scroll-mt-40">
+              <section id="reviews" data-subnav-section="reviews" className="scroll-mt-40">
                 <h2 className="text-2xl sm:text-3xl uppercase font-black text-neutral-900 mb-5">
                   CUSTOMER <span className="text-primary">REVIEWS.</span>
                 </h2>
@@ -1011,7 +1015,7 @@ export default function ServiceCategory({
               </section>
 
               {/* FAQs */}
-              <section id="faqs" className="scroll-mt-40">
+              <section id="faqs" data-subnav-section="faqs" className="scroll-mt-40">
                 <h2 className="text-2xl sm:text-3xl uppercase font-black text-neutral-900 mb-5">
                   COMMON <span className="text-primary">QUESTIONS.</span>
                 </h2>
