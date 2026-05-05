@@ -12,25 +12,21 @@ interface HomeFAQItem {
 }
 
 /**
- * Home page FAQ section — premium variant.
+ * Home page FAQ section — premium variant v2.
  *
- * Why this is its own component instead of a `variant` prop on the
- * shared `FAQAccordion` (used by ServiceCategory / ServiceDetail /
- * CmsPage):
+ * v1 (commit eff2212) shipped a light card-on-gray treatment that
+ * read as flat / empty in operator review. v2 swaps the chrome
+ * for a full-bleed automotive workshop image + dark gradient
+ * overlay; FAQ cards land on top as frosted-glass while closed
+ * and snap to solid-white with a primary border when open.
  *
- *   - Home diverges enough (Q01/Q02… number badges instead of an
- *     icon, larger padding, primary-tinted hover and open states,
- *     section-level "Still have questions?" CTA strip) that a
- *     variant prop on FAQAccordion would clutter it with
- *     conditional branching.
- *   - FAQAccordion's contract is stable and consumed by three
- *     pages already; the demo-readiness brief explicitly forbade
- *     touching it.
- *
- * Behavior is identical to FAQAccordion — initial openIndex=null
- * (all closed on page load), single-open-at-a-time, motion height
- * + opacity transition, chevron rotation, aria-expanded /
- * aria-controls. Only the visual treatment differs.
+ * Constraints preserved from v1:
+ *   - Same six FAQ entries, verbatim, in the same order.
+ *   - Same accordion contract: openIndex starts null (all
+ *     closed), single-open-at-a-time, motion height + opacity
+ *     transition, chevron 180° rotation, aria-expanded /
+ *     aria-controls. Operator's behavior expectations don't shift
+ *     between v1 and v2 — only the surface treatment.
  */
 const HOME_FAQS: HomeFAQItem[] = [
   {
@@ -59,6 +55,9 @@ const HOME_FAQS: HomeFAQItem[] = [
   },
 ];
 
+const BG_IMAGE_URL =
+  "https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?auto=format&fit=crop&w=1920&q=80";
+
 export default function HomeFAQ({ setCurrentPage }: HomeFAQProps) {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
 
@@ -67,66 +66,91 @@ export default function HomeFAQ({ setCurrentPage }: HomeFAQProps) {
   };
 
   return (
-    <section className="py-20 bg-neutral-50 border-y border-border">
-      <div className="site-container">
-        {/* Section header */}
-        <div className="text-center mb-12 max-w-2xl mx-auto">
-          <div className="flex items-center justify-center gap-3 mb-4">
-            <div className="w-8 h-0.5 bg-primary" />
-            <span className="text-xs uppercase tracking-widest text-primary font-bold">
-              Frequently Asked
-            </span>
-            <div className="w-8 h-0.5 bg-primary" />
+    <section className="relative py-20 sm:py-24 lg:py-28 overflow-hidden">
+      {/* Background image — sharp, no blur; overlay handles legibility. */}
+      <div className="absolute inset-0 z-0">
+        <img
+          src={BG_IMAGE_URL}
+          alt=""
+          aria-hidden="true"
+          className="w-full h-full object-cover object-center"
+          loading="lazy"
+          referrerPolicy="no-referrer"
+        />
+      </div>
+
+      {/* Dark gradient overlay — black-heavy with a subtle primary tint
+          in the bottom-right so the section reads as branded, not just
+          dark. */}
+      <div className="absolute inset-0 z-0 bg-gradient-to-br from-black/90 via-black/80 to-primary/30" />
+
+      {/* Accent vignette — radial primary tint in the top-right gives
+          the section depth without competing with the FAQ cards. */}
+      <div
+        className="absolute inset-0 z-0"
+        style={{
+          backgroundImage:
+            "radial-gradient(circle at top right, rgba(31,79,163,0.18), transparent 55%)",
+        }}
+      />
+
+      {/* Content */}
+      <div className="relative z-10 max-w-5xl mx-auto px-6">
+        {/* Header */}
+        <div className="text-center mb-12 sm:mb-16">
+          <div className="text-primary text-xs uppercase tracking-widest font-bold mb-4 flex items-center justify-center gap-3">
+            <span className="h-px w-8 bg-primary" />
+            Frequently Asked
+            <span className="h-px w-8 bg-primary" />
           </div>
-          <h2 className="text-3xl md:text-5xl font-black uppercase tracking-tighter text-neutral-900 mb-4">
+          <h2 className="text-3xl sm:text-5xl lg:text-6xl font-black uppercase tracking-tighter text-white mb-4">
             Questions We Get{" "}
-            <span className="text-primary italic font-black">Asked.</span>
+            <span className="text-primary italic">Asked.</span>
           </h2>
-          <p className="text-sm md:text-base text-muted leading-relaxed">
+          <p className="text-base sm:text-lg text-neutral-300 max-w-2xl mx-auto leading-relaxed">
             Quick answers to what most customers want to know before booking.
           </p>
         </div>
 
         {/* FAQ list */}
-        <div className="max-w-4xl mx-auto space-y-4">
+        <div className="max-w-3xl mx-auto space-y-3 sm:space-y-4">
           {HOME_FAQS.map((faq, i) => {
             const isOpen = openIndex === i;
             const numLabel = `Q${String(i + 1).padStart(2, "0")}`;
             return (
               <div
                 key={i}
-                className={`bg-white border transition-all duration-200 ${
+                className={`transition-all duration-300 ${
                   isOpen
-                    ? "border-primary shadow-md"
-                    : "border-border hover:border-primary/60"
+                    ? "bg-white border-2 border-primary shadow-2xl"
+                    : "bg-white/5 backdrop-blur-md border border-white/10 hover:bg-white/10 hover:border-primary"
                 }`}
               >
                 <button
                   onClick={() => toggle(i)}
                   aria-expanded={isOpen}
                   aria-controls={`home-faq-panel-${i}`}
-                  className="w-full flex items-center gap-4 sm:gap-6 p-6 sm:p-7 text-left"
+                  className="w-full flex items-center justify-between gap-4 p-5 sm:p-6 text-left"
                 >
-                  {/* Number badge */}
-                  <span
-                    className={`shrink-0 text-xs sm:text-sm font-black tracking-widest transition-colors ${
-                      isOpen ? "text-primary" : "text-primary/70"
-                    }`}
-                  >
-                    {numLabel}
-                  </span>
-
-                  {/* Question */}
-                  <span className="flex-1 text-base sm:text-lg font-black uppercase text-neutral-900 tracking-tighter leading-snug">
-                    {faq.q}
-                  </span>
-
-                  {/* Chevron */}
+                  <div className="flex items-center gap-4 sm:gap-5 flex-1 min-w-0">
+                    <span
+                      className={`text-sm font-black uppercase tracking-widest shrink-0 transition-colors ${
+                        isOpen ? "text-primary" : "text-primary/70"
+                      }`}
+                    >
+                      {numLabel}
+                    </span>
+                    <span
+                      className={`text-base sm:text-lg font-black uppercase tracking-tighter leading-snug transition-colors ${
+                        isOpen ? "text-neutral-900" : "text-white"
+                      }`}
+                    >
+                      {faq.q}
+                    </span>
+                  </div>
                   <ChevronDown
                     className={`w-5 h-5 shrink-0 transition-all duration-300 ${
-                      isOpen
-                        ? "rotate-180 text-primary"
-                        : "text-neutral-400"
+                      isOpen ? "text-primary rotate-180" : "text-white/60"
                     }`}
                   />
                 </button>
@@ -139,12 +163,14 @@ export default function HomeFAQ({ setCurrentPage }: HomeFAQProps) {
                       initial={{ height: 0, opacity: 0 }}
                       animate={{ height: "auto", opacity: 1 }}
                       exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.25, ease: "easeOut" }}
+                      transition={{ duration: 0.3, ease: "easeOut" }}
                       className="overflow-hidden"
                     >
-                      <div className="px-6 sm:px-7 pb-6 sm:pb-7">
-                        <div className="border-t border-border pt-5 ml-0 sm:ml-14 sm:pl-2 text-sm md:text-base text-neutral-600 leading-relaxed">
-                          {faq.a}
+                      <div className="px-5 sm:px-6 pb-5 sm:pb-6">
+                        <div className="pt-4 sm:pt-5 border-t border-neutral-200">
+                          <p className="text-sm sm:text-base text-neutral-600 leading-relaxed pl-0 sm:pl-12">
+                            {faq.a}
+                          </p>
                         </div>
                       </div>
                     </motion.div>
@@ -155,17 +181,19 @@ export default function HomeFAQ({ setCurrentPage }: HomeFAQProps) {
           })}
         </div>
 
-        {/* Bottom CTA strip */}
-        <div className="mt-12 flex flex-col sm:flex-row items-center justify-center gap-4 text-center">
-          <span className="text-sm text-neutral-600">
+        {/* Bottom CTA — sits on the dark backdrop. White ink-style
+            button reads as the primary action without competing with
+            the open card's primary-blue border. */}
+        <div className="text-center mt-12 sm:mt-16">
+          <p className="text-neutral-400 text-sm mb-4">
             Still have questions?
-          </span>
+          </p>
           <button
             onClick={() => setCurrentPage("contact")}
-            className="inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-widest text-primary hover:underline"
+            className="btn-ink btn-ink-white inline-flex items-center gap-2 px-8 py-4 text-xs font-black uppercase tracking-widest"
           >
             Contact our advisors
-            <ArrowRight className="w-3.5 h-3.5" />
+            <ArrowRight className="w-3.5 h-3.5 btn-arrow" />
           </button>
         </div>
       </div>
