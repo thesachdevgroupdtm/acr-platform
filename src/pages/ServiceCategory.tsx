@@ -58,13 +58,20 @@ const FUEL_TYPES = [
   { id: "electric", name: "Electric", icon: BatteryCharging },
 ] as const;
 
+// Phase 2.5.9 — sub-nav lists EVERY visible content section in
+// the page body, in render order. Adding gap-sections (Why Us /
+// Brands / Why ACR) prevents the "stuck on previous section"
+// drift the operator reported on 2.5.8 testing.
 const SECTION_NAV = [
-  { id: "overview", label: "Overview" },
-  { id: "pricing", label: "Pricing" },
-  { id: "services", label: "Services" },
-  { id: "process", label: "Process" },
-  { id: "reviews", label: "Reviews" },
-  { id: "faqs", label: "FAQs" },
+  { id: "overview",  label: "Overview" },
+  { id: "pricing",   label: "Pricing" },
+  { id: "services",  label: "Services" },
+  { id: "why-us",    label: "Why Us" },     // 2.5.9 — was un-tracked
+  { id: "process",   label: "Process" },
+  { id: "reviews",   label: "Reviews" },
+  { id: "faqs",      label: "FAQs" },
+  { id: "brands",    label: "Brands" },     // 2.5.9 — was un-tracked
+  { id: "why-acr",   label: "Why ACR" },    // 2.5.9 — was un-tracked
 ] as const;
 
 // Site Header is `sticky top-0 z-[9999]` — top blue bar (~32px) + main (h-20=80px).
@@ -920,7 +927,11 @@ export default function ServiceCategory({
               </section>
 
               {/* WHY CHOOSE */}
-              <section>
+              <section
+                id="why-us"
+                data-subnav-section="why-us"
+                className="scroll-mt-40"
+              >
                 <h2 className="text-2xl sm:text-3xl uppercase font-black text-neutral-900 mb-5">
                   WHY <span className="text-primary">CHOOSE US.</span>
                 </h2>
@@ -1038,7 +1049,11 @@ export default function ServiceCategory({
               </section>
 
               {/* BRANDS WE SERVICE */}
-              <section>
+              <section
+                id="brands"
+                data-subnav-section="brands"
+                className="scroll-mt-40"
+              >
                 <h2 className="text-2xl sm:text-3xl uppercase font-black text-neutral-900 mb-1.5">
                   BRANDS WE <span className="text-primary">SERVICE.</span>
                 </h2>
@@ -1071,7 +1086,11 @@ export default function ServiceCategory({
               </section>
 
               {/* LOCATION-BASED CONTENT */}
-              <section className="bg-neutral-50 p-6 sm:p-8 border border-border">
+              <section
+                id="why-acr"
+                data-subnav-section="why-acr"
+                className="bg-neutral-50 p-6 sm:p-8 border border-border scroll-mt-40"
+              >
                 <h2 className="text-xl sm:text-2xl uppercase font-black text-neutral-900 mb-3 tracking-tighter">
                   Why Choose ACR for{" "}
                   <span className="text-primary">

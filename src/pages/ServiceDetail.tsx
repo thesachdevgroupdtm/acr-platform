@@ -37,15 +37,23 @@ import { VehicleConflictError, type VehicleConflictDetails } from "../lib/errors
 const STICKY_OFFSET_PX = 180;
 const SECTION_NAV_OFFSET_PX = 112;
 
-// Phase 2.5.7 — anchor sections for the in-page sub-nav. Mirrors
-// the /category/{slug} pattern. 5 sections is the max that fits
-// comfortably without horizontal overflow on typical viewports.
+// Phase 2.5.7 + 2.5.9 — anchor sections for the in-page sub-nav.
+// Lists EVERY visible content section in render order so the
+// IntersectionObserver scrollspy never drifts onto an un-tracked
+// section. Sub-nav strip is `overflow-x-auto`; the auto-scroll
+// from Phase 2.5.6 keeps the active link in view as the strip
+// fills with more entries.
 const SECTIONS: ReadonlyArray<{ id: string; label: string }> = [
-  { id: "overview", label: "Overview" },
-  { id: "included", label: "What's Included" },
-  { id: "process",  label: "Process" },
-  { id: "faqs",     label: "FAQs" },
-  { id: "reviews",  label: "Reviews" },
+  { id: "overview",    label: "Overview" },
+  { id: "included",    label: "Included" },        // shortened from "What's Included"
+  { id: "why-service", label: "Why This" },        // 2.5.9 — was un-tracked ("Why Choose This Service")
+  { id: "process",     label: "Process" },
+  { id: "quote",       label: "Quote" },           // 2.5.9 — was un-tracked (CTA banner)
+  { id: "results",     label: "Results" },         // 2.5.9 — was un-tracked ("Real Results")
+  { id: "faqs",        label: "FAQs" },
+  { id: "related",     label: "Related" },         // 2.5.9 — was un-tracked ("Explore Related")
+  { id: "reviews",     label: "Reviews" },
+  { id: "recommended", label: "More Services" },   // 2.5.9 — was un-tracked ("Recommended Services")
 ];
 
 interface ServiceDetailProps {
@@ -492,7 +500,11 @@ export default function ServiceDetail({
               </section>
 
               {/* WHY CHOOSE */}
-              <section>
+              <section
+                id="why-service"
+                data-subnav-section="why-service"
+                className="scroll-mt-44"
+              >
                 <h2 className="text-2xl sm:text-3xl uppercase font-black text-neutral-900 mb-5">
                   WHY CHOOSE <span className="text-primary">THIS SERVICE.</span>
                 </h2>
@@ -555,7 +567,11 @@ export default function ServiceDetail({
               </section>
 
               {/* CTA STRIP */}
-              <section className="bg-primary text-white p-6 sm:p-8">
+              <section
+                id="quote"
+                data-subnav-section="quote"
+                className="bg-primary text-white p-6 sm:p-8 scroll-mt-44"
+              >
                 <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-5 items-center">
                   <div>
                     <h3 className="text-xl sm:text-2xl font-black uppercase tracking-tighter mb-1.5">
@@ -577,7 +593,11 @@ export default function ServiceDetail({
               </section>
 
               {/* REAL RESULTS */}
-              <section>
+              <section
+                id="results"
+                data-subnav-section="results"
+                className="scroll-mt-44"
+              >
                 <h2 className="text-2xl sm:text-3xl uppercase font-black text-neutral-900 mb-1.5">
                   REAL <span className="text-primary">RESULTS.</span>
                 </h2>
@@ -634,7 +654,11 @@ export default function ServiceDetail({
               </section>
 
               {/* INTERNAL LINKS */}
-              <section className="bg-neutral-50 p-6 sm:p-7 border border-border">
+              <section
+                id="related"
+                data-subnav-section="related"
+                className="bg-neutral-50 p-6 sm:p-7 border border-border scroll-mt-44"
+              >
                 <h3 className="text-base font-black uppercase text-neutral-900 mb-2 tracking-tighter">
                   EXPLORE <span className="text-primary">RELATED.</span>
                 </h3>
@@ -703,7 +727,11 @@ export default function ServiceDetail({
               </section>
 
               {/* RECOMMENDED SERVICES */}
-              <section className="pt-12 border-t border-border">
+              <section
+                id="recommended"
+                data-subnav-section="recommended"
+                className="pt-12 border-t border-border scroll-mt-44"
+              >
                 <h2 className="text-2xl sm:text-3xl uppercase font-black text-neutral-900 mb-5">
                   RECOMMENDED{" "}
                   <span className="text-primary">SERVICES.</span>
