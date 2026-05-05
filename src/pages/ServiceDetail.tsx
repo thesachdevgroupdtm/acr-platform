@@ -1,3 +1,4 @@
+import type * as React from "react";
 import { useMemo, useState } from "react";
 import {
   CheckCircle2,
@@ -24,9 +25,28 @@ import VehicleReplaceModal from "../components/VehicleReplaceModal";
 import { useCart } from "../hooks/useCart";
 import { useBookingContext } from "../hooks/useBookingContext";
 import { useAuth } from "../hooks/useAuth";
+import { useSubNavSync } from "../hooks/useSubNavSync";
 import { fetchServiceDetail } from "../lib/api";
 import { useApiQuery } from "../hooks/useApiQuery";
 import { VehicleConflictError, type VehicleConflictDetails } from "../lib/errors";
+
+// Phase 2.5.7 — sticky chrome stack mirrors the parent
+// /category/{slug} page: header (112px) + sub-nav strip (52px) +
+// 16px buffer = 180px sidebar offset. SECTION_NAV_OFFSET_PX (112)
+// pins the new sub-nav strip directly under the header.
+const STICKY_OFFSET_PX = 180;
+const SECTION_NAV_OFFSET_PX = 112;
+
+// Phase 2.5.7 — anchor sections for the in-page sub-nav. Mirrors
+// the /category/{slug} pattern. 5 sections is the max that fits
+// comfortably without horizontal overflow on typical viewports.
+const SECTIONS: ReadonlyArray<{ id: string; label: string }> = [
+  { id: "overview", label: "Overview" },
+  { id: "included", label: "What's Included" },
+  { id: "process",  label: "Process" },
+  { id: "faqs",     label: "FAQs" },
+  { id: "reviews",  label: "Reviews" },
+];
 
 interface ServiceDetailProps {
   categorySlug: string;
@@ -47,6 +67,21 @@ export default function ServiceDetail({
   // Pull synced booking state from parent ServiceCategory page
   const { state: booking } = useBookingContext();
   const { user, isAuthenticated } = useAuth();
+
+  // Phase 2.5.7 — in-page sub-nav scroll-spy + auto-scroll. The
+  // rebindKey ensures the IntersectionObserver re-binds whenever
+  // the user navigates between services (the section DOM nodes
+  // get replaced even though the slug list is constant).
+  const sectionIds = useMemo(() => SECTIONS.map((s) => s.id), []);
+  const {
+    activeSection,
+    scrollToSection,
+    navRef: subNavRef,
+  } = useSubNavSync({
+    sectionIds,
+    stickyOffsetPx: SECTION_NAV_OFFSET_PX,
+    rebindKey: `${categorySlug}/${serviceSlug}`,
+  });
 
   // ---------- API: service detail (skeleton-first) ----------
   const carIds = useMemo(
@@ -333,13 +368,47 @@ export default function ServiceDetail({
         </p>
       </PageBanner>
 
+      {/* Phase 2.5.7 — sticky in-page sub-nav (D-2.5.7-3). Mirrors
+          the /category/{slug} sub-nav so the user has consistent
+          navigation between siblings of the same parent category. */}
+      <nav
+        className="sticky z-30 bg-white border-b border-border"
+        style={{ top: `${SECTION_NAV_OFFSET_PX}px` }}
+      >
+        <div className="site-container">
+          <div
+            ref={subNavRef as React.RefObject<HTMLDivElement>}
+            className="flex gap-1 sm:gap-2 overflow-x-auto"
+            style={{ scrollbarWidth: "none" }}
+          >
+            {SECTIONS.map((s) => (
+              <button
+                key={s.id}
+                data-subnav-link={s.id}
+                onClick={() => scrollToSection(s.id)}
+                className={`text-[10px] sm:text-xs uppercase tracking-widest font-bold py-4 px-3 sm:px-5 whitespace-nowrap border-b-2 transition-colors shrink-0 ${
+                  activeSection === s.id
+                    ? "border-primary text-primary"
+                    : "border-transparent text-neutral-500 hover:text-primary"
+                }`}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </nav>
+
       <div className="pb-14 pt-8">
         <div className="site-container">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 lg:gap-12">
             {/* Main Content */}
             <main className="lg:col-span-2 space-y-12">
               {/* OVERVIEW */}
-              <section className="bg-neutral-50 p-6 sm:p-8 border border-border">
+              <section
+                id="overview"
+                className="bg-neutral-50 p-6 sm:p-8 border border-border scroll-mt-44"
+              >
                 <h2 className="text-2xl sm:text-3xl uppercase font-black text-neutral-900 mb-5">
                   SERVICE <span className="text-primary">OVERVIEW.</span>
                 </h2>
@@ -394,7 +463,7 @@ export default function ServiceDetail({
               </section>
 
               {/* SERVICES INCLUDED */}
-              <section>
+              <section id="included" className="scroll-mt-44">
                 <h2 className="text-2xl sm:text-3xl uppercase font-black text-neutral-900 mb-5">
                   SERVICES <span className="text-primary">INCLUDED.</span>
                 </h2>
@@ -452,7 +521,7 @@ export default function ServiceDetail({
               </section>
 
               {/* PROCESS */}
-              <section>
+              <section id="process" className="scroll-mt-44">
                 <h2 className="text-2xl sm:text-3xl uppercase font-black text-neutral-900 mb-5">
                   THE <span className="text-primary">PROCESS.</span>
                 </h2>
@@ -541,7 +610,7 @@ export default function ServiceDetail({
               </section>
 
               {/* FAQs */}
-              <section>
+              <section id="faqs" className="scroll-mt-44">
                 <h2 className="text-2xl sm:text-3xl uppercase font-black text-neutral-900 mb-5">
                   COMMON <span className="text-primary">QUESTIONS.</span>
                 </h2>
@@ -597,7 +666,10 @@ export default function ServiceDetail({
               </section>
 
               {/* CUSTOMER REVIEWS */}
-              <section className="pt-12 border-t border-border">
+              <section
+                id="reviews"
+                className="pt-12 border-t border-border scroll-mt-44"
+              >
                 <h2 className="text-2xl sm:text-3xl uppercase font-black text-neutral-900 mb-5">
                   CUSTOMER <span className="text-primary">REVIEWS.</span>
                 </h2>
@@ -666,7 +738,11 @@ export default function ServiceDetail({
             </main>
 
             {/* Sidebar */}
-            <aside className="space-y-6 lg:sticky lg:top-32 lg:self-start">
+            {/* Phase 2.5.7 — sticky `top-[180px]` clears the
+                112px header + 52px new sub-nav + 16px buffer.
+                Pre-2.5.7 was `lg:top-32` (128px) which would have
+                slipped under the sub-nav. */}
+            <aside className="space-y-6 lg:sticky lg:top-[180px] lg:self-start">
               {/* Phase 2.5.5 (D-2.5.5-6) — booking context card is
                   PRIMARY (top); SmartMiniCart sits BELOW it as the
                   SECONDARY card, conditional on cart non-empty. */}

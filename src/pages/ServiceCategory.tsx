@@ -69,6 +69,8 @@ const SECTION_NAV = [
 
 // Site Header is `sticky top-0 z-[9999]` — top blue bar (~32px) + main (h-20=80px).
 // Section nav stacks below the FULL header (~112px), not just the main bar.
+// Phase 2.5.7 — the right-side aside uses `top: STICKY_OFFSET_PX + 68 = 180px`
+// so it sits BELOW the 52px sub-nav strip with a 16px buffer.
 const STICKY_OFFSET_PX = 112;
 
 export default function ServiceCategory({
@@ -156,6 +158,12 @@ export default function ServiceCategory({
   } = useSubNavSync({
     sectionIds,
     stickyOffsetPx: STICKY_OFFSET_PX,
+    // Phase 2.5.7 — rebind the observer when the user navigates
+    // between categories. Without this, the observer keeps watching
+    // the previous category's section nodes (now detached from DOM)
+    // and the active state never updates again — the bug operator
+    // reported as "stuck on OVERVIEW".
+    rebindKey: categorySlug,
   });
 
   // ---------- Shared booking context (syncs with ServiceDetail child page) ----------
@@ -1109,7 +1117,10 @@ export default function ServiceCategory({
             {/* ──────────── STICKY BOOKING CARD (RIGHT) ──────────── */}
             <aside
               className="order-1 lg:order-2 lg:sticky lg:self-start space-y-5"
-              style={{ top: `${STICKY_OFFSET_PX + 60}px` }}
+              // Phase 2.5.7 — was STICKY_OFFSET_PX + 60 (172px); bumped to
+              // +68 (180px) so the sidebar sits below the 52px sub-nav
+              // strip + 16px buffer, no overlap on scroll-up.
+              style={{ top: `${STICKY_OFFSET_PX + 68}px` }}
             >
               {/* Phase 2.5.5 (D-2.5.5-6) — Re-Check Prices card is
                   PRIMARY (top of sidebar); SmartMiniCart sits BELOW it

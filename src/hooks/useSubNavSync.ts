@@ -41,6 +41,14 @@ interface UseSubNavSyncOptions {
   /** When true, auto-scroll the sub-nav to centre the active link.
    *  Defaults to true; pages can opt out for testing. */
   autoScrollNav?: boolean;
+  /** Optional opaque token (commonly the URL slug or
+   *  `${cat}/${sub}` pair) that forces the IntersectionObserver to
+   *  re-bind whenever it changes. Necessary on routed pages whose
+   *  section DOM nodes get replaced on navigation but whose
+   *  sectionIds list stays the same — without this, the observer
+   *  watches detached nodes after navigation and the active state
+   *  never updates. */
+  rebindKey?: string | number | null;
 }
 
 interface UseSubNavSyncResult {
@@ -57,6 +65,7 @@ export function useSubNavSync({
   sectionIds,
   stickyOffsetPx,
   autoScrollNav = true,
+  rebindKey = null,
 }: UseSubNavSyncOptions): UseSubNavSyncResult {
   const [activeSection, setActiveSection] = useState<string>("");
   const navRef = useRef<HTMLElement | null>(null);
@@ -90,11 +99,15 @@ export function useSubNavSync({
       if (el) observer.observe(el);
     });
     return () => observer.disconnect();
-    // sectionIds is a stable list per page render; .join wards against
-    // identity-only changes from upstream React Query that don't actually
-    // alter the slugs.
+    // Effect re-runs when:
+    //  - the slug list itself changes (page swaps to a different
+    //    set of anchors), OR
+    //  - rebindKey changes (caller signalled a DOM swap on a routed
+    //    page — see Phase 2.5.7 ServiceCategory / ServiceDetail).
+    // sectionIds object identity alone is unreliable as a dep
+    // because callers commonly memoise it with `[]`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sectionIds.join("|")]);
+  }, [sectionIds.join("|"), rebindKey]);
 
   // Auto-scroll the sub-nav so the active link stays visible.
   useEffect(() => {

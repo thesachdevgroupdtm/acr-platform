@@ -32,9 +32,18 @@ interface ServicesProps {
   openEstimate?: (isCorporate?: boolean, initialService?: string) => void;
 }
 
-// Header (~30px top blue + 80px main bar) + section nav (~52px) ≈ 132px
-const STICKY_OFFSET_PX = 132;
-const SECTION_NAV_OFFSET_PX = 112; // height of header alone
+// Phase 2.5.7 — sticky chrome stack:
+//   • Header: ~32px top blue bar + 80px main bar = 112px
+//   • Sub-nav strip below header: ~52px
+//   • Buffer: 16px
+// SECTION_NAV_OFFSET_PX (112) positions the sub-nav directly under
+// the header. STICKY_OFFSET_PX (180) positions the right-side
+// booking sidebar BELOW the sub-nav so it never slips under the
+// sticky chrome on scroll-up. The pre-2.5.7 value of 132 was
+// computed as header+buffer only; the sub-nav was overlapping the
+// top of the sidebar.
+const STICKY_OFFSET_PX = 180;
+const SECTION_NAV_OFFSET_PX = 112; // height of header alone (sub-nav sits at this offset)
 
 export default function Services({ setCurrentPage }: ServicesProps) {
   const { addItem, count, findCartItem, removeItem, replaceVehicleInCart } = useCart();
