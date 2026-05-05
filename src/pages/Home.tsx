@@ -12,6 +12,7 @@ import {
   type CategorySubService,
 } from "../lib/api";
 import { useApiQuery } from "../hooks/useApiQuery";
+import HomeFAQ from "../components/HomeFAQ";
 
 interface HomeProps {
   setCurrentPage: (page: string) => void;
@@ -73,10 +74,6 @@ export default function Home({ setCurrentPage, openEstimate }: HomeProps) {
   const [isLocationHovered, setIsLocationHovered] = useState(false);
   const [activeLocationIndex, setActiveLocationIndex] = useState(0);
   const [expandedLocationIndex, setExpandedLocationIndex] = useState<number | null>(null);
-  // Demo-readiness — all FAQs default-closed on page load (was 0,
-  // which opened the first one). Matches the canonical accordion
-  // behavior used by the shared FAQAccordion on inner pages.
-  const [faqOpenIndex, setFaqOpenIndex] = useState<number | null>(null);
 
   const categories = ["All Services", ...serviceCategories.map(c => c.title)];
 
@@ -1215,50 +1212,8 @@ export default function Home({ setCurrentPage, openEstimate }: HomeProps) {
         </div>
       </section>
 
-      {/* FAQ Section */}
-      <section className="py-20 bg-surface">
-        <div className="site-container">
-          <div className="text-center mb-16">
-            <div className="flex items-center justify-center gap-3 mb-4">
-              <div className="w-8 h-0.5 bg-accent" />
-              <span className="text-xs uppercase tracking-widest text-muted font-bold">Common Queries</span>
-              <div className="w-8 h-0.5 bg-accent" />
-            </div>
-            <h2 className="text-3xl md:text-5xl font-black uppercase tracking-tighter text-primary-dark">Frequently <span className="text-primary italic font-black">Asked.</span></h2>
-          </div>
-          <div className="max-w-3xl mx-auto space-y-4">
-            {[
-              { q: "Do you offer a warranty on paint?", a: "Yes, we offer a lifetime warranty on paint peeling and fading for all collision repair jobs." },
-              { q: "How long does a typical repair take?", a: "Minor dents and scratches are repaired within 24-48 hours. Major collision repairs depend on the extent of damage." },
-              { q: "Can I get a cashless claim?", a: "Absolutely. We remain partners with all major insurance companies in India." }
-            ].map((item, i) => (
-              <div key={i} className="bg-white border border-border shadow-sm">
-                <button
-                  onClick={() => setFaqOpenIndex(faqOpenIndex === i ? null : i)}
-                  className="w-full flex items-center justify-between p-6 text-left hover:bg-surface transition-colors"
-                >
-                  <span className="text-sm font-black uppercase tracking-tight text-primary-dark">{item.q}</span>
-                  <ChevronRight className={`w-4 h-4 text-primary transition-transform duration-300 ${faqOpenIndex === i ? 'rotate-90' : ''}`} />
-                </button>
-                <AnimatePresence>
-                  {faqOpenIndex === i && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.3 }}
-                    >
-                      <div className="px-6 pb-6 text-sm text-muted leading-relaxed border-t border-border pt-4">
-                        {item.a}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      {/* FAQ Section — premium card design (HomeFAQ component). */}
+      <HomeFAQ setCurrentPage={setCurrentPage} />
 
       {/* Blog Highlights */}
       <section className="py-24 bg-white border-b border-border">
