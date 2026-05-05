@@ -239,7 +239,7 @@ export default function Home({ setCurrentPage, openEstimate }: HomeProps) {
 
               <div className="flex items-center gap-10">
                 <div>
-                  <div className="text-2xl font-bold text-primary-dark">25,000+</div>
+                  <div className="text-2xl font-bold text-primary-dark">50,000+</div>
                   <div className="text-[10px] uppercase tracking-widest font-medium text-muted">Cars Served</div>
                 </div>
                 <div className="w-px h-8 bg-border" />
@@ -465,10 +465,10 @@ export default function Home({ setCurrentPage, openEstimate }: HomeProps) {
           {/* Compact Stats Row */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mt-20 pt-10 border-t border-border">
             {[
-              { label: "10,000+", sub: "Cars Serviced" },
+              { label: "50,000+", sub: "Cars Serviced" },
               { label: "4+", sub: "Service Centers" },
               { label: "15+", sub: "Years Experience" },
-              { label: "100%", sub: "Satisfaction" }
+              { label: "98%", sub: "Customer Satisfaction" }
             ].map((stat, i) => (
               <div key={i} className="text-center">
                 <div className="text-3xl font-bold text-primary-dark tracking-normal mb-2">{stat.label}</div>

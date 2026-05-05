@@ -2,8 +2,41 @@ import { useState, useEffect } from "react";
 import { Car, Instagram, Facebook, Twitter, Mail, Phone, MapPin, Youtube, Linkedin, ChevronLeft, ChevronRight } from "lucide-react";
 import { BUSINESS_INFO, LOCATIONS } from "../data/businessData";
 
-export default function Footer() {
+interface FooterProps {
+  /** Phase 2.6a-fix demo-readiness — wire Quick Links to real
+   *  page navigation. Optional so any caller that doesn't pass
+   *  a navigator falls back to the (silent) anchor behavior. */
+  setCurrentPage?: (page: string) => void;
+}
+
+// Quick Links → currentPage key. Same vocabulary App.tsx uses.
+const QUICK_LINKS: Array<{ label: string; page: string }> = [
+  { label: "Home",     page: "home" },
+  { label: "Services", page: "services" },
+  { label: "Insurance", page: "insurance" },
+  { label: "Gallery",  page: "gallery" },
+  { label: "About",    page: "about" },
+  { label: "Contact",  page: "contact" },
+  { label: "Sitemap",  page: "sitemap" },
+];
+
+const USEFUL_LINKS: Array<{ label: string; page: string }> = [
+  { label: "Service Centers",     page: "service-centers" },
+  { label: "Offers & Discounts",  page: "offers" },
+  { label: "Corporate Tie-ups",   page: "corporate" },
+  { label: "Coupons",             page: "coupons" },
+  { label: "Contact Us",          page: "contact" },
+];
+
+export default function Footer({ setCurrentPage }: FooterProps) {
   const [currentLocationIdx, setCurrentLocationIdx] = useState(0);
+
+  const navigate = (page: string) => {
+    if (setCurrentPage) {
+      setCurrentPage(page);
+      window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
+    }
+  };
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -77,11 +110,14 @@ export default function Footer() {
           <div className="lg:col-span-2">
             <h4 className="text-[15px] font-black uppercase tracking-widest mb-6 text-neutral-900">Quick Links</h4>
             <ul className="space-y-3.5">
-              {["Home", "Services", "Insurance", "Gallery", "About", "Contact", "Sitemap"].map((item) => (
-                <li key={item}>
-                  <a href={`#${item.toLowerCase()}`} className="text-[13px] font-medium text-muted hover:text-primary transition-colors block">
-                    {item}
-                  </a>
+              {QUICK_LINKS.map((item) => (
+                <li key={item.label}>
+                  <button
+                    onClick={() => navigate(item.page)}
+                    className="text-[13px] font-medium text-muted hover:text-primary transition-colors block text-left"
+                  >
+                    {item.label}
+                  </button>
                 </li>
               ))}
             </ul>
@@ -91,11 +127,14 @@ export default function Footer() {
           <div className="lg:col-span-2">
             <h4 className="text-[15px] font-black uppercase tracking-widest mb-6 text-neutral-900">Useful Links</h4>
             <ul className="space-y-3.5">
-              {["Service Centers", "Offers & Discounts", "Corporate Tie-ups", "Cashless Claims", "Customer Reviews"].map((item) => (
-                <li key={item}>
-                  <a href="#" className="text-[13px] font-medium text-muted hover:text-primary transition-colors block">
-                    {item}
-                  </a>
+              {USEFUL_LINKS.map((item) => (
+                <li key={item.label}>
+                  <button
+                    onClick={() => navigate(item.page)}
+                    className="text-[13px] font-medium text-muted hover:text-primary transition-colors block text-left"
+                  >
+                    {item.label}
+                  </button>
                 </li>
               ))}
             </ul>
@@ -161,9 +200,14 @@ export default function Footer() {
 
         <div className="pt-8 border-t border-border flex flex-col md:flex-row justify-between items-center gap-4 px-4 lg:px-0">
           <p className="text-[13px] font-medium text-muted">© 2026 Auto Car Repair. All rights reserved.</p>
+          {/* Demo-readiness — Privacy / Terms pages aren't built yet,
+              so these stay as plain non-interactive labels until the
+              CMS routes for them land. Keeps the visual rhythm of
+              the footer's right-side cluster without offering a
+              dead link to click. */}
           <div className="flex items-center gap-8 text-[13px] font-medium text-muted">
-            <a href="#" className="hover:text-primary transition-colors">Privacy Policy</a>
-            <a href="#" className="hover:text-primary transition-colors">Terms of Service</a>
+            <span>Privacy Policy</span>
+            <span>Terms of Service</span>
           </div>
         </div>
       </div>

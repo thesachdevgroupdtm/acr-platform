@@ -326,7 +326,7 @@ export default function App() {
         </AnimatePresence>
       </main>
 
-      <Footer />
+      <Footer setCurrentPage={navigateTo} />
 
       {/* Estimate Modal */}
       <AnimatePresence>

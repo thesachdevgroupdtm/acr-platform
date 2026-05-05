@@ -63,8 +63,9 @@ function resolveBaseUrl(raw: string): string {
 
 export const API_BASE_URL = resolveBaseUrl(RAW_BASE);
 
-if (typeof console !== "undefined") {
-  // One-line log so the dev console makes the resolved target obvious.
+if (import.meta.env.DEV && typeof console !== "undefined") {
+  // Demo-readiness — only print the resolved API target in dev.
+  // Production builds keep the console clean.
   // eslint-disable-next-line no-console
   console.log(`[api] base = ${API_BASE_URL}`);
 }
