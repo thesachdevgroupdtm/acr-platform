@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 import PageBanner from "../components/PageBanner";
 import BookingSidebar from "../components/BookingSidebar";
-import SmartMiniCart from "../components/SmartMiniCart";
 import VehicleReplaceModal from "../components/VehicleReplaceModal";
 import { useCart } from "../hooks/useCart";
 import { VehicleConflictError, type VehicleConflictDetails } from "../lib/errors";
@@ -354,16 +353,17 @@ export default function Services({ setCurrentPage }: ServicesProps) {
 
             {/* ───── BOOKING SIDEBAR ───── */}
             <aside className="order-1 lg:order-2 space-y-5">
-              {/* Phase 2.5.5 (D-2.5.5-3, D-2.5.5-6) — booking panel is
-                  PRIMARY (top of sidebar); SmartMiniCart is SECONDARY,
-                  rendered BELOW and conditional on cart non-empty. */}
+              {/* Phase 2.5.5 (final) — sidebar shows ONLY the booking
+                  panel (D-2.5.5-4). All cart-state UI in browse pages
+                  was consolidated to the global top-header cart icon;
+                  the SmartMiniCart that briefly lived here was removed
+                  per UX audit. */}
               <BookingSidebar
                 titleStart="EXPERIENCE THE BEST"
                 titleAccent="CAR SERVICES"
                 titleEnd="IN"
                 stickyTopPx={STICKY_OFFSET_PX}
               />
-              <SmartMiniCart setCurrentPage={setCurrentPage} />
             </aside>
           </div>
         </div>

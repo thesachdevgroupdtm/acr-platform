@@ -20,7 +20,6 @@ import {
   LOCATIONS,
 } from "../data/businessData";
 import PageBanner from "../components/PageBanner";
-import SmartMiniCart from "../components/SmartMiniCart";
 import VehicleReplaceModal from "../components/VehicleReplaceModal";
 import { useCart } from "../hooks/useCart";
 import { useBookingContext } from "../hooks/useBookingContext";
@@ -883,10 +882,11 @@ export default function ServiceDetail({
                 )}
               </div>
 
-              {/* Phase 2.5.5 — SmartMiniCart sits HERE (D-2.5.5-3,
-                  D-2.5.5-6): below the primary booking context card,
-                  above the trust badges. Conditional on items > 0. */}
-              <SmartMiniCart setCurrentPage={setCurrentPage} />
+              {/* Phase 2.5.5 (final) — sidebar shows ONLY the booking
+                  context card + trust badges (D-2.5.5-4). The
+                  SmartMiniCart that briefly lived between them was
+                  removed per UX audit; cart access is the global
+                  top-header icon. */}
 
               {/* Trust badges */}
               <div className="bg-white p-5 sm:p-6 border border-border shadow-xl">

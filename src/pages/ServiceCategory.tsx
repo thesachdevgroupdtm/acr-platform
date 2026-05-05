@@ -30,7 +30,6 @@ import {
 } from "../data/businessData";
 import { useBrands, useModels, useFuels } from "../hooks/useVehicle";
 import PageBanner from "../components/PageBanner";
-import SmartMiniCart from "../components/SmartMiniCart";
 import VehicleReplaceModal from "../components/VehicleReplaceModal";
 import { useCart } from "../hooks/useCart";
 import { VehicleConflictError, type VehicleConflictDetails } from "../lib/errors";
@@ -1321,11 +1320,12 @@ export default function ServiceCategory({
                 </div>
               </div>
 
-              {/* Phase 2.5.5 — SmartMiniCart sits HERE (D-2.5.5-3,
-                  D-2.5.5-6): below the primary Re-Check Prices card,
-                  above the trust-badges section. Conditional on cart
-                  non-empty. */}
-              <SmartMiniCart setCurrentPage={setCurrentPage} />
+              {/* Phase 2.5.5 (final) — sidebar shows ONLY the
+                  Re-Check Prices booking panel + trust badges
+                  (D-2.5.5-4). The SmartMiniCart that briefly lived
+                  between them was removed per UX audit; the global
+                  top-header cart icon is the single cart-access
+                  surface across browse pages. */}
 
               {/* TRUST BADGES */}
               <div className="bg-white p-5 sm:p-6 border border-border shadow-xl">
