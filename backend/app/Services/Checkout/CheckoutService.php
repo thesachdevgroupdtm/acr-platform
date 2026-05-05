@@ -54,27 +54,12 @@ class CheckoutService
             fn ($i) => (float) $i->unit_price_snapshot * (int) $i->quantity
         );
 
-        // Phase 2.5b — coupon discount integration. Mirrors
-        // CartService::totalsFor; both must stay in sync so the
-        // user sees the same total in cart and checkout.
-        $discount   = 0.0;
-        $couponMeta = null;
-        if ($cart->coupon_id !== null) {
-            $coupon = $cart->relationLoaded('coupon') ? $cart->coupon : $cart->coupon()->first();
-            if ($coupon && $coupon->is_active && !$coupon->isExpired()) {
-                $discount   = (float) $coupon->calculateDiscount($subtotal);
-                $couponMeta = [
-                    'code'            => $coupon->code,
-                    'name'            => $coupon->name,
-                    'discount_amount' => round($discount, 2),
-                ];
-            } else {
-                // Stale ref — clear so the next quote() doesn't
-                // pick it back up. Same self-heal as totalsFor.
-                $cart->coupon_id = null;
-                $cart->save();
-            }
-        }
+        // Phase 2.6a — single source of truth on the model. Same
+        // helper backs CartService::totalsFor so cart and checkout
+        // can never disagree on discount math.
+        $reloaded  = $cart->reloadCoupon($subtotal);
+        $discount   = $reloaded['discount'] ?? 0.0;
+        $couponMeta = $reloaded['meta']     ?? null;
 
         $gstPct = (int) config('services.gst_percentage', 18);
         $tax    = round(($subtotal - $discount) * ($gstPct / 100), 2);

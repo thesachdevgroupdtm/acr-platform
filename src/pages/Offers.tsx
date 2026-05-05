@@ -1,38 +1,40 @@
 import { motion } from "motion/react";
 import PageBanner from "../components/PageBanner";
-import { ArrowRight, AlertCircle, Tag, Star, Users } from "lucide-react";
-import { OFFERS, type OfferCoupon } from "../data/businessData";
+import { ArrowRight, AlertCircle, Tag } from "lucide-react";
+import { useCoupons } from "../hooks/useCoupons";
+import type { CouponResource } from "../types/api";
 
 interface OffersProps {
   setCurrentPage: (page: string) => void;
   openEstimate?: (isCorporate?: boolean, initialService?: string) => void;
 }
 
-/** Display helpers derived from the canonical OfferCoupon shape. */
-function formatDiscount(c: OfferCoupon): string {
-  if (c.type === "percent") {
-    const cap = c.maxDiscount ? ` (UP TO ₹${c.maxDiscount})` : "";
-    return `${c.value}% OFF${cap}`;
+/**
+ * Phase 2.6a — `Offers` is now backend-driven (was a static
+ * showcase off `data/businessData.OFFERS` with marketing-fluff
+ * fields like image / urgency / rating / customers count).
+ *
+ * Reads `useCoupons('marketing')` (Phase 2.5b) — the same hook
+ * `Coupons.tsx` uses. The two pages serve overlapping purposes;
+ * a future cleanup pass may consolidate. For now both stay
+ * live so external links to either route continue to resolve.
+ */
+function formatDiscount(c: CouponResource): string {
+  if (c.discount_type === "percent") {
+    const cap = c.max_discount ? ` (UP TO ₹${c.max_discount})` : "";
+    return `${c.discount_value}% OFF${cap}`;
   }
-  return `FLAT ₹${c.value} OFF`;
+  return `FLAT ₹${c.discount_value} OFF`;
 }
 
-function badgeLabel(c: OfferCoupon): string {
-  switch (c.badge) {
-    case "best":     return "BEST VALUE";
-    case "new":      return "NEW";
-    case "popular":  return "POPULAR";
-    case "limited":  return "LIMITED TIME";
-    default:         return c.firstTimeOnly ? "FIRST BOOKING" : "LIMITED TIME";
-  }
-}
-
-/** "12500" → "12,500+"  /  "8500" → "8,500+" */
-function formatCustomers(n: number): string {
-  return `${n.toLocaleString("en-IN")}+`;
+function badgeLabel(c: CouponResource): string {
+  if (!c.badge) return "LIMITED TIME";
+  return c.badge.toUpperCase();
 }
 
 export default function Offers({ setCurrentPage }: OffersProps) {
+  const { coupons, isLoading, isError } = useCoupons("marketing");
+
   return (
     <>
       <PageBanner
@@ -44,7 +46,7 @@ export default function Offers({ setCurrentPage }: OffersProps) {
       />
       <div className="section-spacing pt-0">
         <div className="site-container">
-          
+
           <div className="max-w-3xl mb-16">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -59,114 +61,83 @@ export default function Offers({ setCurrentPage }: OffersProps) {
             </motion.div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {OFFERS.map((offer, i) => (
-              <motion.div
-                key={offer.id}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.5, delay: i * 0.1 }}
-                className="group relative bg-white border border-border flex flex-col overflow-hidden hover:-translate-y-2 transition-all duration-300 shadow-sm hover:shadow-2xl hover:shadow-primary/10 hover:border-primary/30"
-              >
-                {/* Header band — uses photo when offer.image is set, else
-                    falls back to a brand-coloured gradient. */}
-                <div className="relative h-[250px] overflow-hidden bg-neutral-900">
-                  {offer.image ? (
-                    <>
-                      <img
-                        src={offer.image}
-                        alt={offer.title}
-                        className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:scale-110 group-hover:opacity-70 transition-all duration-700"
-                        referrerPolicy="no-referrer"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-neutral-900 via-neutral-900/50 to-transparent" />
-                    </>
-                  ) : (
-                    <>
-                      <div className="absolute inset-0 bg-gradient-to-br from-primary-dark via-primary to-primary-dark/80" />
-                      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.15),transparent_60%)]" />
-                    </>
-                  )}
+          {isLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="bg-white border border-border h-[400px] animate-pulse" />
+              ))}
+            </div>
+          ) : isError || coupons.length === 0 ? (
+            <div className="py-16 text-center text-sm text-neutral-500">
+              No active offers right now. Check back soon — new deals drop regularly.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {coupons.map((offer, i) => (
+                <motion.div
+                  key={offer.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.5, delay: i * 0.1 }}
+                  className="group relative bg-white border border-border flex flex-col overflow-hidden hover:-translate-y-2 transition-all duration-300 shadow-sm hover:shadow-2xl hover:shadow-primary/10 hover:border-primary/30"
+                >
+                  {/* Header band — brand-coloured gradient (no per-coupon
+                      photos on the backend resource). */}
+                  <div className="relative h-[250px] overflow-hidden bg-neutral-900">
+                    <div className="absolute inset-0 bg-gradient-to-br from-primary-dark via-primary to-primary-dark/80" />
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.15),transparent_60%)]" />
 
-                  {/* Top-left chip: urgency text wins over generic badge label
-                      when the coupon has one (it's the time-pressure hook). */}
-                  {offer.urgencyText ? (
-                    <div className="absolute top-4 left-4 z-10 flex items-center gap-1.5 bg-red-600/90 backdrop-blur-sm text-white px-3 py-1.5 text-[10px] font-black uppercase tracking-widest animate-pulse border border-red-500">
-                      <AlertCircle className="w-3 h-3" />
-                      {offer.urgencyText}
-                    </div>
-                  ) : (
                     <div className="absolute top-4 left-4 z-10 flex items-center gap-1.5 bg-white/15 backdrop-blur-sm text-white px-3 py-1.5 text-[10px] font-black uppercase tracking-widest border border-white/20">
                       <AlertCircle className="w-3 h-3" />
                       {badgeLabel(offer)}
                     </div>
-                  )}
 
-                  {/* Discount + title */}
-                  <div className="absolute bottom-4 left-4 right-4 z-10">
-                    <div className={`inline-block px-4 py-1 mb-3 text-xs font-black uppercase tracking-widest shadow-md ${offer.image ? "bg-primary text-white" : "bg-white text-primary-dark"}`}>
-                      {formatDiscount(offer)}
-                    </div>
-                    <h3 className="text-2xl md:text-3xl font-black uppercase tracking-tighter text-white leading-tight">
-                      {offer.title}
-                    </h3>
-                  </div>
-                </div>
-
-                <div className="p-6 md:p-8 flex-grow flex flex-col justify-between">
-                  <div>
-                    <p className="text-neutral-600 font-medium mb-6 leading-relaxed">
-                      {offer.description}
-                    </p>
-
-                    {/* Trust strip — rating + customers chips, only when set. */}
-                    {(offer.rating || offer.customers) && (
-                      <div className="flex items-center gap-4 text-xs font-bold text-neutral-500 uppercase tracking-widest mb-6">
-                        {offer.rating ? (
-                          <div className="flex items-center gap-1 text-yellow-500">
-                            <Star className="w-4 h-4 fill-current" />
-                            <span className="text-neutral-900">{offer.rating}</span>
-                          </div>
-                        ) : null}
-                        {offer.rating && offer.customers ? (
-                          <span className="w-1 h-1 rounded-full bg-border" />
-                        ) : null}
-                        {offer.customers ? (
-                          <div className="flex items-center gap-1.5">
-                            <Users className="w-3.5 h-3.5" />
-                            <span>Trusted by {formatCustomers(offer.customers)}</span>
-                          </div>
-                        ) : null}
+                    <div className="absolute bottom-4 left-4 right-4 z-10">
+                      <div className="inline-block px-4 py-1 mb-3 text-xs font-black uppercase tracking-widest shadow-md bg-white text-primary-dark">
+                        {formatDiscount(offer)}
                       </div>
-                    )}
-
-                    {/* Coupon code + applicability */}
-                    <div className="flex items-center gap-3 mb-8 pb-6 border-b border-border">
-                      <div className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-50 border border-dashed border-neutral-300 text-neutral-900 font-mono text-xs font-black tracking-widest">
-                        <Tag className="w-3 h-3 text-primary" />
-                        {offer.code}
-                      </div>
-                      {offer.minOrder ? (
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
-                          Min order ₹{offer.minOrder}
-                        </span>
-                      ) : null}
+                      <h3 className="text-2xl md:text-3xl font-black uppercase tracking-tighter text-white leading-tight">
+                        {offer.name}
+                      </h3>
                     </div>
                   </div>
 
-                  <a
-                    href="https://wa.me/911234567890?text=I'm%20interested%20in%20the%20offer!"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="btn-ink btn-ink-primary w-full py-5 text-sm font-black uppercase tracking-widest flex items-center justify-center gap-2 group/btn"
-                  >
-                    CLAIM NOW <ArrowRight className="w-5 h-5 btn-arrow transition-transform duration-300 group-hover/btn:-rotate-45" />
-                  </a>
-                </div>
-              </motion.div>
-            ))}
-          </div>
+                  <div className="p-6 md:p-8 flex-grow flex flex-col justify-between">
+                    <div>
+                      <p className="text-neutral-600 font-medium mb-6 leading-relaxed">
+                        {offer.description}
+                      </p>
+
+                      <div className="flex items-center gap-3 mb-8 pb-6 border-b border-border flex-wrap">
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-50 border border-dashed border-neutral-300 text-neutral-900 font-mono text-xs font-black tracking-widest">
+                          <Tag className="w-3 h-3 text-primary" />
+                          {offer.code}
+                        </div>
+                        {offer.min_order_value > 0 && (
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
+                            Min order ₹{offer.min_order_value}
+                          </span>
+                        )}
+                        {offer.expiry_date && (
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
+                            Valid till {offer.expiry_date}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => setCurrentPage("services")}
+                      className="btn-ink btn-ink-primary w-full py-5 text-sm font-black uppercase tracking-widest flex items-center justify-center gap-2 group/btn"
+                    >
+                      BROWSE SERVICES <ArrowRight className="w-5 h-5 btn-arrow transition-transform duration-300 group-hover/btn:-rotate-45" />
+                    </button>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          )}
 
           {/* Bottom CTA */}
           <div className="mt-24 p-10 md:p-16 bg-neutral-900 text-center relative overflow-hidden">
@@ -181,9 +152,9 @@ export default function Offers({ setCurrentPage }: OffersProps) {
                 <button className="btn-ink btn-ink-primary px-8 py-4 font-bold text-sm tracking-widest uppercase shadow-lg shadow-primary/20">
                   Call Now <ArrowRight className="w-4 h-4 btn-arrow" />
                 </button>
-                <a 
-                  href="https://wa.me/911234567890" 
-                  target="_blank" 
+                <a
+                  href="https://wa.me/911234567890"
+                  target="_blank"
                   rel="noreferrer"
                   className="bg-[#25D366] text-white px-8 py-4 font-bold text-sm tracking-widest uppercase flex items-center gap-2 hover:bg-[#20bd5a] transition-colors"
                 >
@@ -194,7 +165,7 @@ export default function Offers({ setCurrentPage }: OffersProps) {
                 </button>
               </div>
             </div>
-            
+
             {/* Simple abstract bg */}
             <div className="absolute inset-0 opacity-10 flex items-center justify-center pointer-events-none">
               <div className="w-[800px] h-[800px] border-[40px] border-white rounded-full -translate-y-1/2"></div>

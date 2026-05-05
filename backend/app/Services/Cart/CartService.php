@@ -62,27 +62,13 @@ class CartService
             fn ($i) => (float) $i->unit_price_snapshot * (int) $i->quantity
         );
 
-        // Phase 2.5b — coupon discount integration.
-        $discount   = 0.0;
-        $couponMeta = null;
-
-        if ($cart->coupon_id !== null) {
-            $coupon = $cart->relationLoaded('coupon') ? $cart->coupon : $cart->coupon()->first();
-            if ($coupon && $coupon->is_active && !$coupon->isExpired()) {
-                $discount   = (float) $coupon->calculateDiscount($subtotal);
-                $couponMeta = [
-                    'code'            => $coupon->code,
-                    'name'            => $coupon->name,
-                    'discount_amount' => round($discount, 2),
-                ];
-            } else {
-                // Stale coupon ref (deactivated/expired since apply).
-                // Auto-clear so the cart doesn't quote a phantom
-                // discount on the next read.
-                $cart->coupon_id = null;
-                $cart->save();
-            }
-        }
+        // Phase 2.6a — coupon resolution lives on the model
+        // (`Cart::reloadCoupon`); both this method and
+        // CheckoutService::quote call into the same helper so a
+        // stale coupon is auto-cleared once and only once.
+        $reloaded  = $cart->reloadCoupon($subtotal);
+        $discount   = $reloaded['discount'] ?? 0.0;
+        $couponMeta = $reloaded['meta']     ?? null;
 
         // Decision D-B — cart is pre-tax. Tax lands at checkout.
         $tax   = 0.0;

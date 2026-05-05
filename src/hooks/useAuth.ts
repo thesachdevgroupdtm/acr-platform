@@ -56,29 +56,14 @@ export interface SavedAddress {
   isDefault: boolean;
 }
 
-export interface BookingRecord {
-  id: string;
-  createdAt: string;
-  items: { title: string; qty: number; price: number }[];
-  subtotal: number;
-  gst: number;
-  total: number;
-  status: "confirmed" | "completed" | "cancelled";
-  serviceCenter: string;
-  preferredDate: string;
-  preferredTime: string;
-  address: string;
-  paymentMethod: string;
-  notes?: string;
-}
-
 /**
  * AcrUser is the consumer-facing shape. Maintained for compatibility
  * with existing pages (Cart, Checkout, Header, MyBookings, etc.) that
- * read user.name / user.phone / user.bookings / user.addresses.
+ * read user.name / user.phone / user.email / user.addresses.
  *
- * In Phase 2.1, bookings and addresses arrive as empty arrays —
- * server endpoints land in 2.5 (orders) and 2.2 (addresses).
+ * Phase 2.6a — `bookings: BookingRecord[]` field removed (along
+ * with the BookingRecord interface). Real orders live on the
+ * server; pages read them via `useOrdersList` / `useOrderDetail`.
  */
 export interface AcrUser {
   id: string;
@@ -87,7 +72,6 @@ export interface AcrUser {
   email: string;
   phoneVerified: boolean;
   emailVerified: boolean;
-  bookings: BookingRecord[];
   addresses: SavedAddress[];
   defaultCar?: { brand: string; model: string; fuel: string };
   defaultLocation?: string;
@@ -175,7 +159,6 @@ function presentUser(api: UserResource, serverList?: AddressResource[]): AcrUser
     email:          api.email ?? "",
     phoneVerified:  api.is_verified_phone,
     emailVerified:  api.is_verified_email,
-    bookings:       [],                            // Phase 2.5
     addresses,
     defaultCar:     defaults.defaultCar,
     defaultLocation:defaults.defaultLocation,
@@ -498,20 +481,11 @@ export function useAuth() {
     [listAddresses]
   );
 
-  /* ── Booking: gated to Phase 2.5 ── */
-  const addBooking = useCallback(
-    async (_booking: Omit<BookingRecord, "id" | "createdAt" | "status">):
-      Promise<string> => {
-      if (typeof console !== "undefined") {
-        console.warn(
-          "[useAuth] addBooking is gated until Phase 2.5 (offlineCheckout). " +
-          "Returning placeholder invoice; nothing persisted server-side."
-        );
-      }
-      return `ACR${Date.now()}`;
-    },
-    []
-  );
+  // Phase 2.6a — `addBooking` shim removed. It was a placeholder
+  // that returned `ACR${Date.now()}` from the pre-2.5a fake
+  // checkout flow. Real bookings have lived in the orders table
+  // since 2.5a; pages read them via `useOrdersList` /
+  // `useOrderDetail`. No callers remained.
 
   return {
     user,
@@ -528,7 +502,6 @@ export function useAuth() {
     addAddress,
     updateAddress,
     deleteAddress,
-    addBooking,
   };
 }
 

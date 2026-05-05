@@ -10,12 +10,11 @@ import {
 } from "lucide-react";
 import PageBanner from "../components/PageBanner";
 import CancelOrderModal from "../components/CancelOrderModal";
+import LogoutConfirmModal from "../components/LogoutConfirmModal";
 import VehicleBadge from "../components/VehicleBadge";
 import { useAuth } from "../hooks/useAuth";
 import { useOrdersList, useCancelOrder } from "../hooks/useOrders";
 import type { OrderResource, OrderStatus } from "../types/api";
-import { FEATURES } from "../config/features";
-import BookingsComingSoon from "./BookingsComingSoon";
 
 interface MyBookingsProps {
   setCurrentPage: (page: string) => void;
@@ -26,17 +25,15 @@ export default function MyBookings({
   setCurrentPage,
   openAuth,
 }: MyBookingsProps) {
-  // Phase 2.5a — bookingsList stays true; the dark-launch gate is now
-  // a no-op (real /user/orders endpoint shipped).
-  if (!FEATURES.bookingsList) {
-    return <BookingsComingSoon setCurrentPage={setCurrentPage} openAuth={openAuth} />;
-  }
-
+  // Phase 2.6a — FEATURES.bookingsList dark-launch gate +
+  // BookingsComingSoon fallback removed. The real /user/orders
+  // endpoint has been live since 2.5a.
   const { user, isAuthenticated, bootstrapped, logout } = useAuth();
   const { orders, isLoading, isError } = useOrdersList({ per_page: 50 });
   const cancelMutation = useCancelOrder();
   const [cancelTarget, setCancelTarget] = useState<OrderResource | null>(null);
   const [cancelError, setCancelError] = useState<string | null>(null);
+  const [logoutOpen, setLogoutOpen] = useState(false);
 
   const completed = orders.filter((o) => o.status === "completed").length;
 
@@ -119,9 +116,7 @@ export default function MyBookings({
                 </div>
 
                 <button
-                  onClick={() => {
-                    if (confirm("Log out of your account?")) logout();
-                  }}
+                  onClick={() => setLogoutOpen(true)}
                   className="w-full bg-white border border-border py-3 text-xs font-black uppercase tracking-widest text-neutral-700 hover:border-accent-dark hover:text-accent-dark transition-colors"
                 >
                   Logout
@@ -193,6 +188,15 @@ export default function MyBookings({
         onClose={closeCancelModal}
         pending={cancelMutation.isPending}
         errorMessage={cancelError}
+      />
+
+      <LogoutConfirmModal
+        open={logoutOpen}
+        onConfirm={() => {
+          setLogoutOpen(false);
+          logout();
+        }}
+        onClose={() => setLogoutOpen(false)}
       />
     </>
   );

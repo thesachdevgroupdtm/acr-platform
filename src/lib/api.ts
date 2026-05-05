@@ -190,6 +190,13 @@ export async function api<T = unknown>(
     if (res.status === 401 && !allowUnauthorized) {
       // Token expired or invalid — wipe so the next render shows logged-out state
       setToken(null);
+      // Phase 2.6a — broadcast a session-expired event so a single
+      // app-level toast can render once, instead of every page that
+      // catches 401 having to surface its own banner. The Toast
+      // component (mounted in App.tsx) listens for this on window.
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("acr-session-expired"));
+      }
     }
     const message =
       (payload && typeof payload === "object" && "message" in payload
@@ -270,6 +277,11 @@ export interface CategorySubService {
   name: string;
   title: string;
   base_price: number | string | null;
+  /** Phase 2.6a — non-null only when the request carried brand_id /
+   * model_id / fuel_id AND service_prices had a row. */
+  vehicle_price?: number | string | null;
+  /** Phase 2.6a — `vehicle_price ?? base_price`; the value to display. */
+  effective_price?: number | string | null;
   image: string | null;
   time_takes: string | number | null;
   time_unit: string | null;
@@ -291,6 +303,10 @@ export interface SubService {
   time_unit?: string | null;
   price?: number | string | null;
   base_price?: number | string | null;
+  /** Phase 2.6a — null when no vehicle context was passed. */
+  vehicle_price?: number | string | null;
+  /** Phase 2.6a — `vehicle_price ?? base_price`. */
+  effective_price?: number | string | null;
   category_detail?: ServiceCategory;
 }
 

@@ -64,6 +64,29 @@ class ServiceController extends Controller
                 ->unique()
                 ->values()
                 ->all();
+
+            // Phase 2.6a — bulk-resolve per-service prices and stash them
+            // on each Service instance via the transient
+            // `resolvedVehiclePrice` property. SubServiceResource reads
+            // it and emits `vehicle_price` + `effective_price`. Replaces
+            // the frontend's parallel POST /pricing call on this page.
+            $allServiceIds = $categories->flatMap(fn ($c) => $c->services->pluck('id'))->all();
+
+            $priceMap = ServicePrice::query()
+                ->whereIn('service_id', $allServiceIds)
+                ->where('brand_id', $brand->id)
+                ->where('model_id', $model->id)
+                ->where('fuel_type_id', $fuel->id)
+                ->pluck('price', 'service_id')
+                ->all();
+
+            foreach ($categories as $cat) {
+                foreach ($cat->services as $service) {
+                    $service->resolvedVehiclePrice = array_key_exists($service->id, $priceMap)
+                        ? (float) $priceMap[$service->id]
+                        : null;
+                }
+            }
         }
 
         return response()->json([

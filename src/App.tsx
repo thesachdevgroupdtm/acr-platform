@@ -23,12 +23,12 @@ import CmsPage from "./pages/CmsPage";
 import Sitemap from "./pages/Sitemap";
 import Cart from "./pages/Cart";
 import Checkout from "./pages/Checkout";
-import Payment from "./pages/Payment";
 import MyBookings from "./pages/MyBookings";
 import OrderDetail from "./pages/OrderDetail";
 import BookingConfirmation from "./pages/BookingConfirmation";
 import EstimateProcess from "./components/EstimateProcess";
 import AuthModal from "./components/AuthModal";
+import SessionExpiredToast from "./components/SessionExpiredToast";
 import RouteResolutionLoader from "./components/RouteResolutionLoader";
 import { motion, AnimatePresence } from "motion/react";
 import { BUSINESS_INFO } from "./data/businessData";
@@ -277,8 +277,11 @@ export default function App() {
         return <Cart setCurrentPage={navigateTo} openAuth={openAuth} />;
       case "checkout":
         return <Checkout setCurrentPage={navigateTo} openAuth={openAuth} />;
-      case "payment":
-        return <Payment setCurrentPage={navigateTo} />;
+      // Phase 2.6a — `payment` route removed. Phase 2.5a's real
+      // checkout flow goes Cart → Checkout → BookingConfirmation
+      // directly; the legacy Payment.tsx fake-gateway page was
+      // unreachable since 2.5a and got deleted in 2.6a. Direct
+      // hits on /payment fall through to the default Home route.
       case "my-bookings":
         return <MyBookings setCurrentPage={navigateTo} openAuth={openAuth} />;
       default:
@@ -336,6 +339,9 @@ export default function App() {
         setCurrentPage={navigateTo}
         onClose={() => setAuthModal((prev) => ({ ...prev, isOpen: false }))}
       />
+
+      {/* Phase 2.6a — global 401 session-expired toast. */}
+      <SessionExpiredToast />
 
       {/* Mobile Sticky CTA */}
       <div className="lg:hidden fixed bottom-6 left-6 right-6 z-40">

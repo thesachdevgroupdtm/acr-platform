@@ -361,19 +361,24 @@ function EmptyCart({
   );
 }
 
-// ---------- Step indicator (shared visual across Cart/Checkout/Payment) ----------
+// ---------- Step indicator (shared visual across Cart + Checkout) ----------
+// Phase 2.6a — dropped the "Payment" step alongside the Payment.tsx
+// page deletion. The real flow since 2.5a is Cart → Checkout →
+// BookingConfirmation; payment is "Pay at Service Center" with no
+// payment-step page. Kept current: 1|2 typing for the two surviving
+// steps; legacy callers passing `3` would still type-check after the
+// union narrowed below.
 
 export function CheckoutSteps({
   current,
   setCurrentPage,
 }: {
-  current: 1 | 2 | 3;
+  current: 1 | 2;
   setCurrentPage: (p: string) => void;
 }) {
   const steps = [
     { num: 1, label: "Cart", page: "cart" },
     { num: 2, label: "Checkout", page: "checkout" },
-    { num: 3, label: "Payment", page: "payment" },
   ];
   return (
     <div className="flex items-center justify-center max-w-md mx-auto gap-1 sm:gap-2">

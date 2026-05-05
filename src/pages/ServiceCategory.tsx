@@ -42,7 +42,6 @@ import {
   type SubService as ApiSubService,
 } from "../lib/api";
 import { useApiQuery } from "../hooks/useApiQuery";
-import { usePricingFor } from "../hooks/usePricing";
 
 interface ServiceCategoryProps {
   categorySlug: string;
@@ -105,39 +104,28 @@ export default function ServiceCategory({
   const priceShowFromApi = Boolean(detailQuery.data?.price_show);
   const isLoadingDetail = detailQuery.isLoading;
 
-  // Phase 2.3.5 — POST /pricing in parallel for explicit
-  // matched_prices, so per-service "no priced row" can be detected
-  // without trusting `sub.price` (which the backend silently falls
-  // back to base_price when no row matches). priceMap drives the
-  // 4-state machine in the price column.
-  const subServiceIds = useMemo(
-    () => apiSubServices.map((s) => s.id),
-    [apiSubServices]
-  );
+  // Phase 2.6a — vehicle prices arrive INLINE on each service in the
+  // /services/{slug} response (`vehicle_price` field). The pre-2.6a
+  // parallel POST /pricing call is gone; the backend resolved the
+  // price map itself using the brand/model/fuel slugs in the GET
+  // query. priceMap still drives the 4-state machine in the price
+  // column.
   const vehicleSelected = !!(
     bookingCtx0.car?.brand_id &&
     bookingCtx0.car?.model_id &&
     bookingCtx0.car?.fuel_id
   );
-  const pricingReq = useMemo(() => {
-    if (!vehicleSelected || subServiceIds.length === 0) return null;
-    return {
-      brand_id:     bookingCtx0.car!.brand_id!,
-      model_id:     bookingCtx0.car!.model_id!,
-      fuel_type_id: bookingCtx0.car!.fuel_id!,
-      service_ids:  subServiceIds,
-    };
-  }, [vehicleSelected, bookingCtx0.car, subServiceIds]);
-  const pricingQuery = usePricingFor(pricingReq);
   const priceMap = useMemo(() => {
     const m = new Map<number, number>();
-    for (const p of pricingQuery.data?.matched_prices ?? []) {
-      m.set(p.service_id, p.price);
+    for (const s of apiSubServices) {
+      if (s.vehicle_price != null) {
+        const num = Number(s.vehicle_price);
+        if (Number.isFinite(num)) m.set(s.id, num);
+      }
     }
     return m;
-  }, [pricingQuery.data]);
-  const pricingLoading =
-    vehicleSelected && pricingQuery.isFetching && pricingQuery.data === undefined;
+  }, [apiSubServices]);
+  const pricingLoading = vehicleSelected && detailQuery.isLoading;
   // For sections that need a stable display object — never null in render below;
   // skeleton path returns early when no category resolved.
   const category = apiCategory;

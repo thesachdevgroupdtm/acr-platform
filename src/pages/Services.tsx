@@ -24,7 +24,6 @@ import {
   type CategorySubService,
 } from "../lib/api";
 import { useApiQuery } from "../hooks/useApiQuery";
-import { usePricingFor } from "../hooks/usePricing";
 import { useSubNavSync } from "../hooks/useSubNavSync";
 
 interface ServicesProps {
@@ -97,44 +96,32 @@ export default function Services({ setCurrentPage }: ServicesProps) {
     [servicesQuery.data?.available_category_ids]
   );
 
-  // Phase 2.3.5 — vehicle-specific prices ONLY. Base_price is never
-  // shown to users; the row's price column is a 4-state machine
-  // driven by `priceFor` below:
-  //   no-vehicle → "Check Price" CTA (existing UX)
-  //   loading    → skeleton bar (no number rendered)
-  //   price      → ₹{vehicle-specific value}
-  //   no-price   → "Quote on Inspection"
-  // The /services list endpoint deliberately returns base_price only
-  // (see SubServiceResource); we POST /pricing for every visible
-  // service id and never fall back to base_price for display.
+  // Phase 2.6a — vehicle-specific prices arrive INLINE on each
+  // SubServiceResource (`vehicle_price`). The 4-state machine from
+  // 2.3.5 still applies — driven by `priceFor` below:
+  //   no-vehicle → "Check Price" CTA
+  //   loading    → skeleton bar (servicesQuery.isFetching)
+  //   price      → ₹{vehicle_price}
+  //   no-price   → "Quote on Inspection" (vehicle context sent but
+  //                service has no service_prices row)
+  // The pre-2.6a parallel POST /pricing call is gone — the bulk
+  // resolution happens server-side inside ServiceController@index.
   const vehicleSelected = !!(
     booking.car?.brand_id && booking.car?.model_id && booking.car?.fuel_id
   );
-  const allServiceIds = useMemo(() => {
-    const ids: number[] = [];
-    for (const c of apiCategories) {
-      for (const s of c.services ?? []) ids.push(s.id);
-    }
-    return ids;
-  }, [apiCategories]);
-  const pricingReq = useMemo(() => {
-    if (!vehicleSelected || allServiceIds.length === 0) return null;
-    return {
-      brand_id:     booking.car!.brand_id!,
-      model_id:     booking.car!.model_id!,
-      fuel_type_id: booking.car!.fuel_id!,        // backend uses fuel_type_id
-      service_ids:  allServiceIds,
-    };
-  }, [vehicleSelected, booking.car, allServiceIds]);
-  const pricingQuery = usePricingFor(pricingReq);
   const priceMap = useMemo(() => {
     const m = new Map<number, number>();
-    for (const p of pricingQuery.data?.matched_prices ?? []) {
-      m.set(p.service_id, p.price);
+    for (const c of apiCategories) {
+      for (const s of c.services ?? []) {
+        if (s.vehicle_price != null) {
+          const num = Number(s.vehicle_price);
+          if (Number.isFinite(num)) m.set(s.id, num);
+        }
+      }
     }
     return m;
-  }, [pricingQuery.data]);
-  const pricingLoading = vehicleSelected && pricingQuery.isFetching && pricingQuery.data === undefined;
+  }, [apiCategories]);
+  const pricingLoading = vehicleSelected && servicesQuery.isLoading;
 
   const handleAddToCart = async (sub: CategorySubService, categorySlug: string) => {
     try {

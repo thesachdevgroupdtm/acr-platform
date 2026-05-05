@@ -78,4 +78,48 @@ class Cart extends Model
     {
         return app(CartService::class)->totalsFor($this);
     }
+
+    /**
+     * Phase 2.6a — single source of truth for "is the applied coupon
+     * still valid, and what's its discount on this subtotal."
+     *
+     * Auto-clears (and persists) the cart's coupon_id when the
+     * referenced coupon has been deactivated or expired since the
+     * user applied it — so neither CartService::totalsFor nor
+     * CheckoutService::quote can ever quote a phantom discount.
+     *
+     * Returns null when no coupon is applied OR the applied coupon is
+     * stale and was just cleared. Otherwise returns a 3-key payload:
+     *   [
+     *     'coupon'   => Coupon model instance,
+     *     'discount' => float (raw, unrounded),
+     *     'meta'     => ['code', 'name', 'discount_amount' (rounded)],
+     *   ]
+     */
+    public function reloadCoupon(float $subtotal): ?array
+    {
+        if ($this->coupon_id === null) {
+            return null;
+        }
+
+        $coupon = $this->relationLoaded('coupon') ? $this->coupon : $this->coupon()->first();
+
+        if ($coupon && $coupon->is_active && !$coupon->isExpired()) {
+            $discount = (float) $coupon->calculateDiscount($subtotal);
+            return [
+                'coupon'   => $coupon,
+                'discount' => $discount,
+                'meta'     => [
+                    'code'            => $coupon->code,
+                    'name'            => $coupon->name,
+                    'discount_amount' => round($discount, 2),
+                ],
+            ];
+        }
+
+        // Stale ref (deactivated or expired since apply). Self-heal.
+        $this->coupon_id = null;
+        $this->save();
+        return null;
+    }
 }

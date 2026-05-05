@@ -20,8 +20,6 @@ import { useAuth } from "../hooks/useAuth";
 import { useBookingContext } from "../hooks/useBookingContext";
 import { useServiceCenters } from "../hooks/useServiceCenters";
 import { CheckoutSteps } from "./Cart";
-import { FEATURES } from "../config/features";
-import CheckoutComingSoon from "./CheckoutComingSoon";
 import { ApiError, postPlaceOrder } from "../lib/api";
 import CouponInput from "../components/CouponInput";
 import VehicleBadge from "../components/VehicleBadge";
@@ -45,12 +43,11 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const GST_PCT = 18;
 
 export default function Checkout({ setCurrentPage, openAuth }: CheckoutProps) {
-  // Phase 2.5a — checkoutFlow stays true; the dark-launch gate is
-  // now a no-op (real backend ships). Kept for ops kill-switch.
-  if (!FEATURES.checkoutFlow) {
-    return <CheckoutComingSoon setCurrentPage={setCurrentPage} />;
-  }
-
+  // Phase 2.6a — the FEATURES.checkoutFlow dark-launch gate and
+  // CheckoutComingSoon fallback have been removed; the real
+  // backend has been live since 2.5a and the flag is permanently
+  // true. If a future ops kill-switch is needed, re-introduce a
+  // narrower toggle without the dead component.
   const { items, subtotal, count, cart } = useCart();
   const { details, setDetails, resetDetails } = useCheckout();
   const { user, isAuthenticated, bootstrapped, setDefaults } = useAuth();

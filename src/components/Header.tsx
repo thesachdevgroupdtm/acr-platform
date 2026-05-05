@@ -199,16 +199,10 @@ export default function Header({ currentPage, setCurrentPage, openEstimate, open
               </a>
             </div>
 
-            {/* Payment Link */}
-            <button 
-              onClick={() => setCurrentPage("payment")}
-              className="hidden sm:flex items-center hover:opacity-80 transition-all cursor-pointer group px-2"
-            >
-              <span className="group-hover:underline decoration-white/40 underline-offset-4 tracking-widest text-[11px] font-bold uppercase">₹ Pay Online</span>
-            </button>
-
-            {/* Divider */}
-            <span className="hidden sm:block w-px h-3 bg-white/20" />
+            {/* Phase 2.6a — "₹ Pay Online" link removed alongside
+                the Payment.tsx page deletion. Real payment is
+                "Pay at Service Center" (Phase 2.5a) until a real
+                gateway lands in Phase 4+. */}
 
             {/* Auth: Login / Sign Up OR Logged-in user menu.
                 When FEATURES.auth is off the entry buttons are hidden so
@@ -335,12 +329,12 @@ export default function Header({ currentPage, setCurrentPage, openEstimate, open
                           }}
                           className="w-full text-left px-4 py-3 text-[11px] font-bold uppercase text-neutral-700 hover:bg-neutral-50 hover:text-primary transition-colors flex items-center gap-2 tracking-widest border-b border-border"
                         >
+                          {/* Phase 2.6a — booking-count badge dropped.
+                              user.bookings was the legacy local array
+                              (always []); real orders live on the
+                              server. The /booking-history page
+                              renders the live count. */}
                           <Package className="w-3.5 h-3.5" /> My Bookings
-                          {(user?.bookings.length ?? 0) > 0 && (
-                            <span className="ml-auto bg-primary text-white text-[9px] px-1.5 py-0.5 normal-case tracking-normal">
-                              {user?.bookings.length}
-                            </span>
-                          )}
                         </button>
                         <button
                           onClick={() => {
