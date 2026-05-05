@@ -92,6 +92,37 @@ export function useSubNavSync({
   const navRef = useRef<HTMLElement | null>(null);
 
   /* ─────────── Scroll-spy ─────────── */
+  //
+  // Phase 2.5.8 — algorithm rewrite to fix the "snap back to OVERVIEW"
+  // mid-page resync bug.
+  //
+  // The previous implementation read only the CHANGED entries from
+  // each IntersectionObserver callback and sorted them ascending by
+  // `boundingClientRect.top`. Two flaws compounded:
+  //
+  //   1. Entries-only view: when section A's state didn't change in
+  //      a given fire (it's been intersecting for a while), it
+  //      wasn't in `entries`. So the callback could pick a stale
+  //      "topmost" from a fire that only contained section B
+  //      exiting, and miss the still-active section A.
+  //
+  //   2. Wrong sort key: among multiple intersecting sections, the
+  //      smallest `top` (most-negative, i.e. furthest above
+  //      viewport) won. That's "first-entered" — but scrollspy UX
+  //      wants "most-recently-passed-the-activation-line." The user
+  //      reads the section whose heading just scrolled past the
+  //      sticky chrome — that section has the LARGEST `top` ≤
+  //      activation line, not the smallest.
+  //
+  // Fix: maintain a Set of currently-intersecting section elements
+  // across IO fires (rather than reading only the changed entries),
+  // re-measure each on every fire (boundingClientRect from a stale
+  // entry can be wrong on fast scrolls), then pick the section
+  // whose top is the largest value still ≤ the activation line at
+  // 15% of viewport height. Falls back to the topmost intersecting
+  // section if no section has crossed the activation line yet
+  // (rare — happens at the very top of the page when only the
+  // first section is visible).
   useEffect(() => {
     const sections = document.querySelectorAll<HTMLElement>(
       "[data-subnav-section]",
@@ -99,26 +130,51 @@ export function useSubNavSync({
     if (sections.length === 0) return;
 
     // Initial-active fallback — first registered section wins until
-    // the observer's first callback overrides. Runs inside the IO
-    // effect (not a separate effect) so it only applies once
-    // sections actually exist in the DOM.
+    // the observer's first callback overrides. Functional update
+    // form keeps any pre-existing activeSlug intact.
     setActiveSlug((current) => {
       if (current) return current;
       const firstSlug = sections[0].getAttribute("data-subnav-section");
       return firstSlug ?? "";
     });
 
+    const intersecting = new Set<HTMLElement>();
+
     const observer = new IntersectionObserver(
       (entries) => {
-        const visible = entries
-          .filter((e) => e.isIntersecting)
-          .sort(
-            (a, b) => a.boundingClientRect.top - b.boundingClientRect.top,
-          );
-        if (visible[0]) {
-          const slug = visible[0].target.getAttribute("data-subnav-section");
-          if (slug) setActiveSlug(slug);
+        // 1. Maintain the running "currently-intersecting" set.
+        for (const entry of entries) {
+          const target = entry.target as HTMLElement;
+          if (entry.isIntersecting) intersecting.add(target);
+          else intersecting.delete(target);
         }
+        if (intersecting.size === 0) return;
+
+        // 2. Re-measure each on this tick — IntersectionObserverEntry
+        //    boundingClientRect can be stale on fast scrolls.
+        const measured = Array.from(intersecting).map((el) => ({
+          el,
+          top: el.getBoundingClientRect().top,
+        }));
+
+        // 3. Activation line at 15% of viewport (matches rootMargin
+        //    top inset). Sections whose top has crossed the line
+        //    going up are "passed".
+        const activationLine = window.innerHeight * 0.15;
+        const passed = measured.filter((m) => m.top <= activationLine);
+
+        // 4. Pick the most-recently-passed section (largest top
+        //    among passed). If none have passed yet, pick the
+        //    topmost intersecting section (smallest top).
+        let chosen: HTMLElement;
+        if (passed.length > 0) {
+          chosen = passed.reduce((a, b) => (a.top > b.top ? a : b)).el;
+        } else {
+          chosen = measured.reduce((a, b) => (a.top < b.top ? a : b)).el;
+        }
+
+        const slug = chosen.getAttribute("data-subnav-section");
+        if (slug) setActiveSlug(slug);
       },
       { rootMargin: ROOT_MARGIN, threshold: [0, 0.1] },
     );
