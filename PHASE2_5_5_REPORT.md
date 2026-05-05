@@ -1,12 +1,21 @@
-# Phase 2.5.5 — cart entry-point consolidation
+# Phase 2.5.5 — cart entry-point consolidation across browse pages
 
-UX-audit outcome: 4 redundant "View Cart" surfaces on
-`/category/{slug}` (and parallel render sites on
-`/services/...`, `/services`) collapsed to 2 purposeful surfaces:
+UX-audit outcome — 4+ redundant "View Cart" surfaces on `/services`,
+`/category/{slug}`, and `/services/{cat}/{sub}` collapsed to 2
+purposeful surfaces, with the contextual card placed BELOW the
+primary booking/estimate panel:
 
-1. Global top-header cart icon (untouched).
-2. Contextual `<SmartMiniCart>` in the right sidebar, sibling
-   to the existing booking-context card.
+1. **Global top-header cart icon** (untouched) — industry-standard
+   global access, available on every page.
+2. **Contextual `<SmartMiniCart>`** — placed BELOW the primary
+   booking/estimate/car-selection panel in each browse page's
+   right sidebar. Renders only when cart has items. Booking is
+   primary; cart is secondary.
+
+This commit supersedes the prior 2.5.5 commit (`ef5d8a0`) which
+positioned `<SmartMiniCart>` ABOVE the booking panel — the
+operator's design priority is booking-first, cart-secondary
+(D-2.5.5-6).
 
 Frontend-only commit. No backend, no API contract, no FEATURES
 flag changes.
@@ -15,57 +24,68 @@ flag changes.
 
 ## 1. Files modified
 
-### New
+### New (already shipped in `ef5d8a0`; unchanged here)
 | Path | Purpose |
 |---|---|
-| `src/components/SmartMiniCart.tsx` | Sidebar mini-cart with item titles, total, VIEW CART CTA. Renders only when cart has items. |
-| `PHASE2_5_5_REPORT.md` | This report. |
+| `src/components/SmartMiniCart.tsx` | Sidebar mini-cart — header, max 3 item lines + "+N more", total, VIEW CART CTA. Renders null when items empty. |
 
-### Modified
+### Modified (this commit)
 | Path | Why |
 |---|---|
-| `src/pages/ServiceCategory.tsx` | Removed sub-nav `Cart (N)` link; removed mid-page strip; removed bottom-of-sidebar VIEW CART card; mounted `<SmartMiniCart>` at the top of the right sidebar. |
-| `src/pages/ServiceDetail.tsx` | Removed bottom-of-sidebar VIEW CART card; mounted `<SmartMiniCart>` at the top of the right sidebar. |
-| `src/pages/Services.tsx` | Removed mid-page floating cart summary; mounted `<SmartMiniCart>` above the BookingSidebar in the right aside (added `space-y-5` to the aside). |
+| `src/pages/Services.tsx` | Removed sub-nav `Cart (N)` link (missed in prior 2.5.5); flipped sidebar order so `<BookingSidebar>` is first and `<SmartMiniCart>` is second. |
+| `src/pages/ServiceCategory.tsx` | Moved `<SmartMiniCart>` from top of right aside to AFTER the Re-Check Prices card (still before trust-badges section). |
+| `src/pages/ServiceDetail.tsx` | Same move — `<SmartMiniCart>` now lives after the booking-context card. |
+
+### New (this commit)
+| Path | Purpose |
+|---|---|
+| `PHASE2_5_5_REPORT.md` | This report (overwrites prior version). |
 
 ---
 
-## 2. PART A — pre-2.5.5 cart-link render sites (audit)
+## 2. PART A — re-audit findings
 
-Grep `View Cart|CART (|service in your cart|service added` across `src/`:
+Grep `View Cart|VIEW CART|CART \(|service in your cart|service added|ITEMS IN CART|item in cart|Cart \(` across `src/`:
 
-| # | File | Lines | Surface | Disposition |
-|---|---|---|---|---|
-| 1 | `pages/ServiceCategory.tsx` | 619–626 | Sub-nav "CART (N)" anchor at far-right of section nav | **Removed** (D-2.5.5-1) |
-| 2 | `pages/ServiceCategory.tsx` | 880–900 | Mid-page strip "{N} services in your cart [VIEW CART →]" between price-list and Services Included | **Removed** (D-2.5.5-2) |
-| 3 | `pages/ServiceCategory.tsx` | 1340–1363 | Bottom-of-sidebar `<motion.button>` "VIEW CART / N services added" | **Replaced by `<SmartMiniCart>` at top of sidebar** |
-| 4 | `pages/Services.tsx` | 345–366 | Floating strip after the categories list, same shape as #2 | **Removed** + `<SmartMiniCart>` mounted in sidebar |
-| 5 | `pages/ServiceDetail.tsx` | 881–902 | Bottom-of-sidebar VIEW CART button | **Replaced by `<SmartMiniCart>` at top of sidebar** |
+| # | File | Lines | Surface | Pre-2.5.5 (orig) | Prior 2.5.5 (`ef5d8a0`) | This commit |
+|---|---|---|---|---|---|---|
+| 1 | `pages/Services.tsx` | 226–233 | Sub-nav "Cart (N)" link at far-right | Present | **Still present (missed)** | **Removed** |
+| 2 | `pages/Services.tsx` | 345–366 | Mid-page floating cart strip | Present | Removed | (n/a) |
+| 3 | `pages/Services.tsx` aside | (now 360-372) | `<SmartMiniCart>` above `<BookingSidebar>` | n/a | **Wrong order (above)** | **Inverted → below** |
+| 4 | `pages/ServiceCategory.tsx` sub-nav | 619-626 | "CART (N)" anchor | Present | Removed | (n/a) |
+| 5 | `pages/ServiceCategory.tsx` body | 880-900 | Mid-page strip | Present | Removed | (n/a) |
+| 6 | `pages/ServiceCategory.tsx` aside | line 1119 | `<SmartMiniCart>` at TOP of sidebar | (n/a) | **Wrong placement** | **Moved → after Re-Check Prices card** |
+| 7 | `pages/ServiceCategory.tsx` aside | 1340-1363 (orig) | Bottom inline VIEW CART card | Present | Removed | (n/a) |
+| 8 | `pages/ServiceDetail.tsx` aside | line 674 | `<SmartMiniCart>` at TOP of sidebar | (n/a) | **Wrong placement** | **Moved → after booking context card** |
+| 9 | `pages/ServiceDetail.tsx` aside | 881-902 (orig) | Bottom inline VIEW CART button | Present | Removed | (n/a) |
 
-`components/BookingSidebar.tsx` does not render any cart UI — the sidebar VIEW CART cards lived inline inside their parent pages.
+`components/BookingSidebar.tsx` carries no cart UI — verified by
+grepping `cart|Cart|ShoppingCart` (no matches). The cart UI lived
+inline in each parent page; consolidation has been done at the
+parent-page level.
 
-The top-header cart icon (`components/Header.tsx`) and the per-row "ADDED" badge (`pages/ServiceCategory.tsx` services list) are untouched per D-2.5.5-4 / D-2.5.5-5.
+The top-header cart icon (`components/Header.tsx`) and the per-row
+"ADDED" status badge (`pages/ServiceCategory.tsx`) are untouched
+per D-2.5.5-4 / D-2.5.5-5.
 
 ---
 
-## 3. PART B — sub-nav cleanup diff
-
-`pages/ServiceCategory.tsx` lines 606–629:
+## 3. PART B — sub-nav cleanup diff (`Services.tsx`)
 
 ```diff
-            {SECTION_NAV.map((s) => (
-              <button
-                key={s.id}
-                onClick={() => scrollToSection(s.id)}
-                className={`text-[10px] sm:text-xs uppercase tracking-widest font-bold py-4 px-3 sm:px-5 whitespace-nowrap border-b-2 transition-colors shrink-0 ${
-                  activeSection === s.id
-                    ? "border-primary text-primary"
-                    : "border-transparent text-neutral-500 hover:text-primary"
-                }`}
-              >
-                {s.label}
-              </button>
-            ))}
+              : apiCategories.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => scrollToSection(c.slug)}
+                    className={`text-[10px] sm:text-xs uppercase tracking-widest font-bold py-4 px-3 sm:px-5 whitespace-nowrap border-b-2 transition-colors shrink-0 ${
+                      activeSection === c.slug
+                        ? "border-primary text-primary"
+                        : "border-transparent text-neutral-500 hover:text-primary"
+                    }`}
+                  >
+                    {c.title}
+                  </button>
+                ))}
 -           {count > 0 && (
 -             <button
 -               onClick={() => setCurrentPage("cart")}
@@ -74,109 +94,164 @@ The top-header cart icon (`components/Header.tsx`) and the per-row "ADDED" badge
 -               <ShoppingCart className="w-4 h-4" /> Cart ({count})
 -             </button>
 -           )}
++           {/* Phase 2.5.5 — sub-nav is category-anchors only
++               (D-2.5.5-1). The previous "CART (N)" link was a
++               redundant cart entry point; the global header icon
++               and the contextual SmartMiniCart in the right
++               sidebar own that role. */}
           </div>
+        </div>
+      </nav>
 ```
 
-The strip now contains only the 6 anchor buttons defined in `SECTION_NAV` (Overview / Pricing / Services / Process / Reviews / FAQs). Mixing global navigation ("Cart") into a section-anchor strip violated the purpose of the strip; the global header icon owns that role.
+The `ServiceCategory.tsx` sub-nav had its `Cart (N)` link removed
+in the prior 2.5.5 commit (`ef5d8a0`); no further change needed
+there. The `Services.tsx` sub-nav had the same pattern but was
+overlooked — fixed here.
+
+After this commit:
+- `/category/{slug}`: Overview · Pricing · Services · Process · Reviews · FAQs
+- `/services`: dynamic category strip (Car Battery · Car Emergency · …) — no CART link
 
 ---
 
-## 4. PART C — mid-page strip removal diff
+## 4. PART C — mid-page strip removal (verification)
 
-`pages/ServiceCategory.tsx` lines 880–900 (now collapsed to a single comment):
+Both mid-page strips were already removed in the prior 2.5.5
+commit (`ef5d8a0`):
+- `ServiceCategory.tsx` lines 880-900 (the "{N} services in your cart" strip between price-list and Services Included).
+- `Services.tsx` lines 345-366 (the floating cart summary after the categories list).
 
-```diff
--           {count > 0 && pricesShown && (
--             <motion.div
--               initial={{ opacity: 0, y: 10 }}
--               animate={{ opacity: 1, y: 0 }}
--               className="mt-5 bg-neutral-50 border border-border p-4 flex items-center justify-between gap-4"
--             >
--               <div className="flex items-center gap-3 min-w-0">
--                 <ShoppingCart className="w-5 h-5 text-primary shrink-0" />
--                 <p className="text-sm font-bold text-neutral-900 tracking-tighter truncate">
--                   {count} {count === 1 ? "service" : "services"} in your
--                   cart
--                 </p>
--               </div>
--               <button
--                 onClick={() => setCurrentPage("cart")}
--                 className="bg-primary text-white px-4 py-2.5 ..."
--               >
--                 View Cart <ArrowRight className="w-3.5 h-3.5" />
--               </button>
--             </motion.div>
--           )}
-+           {/* Phase 2.5.5 — mid-page strip removed; page flows
-+               directly from price-list to "Services Included". */}
-          </section>
-```
-
-`pages/Services.tsx` lines 345–366: same shape removed; page flows directly from category cards to the trust strip.
+Greps for `service in your cart` and `service added` return zero
+matches in source files (only documentation comments).
 
 ---
 
-## 5. PART D — SmartMiniCart component
+## 5. PART D — `<SmartMiniCart>` component preview
+
+Component already shipped in `ef5d8a0` and is unchanged here. Snippet
+of the rendered shape (when 2 items in cart):
 
 ```
 ┌─────────────────────────────────────┐
-│ 🛒 1 ITEM IN CART                   │   header — primary tint
+│ 🛒 2 ITEMS IN CART                  │   header — primary tint, uppercase
 ├─────────────────────────────────────┤
 │ Battery Charging          ₹1,650    │   item line × max 3
+│ Battery Replacement       ₹4,950    │   ↕ divide-y between rows
 ├─────────────────────────────────────┤
-│ + 2 more items                      │   overflow line, italic
-├─────────────────────────────────────┤
-│ TOTAL                     ₹4,250    │   border-t separator
+│ TOTAL                     ₹6,600    │   border-t separator, font-black
 │                                     │
-│      [VIEW CART →]                  │   btn-ink-primary, full-width
+│      [VIEW CART →]                  │   btn-ink-primary, w-full
 └─────────────────────────────────────┘
 ```
 
-- Props: `className?`, `setCurrentPage?` (page-router setter; falls back to `window.location` if omitted so the component is usable in isolation).
-- Renders `null` when `useCart().items.length === 0` — the parent sidebar reflows naturally.
-- Item rows show title, optional `× qty` modifier, and line total.
-- `Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 })` formats prices as `₹1,650` not `₹1650`.
-- Visual contract: `bg-white border border-primary/30 shadow-xl` matches the existing booking-card chrome (same border weight, same shadow scheme) so the two cards stack visually as siblings.
-- `motion.div` entrance animation matches the prior cart-summary card (`initial y:10, animate y:0`) so the appearance feel is preserved.
+Key implementation notes (unchanged):
+- Renders `null` when `useCart().items.length === 0` — parent
+  sidebar reflows to single-card naturally.
+- `Intl.NumberFormat('en-IN', { style:'currency', currency:'INR', maximumFractionDigits: 0 })` for `₹1,650` (not `₹1650`).
+- `bg-white border border-primary/30 shadow-xl` matches the
+  primary booking card's chrome so the two stack as visual
+  siblings.
+- `motion.div` entrance (`initial y:10, animate y:0`) so the card
+  slides in when items first land.
 
 ---
 
-## 6. PART E — sidebar wiring
+## 6. PART E — sidebar wiring (per page)
 
-| Page | Aside container before | After |
-|---|---|---|
-| `ServiceCategory.tsx` | `<aside class="… space-y-5">` then booking card → trust badges → bottom VIEW CART card → trust badges (continued) | Same `space-y-5` aside; **`<SmartMiniCart setCurrentPage={setCurrentPage} />` inserted as first child**; bottom inline VIEW CART card removed. |
-| `ServiceDetail.tsx` | `<aside class="space-y-6 …">` then booking-context card → … → bottom VIEW CART button | **`<SmartMiniCart setCurrentPage={setCurrentPage} />` inserted as first child**; bottom inline VIEW CART button removed. |
-| `Services.tsx` | `<aside class="order-1 lg:order-2">` containing only `<BookingSidebar/>` | Aside now `space-y-5`; **`<SmartMiniCart setCurrentPage={setCurrentPage} />` inserted above `<BookingSidebar/>`**. |
+The structural change in this commit is the placement flip — booking
+panel is now PRIMARY (top), `<SmartMiniCart>` is SECONDARY (below).
 
-In all three pages the import block also gains `import SmartMiniCart from "../components/SmartMiniCart";`.
+### `Services.tsx` — order swap
+```diff
+            {/* ───── BOOKING SIDEBAR ───── */}
+            <aside className="order-1 lg:order-2 space-y-5">
+-             {/* Phase 2.5.5 — contextual mini-cart, sibling to the
+-                 BookingSidebar (D-2.5.5-3). */}
+-             <SmartMiniCart setCurrentPage={setCurrentPage} />
++             {/* Phase 2.5.5 (D-2.5.5-3, D-2.5.5-6) — booking panel is
++                 PRIMARY (top of sidebar); SmartMiniCart is SECONDARY,
++                 rendered BELOW and conditional on cart non-empty. */}
+              <BookingSidebar
+                titleStart="EXPERIENCE THE BEST"
+                titleAccent="CAR SERVICES"
+                titleEnd="IN"
+                stickyTopPx={STICKY_OFFSET_PX}
+              />
++             <SmartMiniCart setCurrentPage={setCurrentPage} />
+            </aside>
+```
+
+This is the structural inversion the new spec calls out explicitly
+("the current cart card appears ABOVE the car-selection panel —
+INVERT this"). After this commit `/services` has the operator-
+correct hierarchy.
+
+### `ServiceCategory.tsx` — relocation
+- `<SmartMiniCart>` removed from the top of the aside (between the
+  comment block and the Re-Check Prices `<div>`).
+- `<SmartMiniCart>` re-mounted between the Re-Check Prices card's
+  closing `</div>` and the trust-badges card.
+- Aside order is now: Re-Check Prices → SmartMiniCart → Trust
+  Badges (Why Trust Us). The trust-badges card is informational
+  chrome unaffected by either re-order.
+
+### `ServiceDetail.tsx` — same relocation pattern
+- `<SmartMiniCart>` removed from the top of the aside (it was
+  immediately under the comment block, before the booking-context
+  card).
+- `<SmartMiniCart>` re-mounted after the booking-context card's
+  closing `</div>` and before the trust-badges card.
+- Final order: Booking Context → SmartMiniCart → Trust Badges.
 
 ---
 
-## 7. Before / after states (described)
+## 7. Final state
 
-**Empty cart state** (`/category/car-battery`, guest browsing):
+### `/services` (cart with 2 items)
+```
+Sub-nav: Car Battery · Car Emergency · … (NO CART link)
+
+Right sidebar:
+┌ BookingSidebar (PRIMARY)             ┐
+│  Location · Car · Phone · Get Estimate│
+└──────────────────────────────────────┘
+┌ SmartMiniCart (SECONDARY, conditional) ┐
+│  🛒 2 ITEMS IN CART                  │
+│  Battery Charging        ₹1,650      │
+│  Battery Replacement     ₹4,950      │
+│  TOTAL                   ₹6,600      │
+│       [VIEW CART →]                  │
+└──────────────────────────────────────┘
+```
+
+### `/category/car-battery` (cart with 1 item)
+```
+Sub-nav: Overview · Pricing · Services · Process · Reviews · FAQs
+         (NO CART link)
+
+Page body: Hero → Price List → Services Included → …
+           (NO mid-page strip between Price List and Services Included)
+
+Right sidebar:
+┌ Re-Check Prices Panel (PRIMARY)      ┐
+└──────────────────────────────────────┘
+┌ SmartMiniCart (SECONDARY)            ┐
+│  🛒 1 ITEM IN CART                   │
+│  Battery Charging        ₹1,650      │
+│  TOTAL                   ₹1,650      │
+│       [VIEW CART →]                  │
+└──────────────────────────────────────┘
+┌ Trust Badges (Why Trust Us)          ┐
+└──────────────────────────────────────┘
+```
+
+### Empty cart on either page
 - Top header: cart icon, no badge.
-- Sub-nav: 6 section anchors only — no "CART" entry.
-- Page body: services list flows directly into "Services Included" (no strip between).
-- Right sidebar: booking context card → trust badges. **No mini-cart.**
-- Net result: page is decluttered, focused on browsing.
-
-**Cart with 1 item** (after clicking ADD on a service row):
-- Top header: cart icon shows "1" badge.
-- Service row: ADDED status badge appears.
-- Right sidebar: **`<SmartMiniCart>` slides in at the top** showing "1 ITEM IN CART", the service title with price `₹1,650`, TOTAL row, and VIEW CART button. Sits above the booking context card as a sibling.
-- Page body: still no mid-page strip.
-- Sub-nav: still anchor-only.
-
-**Cart with 4+ items**:
-- `<SmartMiniCart>` shows the first 3 service titles + their line totals, then `+ 1 more items` overflow line, then aggregated TOTAL of all 4.
-- VIEW CART button unchanged.
-
-**VIEW CART click paths** all converge on `setCurrentPage('cart')` (which is `navigateTo` after Phase 2.5.2):
-- Top header cart icon → `/cart`.
-- SmartMiniCart VIEW CART button → `/cart`.
-- (Removed paths: sub-nav link, mid-page strip, bottom sidebar card.)
+- Sub-nav: section/category anchors only.
+- Right sidebar: booking panel only — `<SmartMiniCart>` returns
+  `null` and the trust-badges card sits directly under the booking
+  panel.
 
 ---
 
@@ -190,8 +265,8 @@ $ npm run build
 ✓ 2167 modules transformed.
 dist/index.html                 0.42 kB │ gzip:   0.28 kB
 dist/assets/index-O4_C5Wv2.css  107.32 kB │ gzip:  17.56 kB
-dist/assets/index-DzM-MUgp.js   781.18 kB │ gzip: 205.28 kB
-✓ built in 13.18s
+dist/assets/index-Bw9-IsAv.js   780.90 kB │ gzip: 205.22 kB
+✓ built in 22.91s
 ```
 
 Pre-existing >500 kB chunk warning unchanged.
@@ -200,7 +275,7 @@ Pre-existing >500 kB chunk warning unchanged.
 
 ## 9. Commit
 
-`fix(frontend): Phase 2.5.5 — cart entry-point consolidation. Remove redundant CART link from category sub-nav; remove mid-page 'X service in cart' strip; replace bottom sidebar VIEW CART card with SmartMiniCart component (item titles, total, CTA) mounted above Re-Check Prices panel. Final state: 2 purposeful cart surfaces (global header icon + contextual sidebar mini-cart) replacing 4 redundant entry points. UX audit outcome from operator design review.`
+`fix(frontend): Phase 2.5.5 — cart entry-point consolidation across browse pages. Remove redundant CART links from /services + /category sub-navs; remove mid-page strip; unify bottom-sidebar VIEW CART cards into SmartMiniCart placed BELOW booking/estimate panel (priority: booking primary, cart secondary). Final state: 2 purposeful cart surfaces (global header icon + contextual sidebar mini-cart) replacing 4+ redundant entry points. UX audit outcome from operator design review.`
 
 (Hash printed by `git log -1 --oneline` after the commit lands.)
 
@@ -208,9 +283,25 @@ Pre-existing >500 kB chunk warning unchanged.
 
 ## 10. Deviations
 
-- **`Services.tsx` mid-page strip removed even though spec scoped PART C to category pages.** The spec showed `/category/car-battery` as the reproduction case but the same pattern existed verbatim on `/services`. Leaving it would have meant the inconsistency surfaced again on the next browse-page audit; cheaper to align both now.
-- **`Services.tsx` aside got `space-y-5` added.** Was a single child (BookingSidebar) so spacing didn't matter; with `<SmartMiniCart>` above it the gap is needed. ServiceCategory + ServiceDetail asides already had `space-y-5` / `space-y-6` for their existing card stacks.
-- **SmartMiniCart accepts an optional `setCurrentPage` prop, not a hard `useNav` import.** Pages already destructure `setCurrentPage` from props (Phase 2.5.2 wired `navigateTo` into that name), so the existing pattern is reused. Component falls back to `window.location.href = '/cart'` when called outside a routed page (safety net for future adopters).
-- **No mobile sticky CTA added.** The spec-screenshot mobile pattern showed a sticky bottom strip on small viewports — out of scope here since the existing top-header icon already shows count on mobile. Worth revisiting in a future mobile-UX pass.
-- **`ShoppingCart` / `ArrowRight` imports left in `Services.tsx` and `ServiceDetail.tsx`.** Both icons are still used elsewhere on those pages (header tile, "View Details" arrows). Removing the imports would have been incorrect.
-- **No prop drilling refactor.** `setCurrentPage` is still passed page → SmartMiniCart manually. A future commit could lift the navigation entry to a context once the codebase migrates to react-router (Phase 3); for now the explicit prop matches every other component on these pages.
+- **Ships as a follow-up to `ef5d8a0`, not a clean replacement.**
+  The prior 2.5.5 commit got the placement priority backwards
+  (cart above booking) and missed the `Services.tsx` sub-nav
+  CART link. This commit corrects both. A future cleanup could
+  squash both into one historical commit if desired; not done
+  here to preserve the audit trail.
+- **No mobile sticky CTA added.** Out of scope; the existing
+  top-header icon already shows the count badge on mobile.
+- **`<SmartMiniCart>` component itself is unchanged.** Only its
+  parent-page mount points were modified.
+- **`ServiceCategory.tsx` aside sticky positioning preserved.**
+  `lg:sticky lg:self-start` with custom `top` style means the
+  whole stack (Re-Check Prices → SmartMiniCart → Trust Badges)
+  scrolls together; the inversion doesn't affect sticky behaviour.
+- **No prop drilling refactor.** `setCurrentPage` is still passed
+  page → SmartMiniCart manually, matching every other component
+  on these pages. A context-based nav lift remains a Phase 3
+  router-migration concern.
+- **Trust-badges card stays beneath SmartMiniCart on
+  `/category/{slug}`.** Visual hierarchy: primary booking card →
+  conditional cart card → static trust card. The trust card was
+  always last in the aside; preserving that.

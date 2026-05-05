@@ -668,10 +668,9 @@ export default function ServiceDetail({
 
             {/* Sidebar */}
             <aside className="space-y-6 lg:sticky lg:top-32 lg:self-start">
-              {/* Phase 2.5.5 — contextual mini-cart, sibling to the
-                  booking context card. Renders only when the cart
-                  has items (D-2.5.5-3). */}
-              <SmartMiniCart setCurrentPage={setCurrentPage} />
+              {/* Phase 2.5.5 (D-2.5.5-6) — booking context card is
+                  PRIMARY (top); SmartMiniCart sits BELOW it as the
+                  SECONDARY card, conditional on cart non-empty. */}
 
               {/* Synced booking context card — shows the SAME details
                   the user already filled on the parent category page.
@@ -884,9 +883,10 @@ export default function ServiceDetail({
                 )}
               </div>
 
-              {/* Phase 2.5.5 — bottom-of-sidebar VIEW CART card removed
-                  per UX audit. SmartMiniCart at the top of this aside
-                  now owns the cart-summary role (D-2.5.5-3). */}
+              {/* Phase 2.5.5 — SmartMiniCart sits HERE (D-2.5.5-3,
+                  D-2.5.5-6): below the primary booking context card,
+                  above the trust badges. Conditional on items > 0. */}
+              <SmartMiniCart setCurrentPage={setCurrentPage} />
 
               {/* Trust badges */}
               <div className="bg-white p-5 sm:p-6 border border-border shadow-xl">

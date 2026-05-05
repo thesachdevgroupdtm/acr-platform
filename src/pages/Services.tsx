@@ -223,14 +223,10 @@ export default function Services({ setCurrentPage }: ServicesProps) {
                     {c.title}
                   </button>
                 ))}
-            {count > 0 && (
-              <button
-                onClick={() => setCurrentPage("cart")}
-                className="ml-auto flex items-center gap-2 text-[10px] sm:text-xs uppercase tracking-widest font-bold py-4 px-3 sm:px-5 text-primary whitespace-nowrap shrink-0"
-              >
-                <ShoppingCart className="w-4 h-4" /> Cart ({count})
-              </button>
-            )}
+            {/* Phase 2.5.5 — sub-nav is category-anchors only (D-2.5.5-1).
+                The previous "CART (N)" link was a redundant cart entry
+                point; the global header icon and the contextual
+                SmartMiniCart in the right sidebar own that role. */}
           </div>
         </div>
       </nav>
@@ -358,15 +354,16 @@ export default function Services({ setCurrentPage }: ServicesProps) {
 
             {/* ───── BOOKING SIDEBAR ───── */}
             <aside className="order-1 lg:order-2 space-y-5">
-              {/* Phase 2.5.5 — contextual mini-cart, sibling to the
-                  BookingSidebar (D-2.5.5-3). */}
-              <SmartMiniCart setCurrentPage={setCurrentPage} />
+              {/* Phase 2.5.5 (D-2.5.5-3, D-2.5.5-6) — booking panel is
+                  PRIMARY (top of sidebar); SmartMiniCart is SECONDARY,
+                  rendered BELOW and conditional on cart non-empty. */}
               <BookingSidebar
                 titleStart="EXPERIENCE THE BEST"
                 titleAccent="CAR SERVICES"
                 titleEnd="IN"
                 stickyTopPx={STICKY_OFFSET_PX}
               />
+              <SmartMiniCart setCurrentPage={setCurrentPage} />
             </aside>
           </div>
         </div>

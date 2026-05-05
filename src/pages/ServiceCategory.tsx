@@ -1113,11 +1113,9 @@ export default function ServiceCategory({
               className="order-1 lg:order-2 lg:sticky lg:self-start space-y-5"
               style={{ top: `${STICKY_OFFSET_PX + 60}px` }}
             >
-              {/* Phase 2.5.5 — contextual mini-cart, sibling to the
-                  Re-Check Prices card. Renders only when the cart has
-                  items (D-2.5.5-3). */}
-              <SmartMiniCart setCurrentPage={setCurrentPage} />
-
+              {/* Phase 2.5.5 (D-2.5.5-6) — Re-Check Prices card is
+                  PRIMARY (top of sidebar); SmartMiniCart sits BELOW it
+                  as the SECONDARY card, conditional on items > 0. */}
               <div className="bg-white p-5 sm:p-6 border border-border shadow-xl">
                 <h2 className="text-xl sm:text-2xl font-black uppercase tracking-tighter text-neutral-900 mb-1 leading-tight">
                   Experience The Best{" "}
@@ -1323,9 +1321,11 @@ export default function ServiceCategory({
                 </div>
               </div>
 
-              {/* Phase 2.5.5 — bottom-of-sidebar VIEW CART card removed
-                  per UX audit. SmartMiniCart at the top of this aside
-                  now owns the cart-summary role (D-2.5.5-3). */}
+              {/* Phase 2.5.5 — SmartMiniCart sits HERE (D-2.5.5-3,
+                  D-2.5.5-6): below the primary Re-Check Prices card,
+                  above the trust-badges section. Conditional on cart
+                  non-empty. */}
+              <SmartMiniCart setCurrentPage={setCurrentPage} />
 
               {/* TRUST BADGES */}
               <div className="bg-white p-5 sm:p-6 border border-border shadow-xl">
