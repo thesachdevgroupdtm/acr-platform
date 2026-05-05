@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import PageBanner from "../components/PageBanner";
 import CouponInput from "../components/CouponInput";
+import CartSkeleton from "../components/CartSkeleton";
 import { useCart } from "../hooks/useCart";
 import { useAuth } from "../hooks/useAuth";
 
@@ -25,7 +26,7 @@ interface CartProps {
 const SERVICE_CHARGE_PCT = 0; // free service charge for now
 
 export default function Cart({ setCurrentPage, openAuth }: CartProps) {
-  const { items, updateQty, removeItem, subtotal, count, clearCart, cart } =
+  const { items, updateQty, removeItem, subtotal, count, clearCart, cart, isLoading: cartLoading } =
     useCart();
   const { isAuthenticated, bootstrapped } = useAuth();
 
@@ -75,7 +76,16 @@ export default function Cart({ setCurrentPage, openAuth }: CartProps) {
           {/* Step indicator: Cart → Checkout → Payment */}
           <CheckoutSteps current={1} setCurrentPage={setCurrentPage} />
 
-          {items.length === 0 ? (
+          {/* Phase 2.6a-fix (D-2.6a-fix-5) — gate empty-state on
+              cartLoading + bootstrapped. Pre-fix, hard refresh on
+              /cart flashed "YOUR CART IS EMPTY" for 1-2s before the
+              cart query resolved. The auth bootstrap is folded in
+              because addItem includes the bearer token only after
+              hydration, so an unbootstrapped cart fetch may resolve
+              against the wrong owner. */}
+          {cartLoading || !bootstrapped ? (
+            <CartSkeleton />
+          ) : items.length === 0 ? (
             <EmptyCart setCurrentPage={setCurrentPage} />
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 lg:gap-10 mt-10">

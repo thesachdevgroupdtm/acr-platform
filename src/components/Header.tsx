@@ -116,8 +116,17 @@ export default function Header({ currentPage, setCurrentPage, openEstimate, open
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   // Cart and auth hooks - drive the header e-commerce icons
-  const { count: cartCount } = useCart();
+  const { count: cartCount, isLoading: cartLoading } = useCart();
   const { user, isAuthenticated, bootstrapped, logout } = useAuth();
+
+  // Phase 2.6a-fix (D-2.6a-fix-D / part D) — the cart count badge
+  // only renders once both auth and cart have hydrated. Pre-fix:
+  // hard refresh painted the icon with no badge (cart query still
+  // pending, count = 0), then a moment later the badge popped in
+  // when the response landed — a visible 0→N flicker. Hiding the
+  // badge entirely during the indeterminate window is cheaper than
+  // a placeholder pulse and keeps the icon's hit-target stable.
+  const showCartBadge = bootstrapped && !cartLoading && cartCount > 0;
 
   // ── Service categories + their sub-services come from a single
   //    /home query. Sub-services arrive nested under each category in
@@ -344,7 +353,7 @@ export default function Header({ currentPage, setCurrentPage, openEstimate, open
                           className="w-full text-left px-4 py-3 text-[11px] font-bold uppercase text-neutral-700 hover:bg-neutral-50 hover:text-primary transition-colors flex items-center gap-2 tracking-widest border-b border-border"
                         >
                           <ShoppingCart className="w-3.5 h-3.5" /> My Cart
-                          {cartCount > 0 && (
+                          {showCartBadge && (
                             <span className="ml-auto bg-primary text-white text-[9px] px-1.5 py-0.5 normal-case tracking-normal">
                               {cartCount}
                             </span>
@@ -378,7 +387,7 @@ export default function Header({ currentPage, setCurrentPage, openEstimate, open
               className="relative flex items-center hover:opacity-80 transition-all"
             >
               <ShoppingCart className="w-4 h-4" />
-              {cartCount > 0 && (
+              {showCartBadge && (
                 <span className="absolute -top-1.5 -right-2 bg-white text-primary text-[9px] font-black w-4 h-4 flex items-center justify-center leading-none">
                   {cartCount > 9 ? "9+" : cartCount}
                 </span>

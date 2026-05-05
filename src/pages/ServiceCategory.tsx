@@ -131,13 +131,16 @@ export default function ServiceCategory({
   const category = apiCategory;
 
   // ---------- Cart ----------
-  const { addItem, count, isInCart, findCartItem, removeItem, replaceVehicleInCart } = useCart();
+  const { addItem, count, isInCart, findCartItem, removeItem, replaceVehicleInCart, isLoading: cartLoading } = useCart();
   const [addedFlash, setAddedFlash] = useState<string | null>(null);
   const [vehicleConflict, setVehicleConflict] = useState<VehicleConflictDetails | null>(null);
   const [replacing, setReplacing] = useState(false);
 
   // ---------- Auth (drives phone prefill + OTP skip) ----------
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, bootstrapped } = useAuth();
+  // Phase 2.6a-fix — `cartReady` gates ADDED-badge derivation; see
+  // Services.tsx for the why.
+  const cartReady = bootstrapped && !cartLoading;
 
   // ---------- Section nav scroll spy (Phase 2.5.7 hard-fix) ----------
   // useSubNavSync queries `[data-subnav-section]` to find sections.
@@ -758,12 +761,14 @@ export default function ServiceCategory({
                     // remove the server cart line. The 1.8 s `justAdded`
                     // flash continues to bridge the visual gap between
                     // the click and the React Query refetch.
-                    const cartItem = findCartItem({
-                      ref_id:   sub.id,
-                      brand_id: bookingCar?.brand_id,
-                      model_id: bookingCar?.model_id,
-                      fuel_id:  bookingCar?.fuel_id,
-                    });
+                    const cartItem = cartReady
+                      ? findCartItem({
+                          ref_id:   sub.id,
+                          brand_id: bookingCar?.brand_id,
+                          model_id: bookingCar?.model_id,
+                          fuel_id:  bookingCar?.fuel_id,
+                        })
+                      : null;
                     const inCart = !!cartItem;
                     return (
                       <div

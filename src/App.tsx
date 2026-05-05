@@ -26,6 +26,7 @@ import Checkout from "./pages/Checkout";
 import MyBookings from "./pages/MyBookings";
 import OrderDetail from "./pages/OrderDetail";
 import BookingConfirmation from "./pages/BookingConfirmation";
+import NotFound from "./pages/NotFound";
 import EstimateProcess from "./components/EstimateProcess";
 import AuthModal from "./components/AuthModal";
 import SessionExpiredToast from "./components/SessionExpiredToast";
@@ -284,8 +285,15 @@ export default function App() {
       // hits on /payment fall through to the default Home route.
       case "my-bookings":
         return <MyBookings setCurrentPage={navigateTo} openAuth={openAuth} />;
+      case "not-found":
+        return <NotFound setCurrentPage={navigateTo} />;
       default:
-        return <Home setCurrentPage={navigateTo} openEstimate={openEstimate} />;
+        // Phase 2.6a-fix (PART E) — unknown currentPage keys render
+        // NotFound at the original URL instead of silently falling
+        // back to Home. Operators hitting deleted routes (/payment,
+        // typos, stale bookmarks) now see a real 404 page with a
+        // clear "Go to Home" CTA, and the browser bar stays honest.
+        return <NotFound setCurrentPage={navigateTo} />;
     }
   };
 

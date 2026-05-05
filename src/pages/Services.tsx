@@ -16,6 +16,7 @@ import PageBanner from "../components/PageBanner";
 import BookingSidebar from "../components/BookingSidebar";
 import VehicleReplaceModal from "../components/VehicleReplaceModal";
 import { useCart } from "../hooks/useCart";
+import { useAuth } from "../hooks/useAuth";
 import { VehicleConflictError, type VehicleConflictDetails } from "../lib/errors";
 import { useBookingContext } from "../hooks/useBookingContext";
 import {
@@ -45,7 +46,14 @@ const STICKY_OFFSET_PX = 180;
 const SECTION_NAV_OFFSET_PX = 112; // height of header alone (sub-nav sits at this offset)
 
 export default function Services({ setCurrentPage }: ServicesProps) {
-  const { addItem, count, findCartItem, removeItem, replaceVehicleInCart } = useCart();
+  const { addItem, count, findCartItem, removeItem, replaceVehicleInCart, isLoading: cartLoading } = useCart();
+  const { bootstrapped } = useAuth();
+  // Phase 2.6a-fix — `cartReady` gates ADDED-badge derivation on
+  // service rows. Without it the badge briefly resolves to "not in
+  // cart" on hard refresh (because findCartItem returns nothing
+  // while cartQuery is pending) and then flips to ADDED — the
+  // 0→ADDED flicker the operator reported.
+  const cartReady = bootstrapped && !cartLoading;
   const [vehicleConflict, setVehicleConflict] = useState<VehicleConflictDetails | null>(null);
   const [replacing, setReplacing] = useState(false);
   const { state: booking } = useBookingContext();
@@ -296,12 +304,14 @@ export default function Services({ setCurrentPage }: ServicesProps) {
                     }}
                     addedFlash={addedFlash}
                     cartItemFor={(subId) =>
-                      findCartItem({
-                        ref_id:   subId,
-                        brand_id: booking.car?.brand_id,
-                        model_id: booking.car?.model_id,
-                        fuel_id:  booking.car?.fuel_id,
-                      })
+                      cartReady
+                        ? findCartItem({
+                            ref_id:   subId,
+                            brand_id: booking.car?.brand_id,
+                            model_id: booking.car?.model_id,
+                            fuel_id:  booking.car?.fuel_id,
+                          })
+                        : null
                     }
                     onAddToCart={(sub) => handleAddToCart(sub, category.slug)}
                     onRemoveFromCart={(itemId) => removeItem(String(itemId))}

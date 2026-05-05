@@ -69,12 +69,15 @@ export default function ServiceDetail({
   setCurrentPage,
   openEstimate,
 }: ServiceDetailProps) {
-  const { addItem, count, findCartItem, removeItem, replaceVehicleInCart } = useCart();
+  const { addItem, count, findCartItem, removeItem, replaceVehicleInCart, isLoading: cartLoading } = useCart();
   const [vehicleConflict, setVehicleConflict] = useState<VehicleConflictDetails | null>(null);
   const [replacing, setReplacing] = useState(false);
   // Pull synced booking state from parent ServiceCategory page
   const { state: booking } = useBookingContext();
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, bootstrapped } = useAuth();
+  // Phase 2.6a-fix — `cartReady` gates ADDED-badge derivation; see
+  // Services.tsx for the why.
+  const cartReady = bootstrapped && !cartLoading;
 
   // ---------- API: service detail (skeleton-first) ----------
   const carIds = useMemo(
@@ -143,12 +146,14 @@ export default function ServiceDetail({
   // Phase 2.3.3 — toggle add/remove on the same button. First click:
   // addItem; second click: remove the server cart line. The 1.8 s
   // post-add flash bridges the visual gap to the React Query refetch.
-  const cartItem = findCartItem({
-    ref_id:   service.id,
-    brand_id: booking.car?.brand_id,
-    model_id: booking.car?.model_id,
-    fuel_id:  booking.car?.fuel_id,
-  });
+  const cartItem = cartReady
+    ? findCartItem({
+        ref_id:   service.id,
+        brand_id: booking.car?.brand_id,
+        model_id: booking.car?.model_id,
+        fuel_id:  booking.car?.fuel_id,
+      })
+    : null;
   const inCart = !!cartItem;
 
   // Phase 2.3.5 — strict vehicle-only price state machine. Use the
