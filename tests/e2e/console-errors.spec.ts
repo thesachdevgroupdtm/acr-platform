@@ -39,17 +39,20 @@ test('no console errors during full navigation flow', async ({ page }) => {
     await expect(page.getByText(expectedText).first()).toBeVisible({ timeout: 10_000 });
   }
 
-  // Filter out network/asset noise — CORS rejections from the
-  // Laravel API (which only allowlists :3000, not the :4173 preview
-  // origin) and missing image 404s are environmental, not React
-  // errors.
+  // Filter only environmental noise (browser-extension injected
+  // messages, image 404s, transport-level failures from external
+  // resources). Application errors — including any CORS rejection
+  // from our own API — are NOT filtered: a real one should fail
+  // the test.
+  //
+  // Phase 2.6b-fix — the previous CORS-bypass filters
+  // ('cors policy' / 'access to fetch') were removed once the
+  // backend allowlist was extended to include :4173.
   const realErrors = errors.filter((text) => {
     const lower = text.toLowerCase();
     return !lower.includes('failed to load resource')
       && !lower.includes('net::')
       && !lower.includes('the server responded with a status')
-      && !lower.includes('cors policy')
-      && !lower.includes('access to fetch')
       && !lower.includes('extension');
   });
 

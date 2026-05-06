@@ -116,17 +116,21 @@ test('4 — rapid route clicks: last-clicked route wins, no console errors', asy
   // we are not measuring transition speed.
   await expect(page.getByRole('heading', { name: /insurance claims/i }).first()).toBeVisible({ timeout: 20_000 });
 
-  // Filter network noise (failed XHRs, image 404s, CORS preflights
-  // against the Laravel API which doesn't allow the :4173 preview
-  // origin) — those are environmental, not code-splitting failures.
-  // Anything left would indicate a real race-condition crash.
+  // Filter only environmental noise (image 404s, transport-level
+  // failures from external resources). Application errors are NOT
+  // filtered — a real race-condition crash here would surface as
+  // a React error and fail the test.
+  //
+  // Phase 2.6b-fix — the previous CORS-bypass filters
+  // ('cors policy' / 'access to fetch') were removed once the
+  // backend allowlist was extended to include :4173. The API now
+  // accepts requests from the preview origin so no CORS errors
+  // should reach the console at all.
   const realErrors = consoleErrors.filter((text) => {
     const lower = text.toLowerCase();
     return !lower.includes('failed to load resource')
       && !lower.includes('net::')
-      && !lower.includes('the server responded with a status')
-      && !lower.includes('cors policy')
-      && !lower.includes('access to fetch');
+      && !lower.includes('the server responded with a status');
   });
   expect(realErrors, `Console errors:\n${realErrors.join('\n')}`).toEqual([]);
 });
