@@ -51,5 +51,32 @@ export default defineConfig({
         // Tests construct full URLs against PREVIEW_URL below.
       },
     },
+    {
+      // Phase 2.6d — single-viewport mobile project per D-2.6d-3.
+      // Pixel 5 instead of iPhone 12 because Pixel 5 is a Chromium
+      // device — Phase 2.6c's `npx playwright install chromium`
+      // didn't pull WebKit, and HARD CONSTRAINT "DO NOT install new
+      // packages" reads as "no new browser installs either". Pixel 5
+      // covers the same mobile invariants (393x851 viewport, mobile
+      // UA, touch event support) under the existing engine.
+      name: 'mobile',
+      testMatch: /mobile\.spec\.ts$/,
+      use: {
+        ...devices['Pixel 5'],
+        baseURL: 'http://localhost:3000',
+      },
+    },
+    {
+      // Phase 2.6d — non-mobile dev-server e2e (full journey, cart
+      // merge UX, coupon flow, auth edges). These tests need real
+      // backend reads and writes, so they target dev (:3000) where
+      // the Laravel API on :8000 already passes CORS for that origin.
+      name: 'edges',
+      testMatch: /(journey|cart-merge|coupon-flow|auth-edges)\.spec\.ts$/,
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: 'http://localhost:3000',
+      },
+    },
   ],
 });
