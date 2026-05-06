@@ -3,35 +3,42 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, lazy, Suspense } from "react";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
+// Phase 2.6b — Home stays eager. It is the most-visited entry and
+// shipping it inside the initial bundle avoids one round-trip on
+// the most common landing path. All other routes are lazy-loaded
+// (D-2.6b-1: one chunk per route via React.lazy()). Vite auto-
+// generates per-route chunks named after the source file.
 import Home from "./pages/Home";
-import Services from "./pages/Services";
-import Insurance from "./pages/Insurance";
-import Gallery from "./pages/Gallery";
-import About from "./pages/About";
-import Contact from "./pages/Contact";
-import Corporate from "./pages/Corporate";
-import ServiceCategory from "./pages/ServiceCategory";
-import ServiceDetail from "./pages/ServiceDetail";
-import ServiceCenters from "./pages/ServiceCenters";
-import ServiceCenterDetail from "./pages/ServiceCenterDetail";
-import Offers from "./pages/Offers";
-import Coupons from "./pages/Coupons";
-import CmsPage from "./pages/CmsPage";
-import Sitemap from "./pages/Sitemap";
-import Cart from "./pages/Cart";
-import Checkout from "./pages/Checkout";
-import MyBookings from "./pages/MyBookings";
-import OrderDetail from "./pages/OrderDetail";
-import BookingConfirmation from "./pages/BookingConfirmation";
-import NotFound from "./pages/NotFound";
-import Testimonials from "./pages/Testimonials";
+const Services = lazy(() => import("./pages/Services"));
+const Insurance = lazy(() => import("./pages/Insurance"));
+const Gallery = lazy(() => import("./pages/Gallery"));
+const About = lazy(() => import("./pages/About"));
+const Contact = lazy(() => import("./pages/Contact"));
+const Corporate = lazy(() => import("./pages/Corporate"));
+const ServiceCategory = lazy(() => import("./pages/ServiceCategory"));
+const ServiceDetail = lazy(() => import("./pages/ServiceDetail"));
+const ServiceCenters = lazy(() => import("./pages/ServiceCenters"));
+const ServiceCenterDetail = lazy(() => import("./pages/ServiceCenterDetail"));
+const Offers = lazy(() => import("./pages/Offers"));
+const Coupons = lazy(() => import("./pages/Coupons"));
+const CmsPage = lazy(() => import("./pages/CmsPage"));
+const Sitemap = lazy(() => import("./pages/Sitemap"));
+const Cart = lazy(() => import("./pages/Cart"));
+const Checkout = lazy(() => import("./pages/Checkout"));
+const MyBookings = lazy(() => import("./pages/MyBookings"));
+const OrderDetail = lazy(() => import("./pages/OrderDetail"));
+const BookingConfirmation = lazy(() => import("./pages/BookingConfirmation"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const Testimonials = lazy(() => import("./pages/Testimonials"));
 import EstimateProcess from "./components/EstimateProcess";
 import AuthModal from "./components/AuthModal";
 import SessionExpiredToast from "./components/SessionExpiredToast";
 import RouteResolutionLoader from "./components/RouteResolutionLoader";
+import GlobalLoadingFallback from "./components/GlobalLoadingFallback";
+import ChunkErrorBoundary from "./components/ChunkErrorBoundary";
 import { motion, AnimatePresence } from "motion/react";
 import { BUSINESS_INFO } from "./data/businessData";
 import { MessageCircle } from "lucide-react";
@@ -316,17 +323,39 @@ export default function App() {
       />
       
       <main className="flex-grow">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={currentPage}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.4, ease: "easeOut" }}
-          >
-            {renderPage()}
-          </motion.div>
-        </AnimatePresence>
+        {/*
+          Phase 2.6b — code-splitting boundaries.
+
+          ChunkErrorBoundary catches the dynamic-import rejection
+          path (network blocked, stale chunk hashes after a deploy)
+          and surfaces a Reload UI instead of letting React unmount
+          the whole tree.
+
+          Suspense lives INSIDE motion.div, not outside
+          AnimatePresence. If Suspense were outside, every chunk
+          fetch would replace the whole AnimatePresence subtree
+          with the fallback, destroying the exiting motion.div mid-
+          transition; mode="wait" then strands the queued exit
+          and rapid sequential clicks can leave the UI stuck on
+          Loading. Per-motion.div Suspense lets each new route
+          suspend independently while the old one finishes its
+          exit cleanly.
+        */}
+        <ChunkErrorBoundary>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={currentPage}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.4, ease: "easeOut" }}
+            >
+              <Suspense fallback={<GlobalLoadingFallback />}>
+                {renderPage()}
+              </Suspense>
+            </motion.div>
+          </AnimatePresence>
+        </ChunkErrorBoundary>
       </main>
 
       <Footer setCurrentPage={navigateTo} />
