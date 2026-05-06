@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect, useCallback, lazy, Suspense } from "react";
+import { Routes, Route, useLocation, useNavigate, useParams } from "react-router-dom";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
 // Phase 2.6b — Home stays eager. It is the most-visited entry and
@@ -36,7 +37,6 @@ const Testimonials = lazy(() => import("./pages/Testimonials"));
 import EstimateProcess from "./components/EstimateProcess";
 import AuthModal from "./components/AuthModal";
 import SessionExpiredToast from "./components/SessionExpiredToast";
-import RouteResolutionLoader from "./components/RouteResolutionLoader";
 import GlobalLoadingFallback from "./components/GlobalLoadingFallback";
 import ChunkErrorBoundary from "./components/ChunkErrorBoundary";
 import { motion, AnimatePresence } from "motion/react";
@@ -44,62 +44,54 @@ import { BUSINESS_INFO } from "./data/businessData";
 import { MessageCircle } from "lucide-react";
 
 /**
- * Phase 2.5.1 + 2.5.2 — pathname ↔ currentPage mapping.
+ * Phase 3A — react-router migration (Commit A: shim).
  *
- * The codebase still uses string-based pseudo-routing (a
- * `currentPage` state value); the full react-router migration
- * remains a Phase 3 deliverable. Phase 2.5.2 makes the pseudo-
- * router URL-aware in three ways:
+ * The legacy string-keyed `currentPage` machine + parsePageFromUrl /
+ * pageToUrl helpers + popstate listener are replaced by
+ * BrowserRouter + <Routes>. URL is now the single source of truth.
  *
- *   1. parsePageFromUrl(loc): URL → currentPage. Used on mount
- *      AND in the popstate listener so back/forward work.
- *   2. pageToUrl(page): currentPage → URL. Used by navigateTo to
- *      push history on click navigation.
- *   3. SPA fallback: dist/.htaccess (production) + Vite dev server
- *      default behaviour ensures unknown routes serve index.html.
+ * Compatibility shim: page components still receive `setCurrentPage`
+ * and Header still receives a string-keyed `currentPage`. Both are
+ * derived from the router via the helpers below. Pages do not
+ * change in this commit (Phase 3B will drop the shim and have each
+ * page call useNavigate / useParams directly).
  *
- * Both helpers are aware of the Vite `base` (`/app/` on production,
- * `/` in dev) via `import.meta.env.BASE_URL`. Hard-refresh on
- * /app/checkout in production therefore parses to "checkout".
+ * Aliases preserved verbatim from the old parsePageFromUrl:
+ *   /booking-history             → MyBookings   (alias)
+ *   /my-bookings                 → MyBookings   (canonical)
+ *   /order/:id                   → OrderDetail
+ *   /booking-confirmation/:id    → BookingConfirmation
+ *   /services/:category/:service → ServiceDetail
+ *   /category/:slug              → ServiceCategory
+ *   /center/:id                  → ServiceCenterDetail
+ *   /payment                     → NotFound (Phase 2.6a deletion regression — falls through catch-all *)
+ *   *                            → NotFound
  */
-const BASE_URL = (import.meta.env.BASE_URL || "/").replace(/\/+$/, "") || "/";
 
-function stripBase(pathname: string): string {
-  if (BASE_URL === "/") return pathname;
-  if (pathname === BASE_URL) return "/";
-  if (pathname.startsWith(BASE_URL + "/")) return pathname.slice(BASE_URL.length);
-  return pathname;
-}
-
-function parsePageFromUrl(loc: Location): string {
-  const rebased = stripBase(loc.pathname || "/");
-  const raw = rebased.replace(/\/+$/, "");
+/**
+ * URL pathname → string-keyed page id Header still consumes.
+ * BrowserRouter strips the basename for us, so `pathname` here is
+ * always relative ("/", "/services", "/category/foo", …).
+ */
+function pathnameToPageKey(pathname: string): string {
+  const raw = (pathname || "/").replace(/\/+$/, "");
   if (raw === "" || raw === "/") return "home";
 
-  // Strip the leading slash and accept the same string vocabulary
-  // the rest of the app uses for its `currentPage` state. Pages
-  // like "service-{cat}/{sub}" stay as one token.
   const stripped = raw.replace(/^\//, "");
 
-  // Aliases — operators sometimes link to URLs the app doesn't
-  // emit but which clearly map to a known page.
   if (stripped === "booking-history") return "my-bookings";
 
-  // /order/123 → order-123  (and similar /booking-confirmation/123)
   const orderMatch = stripped.match(/^order\/(\d+)$/);
   if (orderMatch) return `order-${orderMatch[1]}`;
   const confMatch = stripped.match(/^booking-confirmation\/(\d+)$/);
   if (confMatch) return `booking-confirmation-${confMatch[1]}`;
 
-  // /services/{cat}/{sub} → service-{cat}/{sub}
   const svcMatch = stripped.match(/^services\/([^/]+)\/([^/]+)$/);
   if (svcMatch) return `service-${svcMatch[1]}/${svcMatch[2]}`;
 
-  // /category/{slug} → category-{slug}
   const catMatch = stripped.match(/^category\/([^/]+)$/);
   if (catMatch) return `category-${catMatch[1]}`;
 
-  // /center/{id} → center-{id}
   const centerMatch = stripped.match(/^center\/([^/]+)$/);
   if (centerMatch) return `center-${centerMatch[1]}`;
 
@@ -107,107 +99,135 @@ function parsePageFromUrl(loc: Location): string {
 }
 
 /**
- * Inverse of parsePageFromUrl. The mapping is intentionally not
- * 1:1 — pretty URLs like /order/12 map back to the internal key
- * "order-12" so existing currentPage-based logic doesn't change.
+ * Inverse: page-key → router-relative path. Used by the
+ * `setCurrentPage` shim so legacy callers (Header, Footer, page
+ * components) keep working without modification. BrowserRouter
+ * re-prefixes its basename, so we return paths WITHOUT the Vite
+ * base prefix here.
  */
-function pageToUrl(page: string): string {
-  const rel = (() => {
-    if (page === "home") return "/";
-    if (page === "my-bookings") return "/booking-history";
+function pageKeyToPath(page: string): string {
+  if (page === "home") return "/";
+  if (page === "my-bookings") return "/booking-history";
 
-    const orderMatch = page.match(/^order-(\d+)$/);
-    if (orderMatch) return `/order/${orderMatch[1]}`;
-    const confMatch = page.match(/^booking-confirmation-(\d+)$/);
-    if (confMatch) return `/booking-confirmation/${confMatch[1]}`;
+  const orderMatch = page.match(/^order-(\d+)$/);
+  if (orderMatch) return `/order/${orderMatch[1]}`;
+  const confMatch = page.match(/^booking-confirmation-(\d+)$/);
+  if (confMatch) return `/booking-confirmation/${confMatch[1]}`;
 
-    // service-{cat}/{sub}
-    const svcMatch = page.match(/^service-(.+)\/(.+)$/);
-    if (svcMatch) return `/services/${svcMatch[1]}/${svcMatch[2]}`;
-    const catMatch = page.match(/^category-(.+)$/);
-    if (catMatch) return `/category/${catMatch[1]}`;
-    const centerMatch = page.match(/^center-(.+)$/);
-    if (centerMatch) return `/center/${centerMatch[1]}`;
+  const svcMatch = page.match(/^service-(.+)\/(.+)$/);
+  if (svcMatch) return `/services/${svcMatch[1]}/${svcMatch[2]}`;
+  const catMatch = page.match(/^category-(.+)$/);
+  if (catMatch) return `/category/${catMatch[1]}`;
+  const centerMatch = page.match(/^center-(.+)$/);
+  if (centerMatch) return `/center/${centerMatch[1]}`;
 
-    return `/${page}`;
-  })();
+  return `/${page}`;
+}
 
-  // Re-apply the Vite base prefix in production (e.g. /app + /checkout
-  // → /app/checkout). Dev's BASE_URL is "/" so this is a no-op.
-  if (BASE_URL === "/") return rel;
-  return rel === "/" ? BASE_URL : `${BASE_URL}${rel}`;
+// ─────────────── Route element wrappers ───────────────
+//
+// These pull useParams off the router and forward them as props to
+// each page in the same shape the legacy renderPage() switch used.
+// They are the entire surface area of the shim — Phase 3B replaces
+// them with direct useParams calls inside each page.
+
+interface ShimProps {
+  setCurrentPage: (page: string) => void;
+  openEstimate: (isCorporate?: boolean, initialService?: string) => void;
+  openAuth: (tab?: "login" | "signup", redirectTo?: string) => void;
+}
+
+function ServiceDetailRoute({ setCurrentPage, openEstimate }: ShimProps) {
+  const { category, service } = useParams<{ category: string; service: string }>();
+  return (
+    <ServiceDetail
+      categorySlug={category!}
+      serviceSlug={service!}
+      setCurrentPage={setCurrentPage}
+      openEstimate={openEstimate}
+    />
+  );
+}
+
+function ServiceCategoryRoute({ setCurrentPage, openEstimate }: ShimProps) {
+  const { slug } = useParams<{ slug: string }>();
+  return (
+    <ServiceCategory
+      categorySlug={slug!}
+      setCurrentPage={setCurrentPage}
+      openEstimate={openEstimate}
+    />
+  );
+}
+
+function ServiceCenterDetailRoute({ setCurrentPage, openEstimate }: ShimProps) {
+  const { id } = useParams<{ id: string }>();
+  return (
+    <ServiceCenterDetail
+      centerId={id!}
+      setCurrentPage={setCurrentPage}
+      openEstimate={openEstimate}
+    />
+  );
+}
+
+function OrderDetailRoute({ setCurrentPage }: ShimProps) {
+  const { id } = useParams<{ id: string }>();
+  const numericId = Number(id);
+  // Original behaviour: invalid id → NotFound (Phase 2.6a-fix).
+  if (!Number.isFinite(numericId) || numericId <= 0) {
+    return <NotFound setCurrentPage={setCurrentPage} />;
+  }
+  return <OrderDetail orderId={numericId} setCurrentPage={setCurrentPage} />;
+}
+
+function BookingConfirmationRoute({ setCurrentPage }: ShimProps) {
+  const { id } = useParams<{ id: string }>();
+  const numericId = Number(id);
+  if (!Number.isFinite(numericId) || numericId <= 0) {
+    return <NotFound setCurrentPage={setCurrentPage} />;
+  }
+  return (
+    <BookingConfirmation orderId={numericId} setCurrentPage={setCurrentPage} />
+  );
 }
 
 export default function App() {
-  const [currentPage, setCurrentPage] = useState("home");
-  // Phase 2.5.1 — render gate. False until the URL has been parsed
-  // on mount (one tick). Prevents the Home flash on hard-refresh
-  // of any non-/ URL.
-  const [isRouteResolved, setIsRouteResolved] = useState(false);
+  const location = useLocation();
+  const navigate = useNavigate();
 
-  /**
-   * Phase 2.5.2 — navigation entry point used by every page.
-   * Mutates currentPage AND pushes URL via history.pushState so
-   * refresh/back/forward all work. The raw setCurrentPage is
-   * reserved for the popstate handler and the initial mount parse
-   * (cases where the URL is already correct).
-   *
-   * Pages still receive this under the legacy prop name
-   * `setCurrentPage` so existing call sites compile without churn.
-   */
-  const navigateTo = useCallback((page: string) => {
-    setCurrentPage(page);
-    if (typeof window === "undefined") return;
-    const target = pageToUrl(page);
-    const current = window.location.pathname + window.location.search;
-    if (target !== current) {
-      window.history.pushState({ page }, "", target);
-    }
-  }, []);
+  // Header expects a string-keyed `currentPage` for its active-state
+  // computation (services/category-foo/service-foo/center-foo/etc.).
+  // We derive it from the URL on every render.
+  const currentPage = pathnameToPageKey(location.pathname);
 
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      setIsRouteResolved(true);
-      return;
-    }
-    const initial = parsePageFromUrl(window.location);
-    if (initial !== "home") {
-      setCurrentPage(initial);
-    }
-    // Replace the current history entry so a back-button from the
-    // first navigation lands on the parsed page rather than a
-    // stale ./. Idempotent: no-op when target === current.
-    const target = pageToUrl(initial);
-    const current = window.location.pathname + window.location.search;
-    if (target !== current) {
-      window.history.replaceState({ page: initial }, "", target);
-    }
-    setIsRouteResolved(true);
+  // The shim: legacy callers do `setCurrentPage("services")` →
+  // resolves to /services. Phase 3B will replace these calls with
+  // direct useNavigate inside each page.
+  const setCurrentPage = useCallback(
+    (page: string) => {
+      navigate(pageKeyToPath(page));
+    },
+    [navigate],
+  );
 
-    const handlePop = () => {
-      const next = parsePageFromUrl(window.location);
-      // Use the raw setter — popstate already changed the URL.
-      // Calling navigateTo here would push a duplicate history entry.
-      setCurrentPage(next);
-    };
-    window.addEventListener("popstate", handlePop);
-    return () => window.removeEventListener("popstate", handlePop);
-  }, []);
-  const [estimateModal, setEstimateModal] = useState<{isOpen: boolean, isCorporate: boolean, initialService: string}>({
+  const [estimateModal, setEstimateModal] = useState<{ isOpen: boolean; isCorporate: boolean; initialService: string }>({
     isOpen: false,
     isCorporate: false,
-    initialService: ""
+    initialService: "",
   });
-  const [authModal, setAuthModal] = useState<{isOpen: boolean, defaultTab: "login" | "signup", redirectTo?: string}>({
+  const [authModal, setAuthModal] = useState<{ isOpen: boolean; defaultTab: "login" | "signup"; redirectTo?: string }>({
     isOpen: false,
     defaultTab: "login",
-    redirectTo: undefined
+    redirectTo: undefined,
   });
 
-  // Scroll to top on page change
+  // Scroll to top on pathname change. Search-only changes (e.g.
+  // ?coupon=FIRST10) preserve scroll position, which matches the
+  // pre-router behaviour where currentPage hadn't changed.
   useEffect(() => {
     window.scrollTo(0, 0);
-  }, [currentPage]);
+  }, [location.pathname]);
 
   const openEstimate = (isCorporate = false, initialService = "") => {
     setEstimateModal({ isOpen: true, isCorporate, initialService });
@@ -217,154 +237,90 @@ export default function App() {
     setAuthModal({ isOpen: true, defaultTab: tab, redirectTo });
   };
 
-
-  const renderPage = () => {
-    if (currentPage.startsWith("center-")) {
-      const centerId = currentPage.replace("center-", "");
-      return <ServiceCenterDetail centerId={centerId} setCurrentPage={navigateTo} openEstimate={openEstimate} />;
-    }
-
-    if (currentPage.startsWith("category-")) {
-      const categorySlug = currentPage.replace("category-", "");
-      // Lazy load or just import ServiceCategory
-      return <ServiceCategory categorySlug={categorySlug} setCurrentPage={navigateTo} openEstimate={openEstimate} />;
-    }
-
-    if (currentPage.startsWith("service-") && currentPage !== "service-centers") {
-      // expected format: service-{categorySlug}/{serviceSlug}
-      const fullSlug = currentPage.replace("service-", "");
-      const [categorySlug, serviceSlug] = fullSlug.split("/");
-      return <ServiceDetail categorySlug={categorySlug} serviceSlug={serviceSlug} setCurrentPage={navigateTo} openEstimate={openEstimate} />;
-    }
-
-    if (currentPage === "cms-preview") {
-      return <CmsPage setCurrentPage={navigateTo} openEstimate={openEstimate} />;
-    }
-
-    // Phase 2.5a — order detail (`order-{id}`).
-    if (currentPage.startsWith("order-")) {
-      const id = Number(currentPage.replace("order-", ""));
-      if (Number.isFinite(id) && id > 0) {
-        return <OrderDetail orderId={id} setCurrentPage={navigateTo} />;
-      }
-    }
-
-    // Phase 2.5a — booking confirmation (`booking-confirmation-{id}`).
-    if (currentPage.startsWith("booking-confirmation-")) {
-      const id = Number(currentPage.replace("booking-confirmation-", ""));
-      if (Number.isFinite(id) && id > 0) {
-        return (
-          <BookingConfirmation orderId={id} setCurrentPage={navigateTo} />
-        );
-      }
-    }
-
-    switch (currentPage) {
-      case "home":
-        return <Home setCurrentPage={navigateTo} openEstimate={openEstimate} />;
-      case "services":
-        return <Services setCurrentPage={navigateTo} openEstimate={openEstimate} />;
-      case "service-centers":
-        return <ServiceCenters setCurrentPage={navigateTo} openEstimate={openEstimate} />;
-      case "insurance":
-        return <Insurance setCurrentPage={navigateTo} openEstimate={openEstimate} />;
-      case "corporate":
-        return <Corporate setCurrentPage={navigateTo} openEstimate={() => openEstimate(true)} />;
-      case "gallery":
-        return <Gallery setCurrentPage={navigateTo} openEstimate={openEstimate} />;
-      case "about":
-        return <About setCurrentPage={navigateTo} openEstimate={openEstimate} />;
-      case "contact":
-        return <Contact setCurrentPage={navigateTo} openEstimate={openEstimate} />;
-      case "offers":
-        return <Offers setCurrentPage={navigateTo} openEstimate={openEstimate} />;
-      case "coupons":
-        return <Coupons setCurrentPage={navigateTo} openEstimate={openEstimate} />;
-      case "sitemap":
-        return <Sitemap setCurrentPage={navigateTo} openEstimate={openEstimate} />;
-      case "cart":
-        return <Cart setCurrentPage={navigateTo} openAuth={openAuth} />;
-      case "checkout":
-        return <Checkout setCurrentPage={navigateTo} openAuth={openAuth} />;
-      // Phase 2.6a — `payment` route removed. Phase 2.5a's real
-      // checkout flow goes Cart → Checkout → BookingConfirmation
-      // directly; the legacy Payment.tsx fake-gateway page was
-      // unreachable since 2.5a and got deleted in 2.6a. Direct
-      // hits on /payment fall through to the default Home route.
-      case "my-bookings":
-        return <MyBookings setCurrentPage={navigateTo} openAuth={openAuth} />;
-      case "testimonials":
-        return <Testimonials setCurrentPage={navigateTo} />;
-      case "not-found":
-        return <NotFound setCurrentPage={navigateTo} />;
-      default:
-        // Phase 2.6a-fix (PART E) — unknown currentPage keys render
-        // NotFound at the original URL instead of silently falling
-        // back to Home. Operators hitting deleted routes (/payment,
-        // typos, stale bookmarks) now see a real 404 page with a
-        // clear "Go to Home" CTA, and the browser bar stays honest.
-        return <NotFound setCurrentPage={navigateTo} />;
-    }
-  };
-
-  // Phase 2.5.1 — hold render until the initial URL parse has run.
-  // See parsePageFromUrl + the mount effect above for context.
-  if (!isRouteResolved) {
-    return <RouteResolutionLoader />;
-  }
+  // Pre-built shim prop bundles — three flavours so the route
+  // wrappers don't have to spread three arguments each.
+  const pageShim: ShimProps = { setCurrentPage, openEstimate, openAuth };
 
   return (
     <div className="min-h-screen flex flex-col bg-white selection:bg-primary selection:text-white">
       <Header
-        currentPage={currentPage} 
-        setCurrentPage={navigateTo} 
+        currentPage={currentPage}
+        setCurrentPage={setCurrentPage}
         openEstimate={() => openEstimate(false)}
         openAuth={openAuth}
       />
-      
+
       <main className="flex-grow">
         {/*
-          Phase 2.6b — code-splitting boundaries.
+          Phase 2.6b — code-splitting boundaries (preserved verbatim
+          across the Phase 3A router migration).
 
           ChunkErrorBoundary catches the dynamic-import rejection
-          path (network blocked, stale chunk hashes after a deploy)
-          and surfaces a Reload UI instead of letting React unmount
-          the whole tree.
-
-          Suspense lives INSIDE motion.div, not outside
-          AnimatePresence. If Suspense were outside, every chunk
-          fetch would replace the whole AnimatePresence subtree
-          with the fallback, destroying the exiting motion.div mid-
-          transition; mode="wait" then strands the queued exit
-          and rapid sequential clicks can leave the UI stuck on
-          Loading. Per-motion.div Suspense lets each new route
-          suspend independently while the old one finishes its
-          exit cleanly.
+          path; Suspense lives INSIDE motion.div (per the Phase 2.6b
+          architecture call) so each new route's chunk fetch can
+          suspend independently of the previous route's exit
+          animation. The motion.div key is now location.pathname
+          (was: currentPage string). Routes is given an explicit
+          `location` prop so the exiting motion.div retains the OLD
+          route's children while the new motion.div mounts with the
+          new route — same separation that mode="wait" already
+          relied on.
         */}
         <ChunkErrorBoundary>
           <AnimatePresence mode="wait">
             <motion.div
-              key={currentPage}
+              key={location.pathname}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.4, ease: "easeOut" }}
             >
               <Suspense fallback={<GlobalLoadingFallback />}>
-                {renderPage()}
+                <Routes location={location}>
+                  <Route path="/" element={<Home setCurrentPage={setCurrentPage} openEstimate={openEstimate} />} />
+                  <Route path="/services" element={<Services setCurrentPage={setCurrentPage} openEstimate={openEstimate} />} />
+                  <Route path="/services/:category/:service" element={<ServiceDetailRoute {...pageShim} />} />
+                  <Route path="/category/:slug" element={<ServiceCategoryRoute {...pageShim} />} />
+                  <Route path="/service-centers" element={<ServiceCenters setCurrentPage={setCurrentPage} openEstimate={openEstimate} />} />
+                  <Route path="/center/:id" element={<ServiceCenterDetailRoute {...pageShim} />} />
+                  <Route path="/insurance" element={<Insurance setCurrentPage={setCurrentPage} openEstimate={openEstimate} />} />
+                  <Route path="/corporate" element={<Corporate setCurrentPage={setCurrentPage} openEstimate={() => openEstimate(true)} />} />
+                  <Route path="/gallery" element={<Gallery setCurrentPage={setCurrentPage} openEstimate={openEstimate} />} />
+                  <Route path="/about" element={<About setCurrentPage={setCurrentPage} openEstimate={openEstimate} />} />
+                  <Route path="/contact" element={<Contact setCurrentPage={setCurrentPage} openEstimate={openEstimate} />} />
+                  <Route path="/offers" element={<Offers setCurrentPage={setCurrentPage} openEstimate={openEstimate} />} />
+                  <Route path="/coupons" element={<Coupons setCurrentPage={setCurrentPage} openEstimate={openEstimate} />} />
+                  <Route path="/sitemap" element={<Sitemap setCurrentPage={setCurrentPage} openEstimate={openEstimate} />} />
+                  <Route path="/cms-preview" element={<CmsPage setCurrentPage={setCurrentPage} openEstimate={openEstimate} />} />
+                  <Route path="/cart" element={<Cart setCurrentPage={setCurrentPage} openAuth={openAuth} />} />
+                  <Route path="/checkout" element={<Checkout setCurrentPage={setCurrentPage} openAuth={openAuth} />} />
+                  <Route path="/booking-history" element={<MyBookings setCurrentPage={setCurrentPage} openAuth={openAuth} />} />
+                  <Route path="/my-bookings" element={<MyBookings setCurrentPage={setCurrentPage} openAuth={openAuth} />} />
+                  <Route path="/testimonials" element={<Testimonials setCurrentPage={setCurrentPage} />} />
+                  <Route path="/order/:id" element={<OrderDetailRoute {...pageShim} />} />
+                  <Route path="/booking-confirmation/:id" element={<BookingConfirmationRoute {...pageShim} />} />
+                  <Route path="/not-found" element={<NotFound setCurrentPage={setCurrentPage} />} />
+                  {/*
+                    Catch-all — preserves the Phase 2.6a-fix invariant
+                    that unknown URLs land on NotFound at the original
+                    URL (NOT a silent home redirect). /payment still
+                    maps here per Phase 2.6a, locked by the smoke test.
+                  */}
+                  <Route path="*" element={<NotFound setCurrentPage={setCurrentPage} />} />
+                </Routes>
               </Suspense>
             </motion.div>
           </AnimatePresence>
         </ChunkErrorBoundary>
       </main>
 
-      <Footer setCurrentPage={navigateTo} />
+      <Footer setCurrentPage={setCurrentPage} />
 
       {/* Estimate Modal */}
       <AnimatePresence>
         {estimateModal.isOpen && (
-          <EstimateProcess 
-            onClose={() => setEstimateModal(prev => ({ ...prev, isOpen: false }))} 
+          <EstimateProcess
+            onClose={() => setEstimateModal((prev) => ({ ...prev, isOpen: false }))}
             isCorporate={estimateModal.isCorporate}
             initialService={estimateModal.initialService}
           />
@@ -376,7 +332,7 @@ export default function App() {
         isOpen={authModal.isOpen}
         defaultTab={authModal.defaultTab}
         redirectTo={authModal.redirectTo}
-        setCurrentPage={navigateTo}
+        setCurrentPage={setCurrentPage}
         onClose={() => setAuthModal((prev) => ({ ...prev, isOpen: false }))}
       />
 
@@ -386,7 +342,7 @@ export default function App() {
       {/* Mobile Sticky CTA */}
       <div className="lg:hidden fixed bottom-6 left-6 right-6 z-40">
         <div className="bg-white/90 backdrop-blur-xl border border-border p-2 flex shadow-lg">
-          <button 
+          <button
             onClick={() => openEstimate(false)}
             className="w-full bg-primary text-white py-3.5 font-bold uppercase tracking-widest border border-primary text-sm shadow-sm hover:bg-primary-dark transition-colors"
           >
@@ -397,10 +353,10 @@ export default function App() {
 
       {/* Floating WhatsApp Button */}
       <div className="fixed bottom-24 lg:bottom-6 right-6 z-50">
-        <a 
-          href={`https://wa.me/91${BUSINESS_INFO.phone.replace(/\D/g, '')}`}
-          target="_blank" 
-          rel="noopener noreferrer" 
+        <a
+          href={`https://wa.me/91${BUSINESS_INFO.phone.replace(/\D/g, "")}`}
+          target="_blank"
+          rel="noopener noreferrer"
           className="w-14 h-14 bg-[#25D366] text-white rounded-full flex items-center justify-center shadow-2xl hover:scale-110 transition-transform cursor-pointer"
         >
           <MessageCircle className="w-7 h-7" />
@@ -409,5 +365,3 @@ export default function App() {
     </div>
   );
 }
-
-

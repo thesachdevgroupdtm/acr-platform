@@ -71,8 +71,9 @@ export default defineConfig({
       // merge UX, coupon flow, auth edges). These tests need real
       // backend reads and writes, so they target dev (:3000) where
       // the Laravel API on :8000 already passes CORS for that origin.
+      // Phase 3A — router-pattern tests added to this project.
       name: 'edges',
-      testMatch: /(journey|cart-merge|coupon-flow|auth-edges)\.spec\.ts$/,
+      testMatch: /(journey|cart-merge|coupon-flow|auth-edges|router-patterns)\.spec\.ts$/,
       use: {
         ...devices['Desktop Chrome'],
         baseURL: 'http://localhost:3000',
