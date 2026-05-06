@@ -96,8 +96,10 @@ export default function HomeFAQ({ setCurrentPage }: HomeFAQProps) {
 
       {/* Content */}
       <div className="relative z-10 max-w-5xl mx-auto px-6">
-        {/* Header */}
-        <div className="text-center mb-12 sm:mb-16">
+        {/* Header — v3: same eyebrow / title / subtitle as v2; only
+            the bottom margin tightens (mb-12/mb-16 → mb-8/mb-10) so
+            the first FAQ card sits closer beneath the subtitle. */}
+        <div className="text-center mb-8 sm:mb-10">
           <div className="text-primary text-xs uppercase tracking-widest font-bold mb-4 flex items-center justify-center gap-3">
             <span className="h-px w-8 bg-primary" />
             Frequently Asked
@@ -112,8 +114,12 @@ export default function HomeFAQ({ setCurrentPage }: HomeFAQProps) {
           </p>
         </div>
 
-        {/* FAQ list */}
-        <div className="max-w-3xl mx-auto space-y-3 sm:space-y-4">
+        {/* FAQ list — v3 compact: max-w-2xl (was 3xl), tighter
+            inter-card gap, smaller card padding, smaller question
+            text + chevron + number badge. Closed-state height drops
+            from ~76 px to ~56 px while keeping the touch target
+            comfortably above the 44 px minimum. */}
+        <div className="max-w-2xl mx-auto space-y-2">
           {HOME_FAQS.map((faq, i) => {
             const isOpen = openIndex === i;
             const numLabel = `Q${String(i + 1).padStart(2, "0")}`;
@@ -130,18 +136,18 @@ export default function HomeFAQ({ setCurrentPage }: HomeFAQProps) {
                   onClick={() => toggle(i)}
                   aria-expanded={isOpen}
                   aria-controls={`home-faq-panel-${i}`}
-                  className="w-full flex items-center justify-between gap-4 p-5 sm:p-6 text-left"
+                  className="w-full flex items-center justify-between gap-3 px-4 py-3.5 sm:px-5 sm:py-4 text-left"
                 >
-                  <div className="flex items-center gap-4 sm:gap-5 flex-1 min-w-0">
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
                     <span
-                      className={`text-sm font-black uppercase tracking-widest shrink-0 transition-colors ${
+                      className={`text-xs font-black uppercase tracking-widest shrink-0 transition-colors ${
                         isOpen ? "text-primary" : "text-primary/70"
                       }`}
                     >
                       {numLabel}
                     </span>
                     <span
-                      className={`text-base sm:text-lg font-black uppercase tracking-tighter leading-snug transition-colors ${
+                      className={`text-sm sm:text-base font-black uppercase tracking-tighter leading-snug transition-colors ${
                         isOpen ? "text-neutral-900" : "text-white"
                       }`}
                     >
@@ -149,7 +155,7 @@ export default function HomeFAQ({ setCurrentPage }: HomeFAQProps) {
                     </span>
                   </div>
                   <ChevronDown
-                    className={`w-5 h-5 shrink-0 transition-all duration-300 ${
+                    className={`w-4 h-4 shrink-0 transition-all duration-300 ${
                       isOpen ? "text-primary rotate-180" : "text-white/60"
                     }`}
                   />
@@ -166,9 +172,9 @@ export default function HomeFAQ({ setCurrentPage }: HomeFAQProps) {
                       transition={{ duration: 0.3, ease: "easeOut" }}
                       className="overflow-hidden"
                     >
-                      <div className="px-5 sm:px-6 pb-5 sm:pb-6">
-                        <div className="pt-4 sm:pt-5 border-t border-neutral-200">
-                          <p className="text-sm sm:text-base text-neutral-600 leading-relaxed pl-0 sm:pl-12">
+                      <div className="px-4 sm:px-5 pb-4 sm:pb-5">
+                        <div className="pt-3 border-t border-neutral-200">
+                          <p className="text-sm text-neutral-600 leading-relaxed pl-0 sm:pl-9">
                             {faq.a}
                           </p>
                         </div>
@@ -181,10 +187,10 @@ export default function HomeFAQ({ setCurrentPage }: HomeFAQProps) {
           })}
         </div>
 
-        {/* Bottom CTA — sits on the dark backdrop. White ink-style
-            button reads as the primary action without competing with
-            the open card's primary-blue border. */}
-        <div className="text-center mt-12 sm:mt-16">
+        {/* Bottom CTA — v3: top margin reduced (mt-12/mt-16 →
+            mt-8/mt-10) so the CTA sits closer to the last card.
+            Button styling unchanged. */}
+        <div className="text-center mt-8 sm:mt-10">
           <p className="text-neutral-400 text-sm mb-4">
             Still have questions?
           </p>
