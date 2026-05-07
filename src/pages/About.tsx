@@ -1,20 +1,21 @@
 import { motion } from "motion/react";
+import { useNavigate } from "react-router-dom";
 import { Users, History, Target, Heart, Shield } from "lucide-react";
 import { BUSINESS_INFO } from "../data/businessData";
 import PageBanner from "../components/PageBanner";
 
 interface AboutProps {
-  setCurrentPage?: (page: string) => void;
   openEstimate?: (isCorporate?: boolean, initialService?: string) => void;
 }
 
-export default function About({ setCurrentPage }: AboutProps) {
+export default function About(_props: AboutProps) {
+  const navigate = useNavigate();
   return (
     <>
       <PageBanner
         title="About Us"
         breadcrumbs={[
-          { label: "Home", onClick: () => setCurrentPage?.("home") },
+          { label: "Home", onClick: () => navigate("/") },
           { label: "About" }
         ]}
       />

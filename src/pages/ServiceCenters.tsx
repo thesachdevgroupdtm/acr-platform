@@ -1,20 +1,21 @@
 import { motion } from "motion/react";
+import { useNavigate } from "react-router-dom";
 import { MapPin, Phone, Star, ArrowRight, Clock, Shield } from "lucide-react";
 import { LOCATIONS } from "../data/businessData";
 import PageBanner from "../components/PageBanner";
 
 interface ServiceCentersProps {
-  setCurrentPage: (page: string) => void;
   openEstimate?: (isCorporate?: boolean, initialService?: string) => void;
 }
 
-export default function ServiceCenters({ setCurrentPage }: ServiceCentersProps) {
+export default function ServiceCenters(_props: ServiceCentersProps) {
+  const navigate = useNavigate();
   return (
     <>
       <PageBanner
         title="Our Centres"
         breadcrumbs={[
-          { label: "Home", onClick: () => setCurrentPage("home") },
+          { label: "Home", onClick: () => navigate("/") },
           { label: "Service Centers" }
         ]}
       />
@@ -70,7 +71,7 @@ export default function ServiceCenters({ setCurrentPage }: ServiceCentersProps) 
                 </div>
 
                 <button 
-                  onClick={() => setCurrentPage(`center-${center.id}`)}
+                  onClick={() => navigate(`/center/${center.id}`)}
                   className="w-full border border-primary text-primary py-3 text-[10px] font-bold uppercase tracking-widest hover:bg-primary hover:text-white transition-all flex items-center justify-center gap-2"
                 >
                   View Centre Details <ArrowRight className="w-4 h-4" />

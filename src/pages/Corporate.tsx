@@ -1,13 +1,14 @@
 import { motion } from "motion/react";
+import { useNavigate } from "react-router-dom";
 import { Shield, Users, BarChart, Clock, CheckCircle2, MessageSquare, ArrowRight } from "lucide-react";
 import PageBanner from "../components/PageBanner";
 
 interface CorporateProps {
-  setCurrentPage?: (page: string) => void;
   openEstimate?: () => void;
 }
 
-export default function Corporate({ setCurrentPage, openEstimate }: CorporateProps) {
+export default function Corporate({ openEstimate }: CorporateProps) {
+  const navigate = useNavigate();
   const benefits = [
     {
       title: "Dedicated Manager",
@@ -36,7 +37,7 @@ export default function Corporate({ setCurrentPage, openEstimate }: CorporatePro
       <PageBanner
         title="Corporate & Fleet"
         breadcrumbs={[
-          { label: "Home", onClick: () => setCurrentPage?.("home") },
+          { label: "Home", onClick: () => navigate("/") },
           { label: "Corporate" }
         ]}
       />

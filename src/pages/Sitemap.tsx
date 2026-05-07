@@ -1,4 +1,5 @@
 import { ArrowRight } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import PageBanner from "../components/PageBanner";
 import { LOCATIONS } from "../data/businessData";
 import {
@@ -9,11 +10,30 @@ import {
 import { useApiQuery } from "../hooks/useApiQuery";
 
 interface SitemapProps {
-  setCurrentPage: (page: string) => void;
   openEstimate?: (isCorporate?: boolean, initialService?: string) => void;
 }
 
-export default function Sitemap({ setCurrentPage }: SitemapProps) {
+// Phase 3B — explicit label → URL map. The legacy code derived
+// the URL from page.toLowerCase().replace(' ', '-'); under the new
+// router we want each link to land on a real route, so the map is
+// canonical (and "Home" maps to "/" which the old shim already
+// handled, just less obviously).
+const MAIN_PAGES: Array<{ label: string; path: string }> = [
+  { label: "Home",            path: "/" },
+  { label: "Services",        path: "/services" },
+  { label: "Service Centers", path: "/service-centers" },
+  { label: "Insurance",       path: "/insurance" },
+  { label: "Corporate",       path: "/corporate" },
+  { label: "Gallery",         path: "/gallery" },
+  { label: "About",           path: "/about" },
+  { label: "Contact",         path: "/contact" },
+  { label: "Offers",          path: "/offers" },
+  { label: "Coupons",         path: "/coupons" },
+  { label: "Testimonials",    path: "/testimonials" },
+];
+
+export default function Sitemap(_props: SitemapProps) {
+  const navigate = useNavigate();
   // Single /home request. Sub-services are nested under each category in
   // the response (Phase 1.6) — no per-category round trips.
   const home = useApiQuery(["home"], (signal) => fetchHome(signal));
@@ -32,7 +52,7 @@ export default function Sitemap({ setCurrentPage }: SitemapProps) {
       <PageBanner
         title="Sitemap"
         breadcrumbs={[
-          { label: "Home", onClick: () => setCurrentPage("home") },
+          { label: "Home", onClick: () => navigate("/") },
           { label: "Sitemap" },
         ]}
       />
@@ -44,14 +64,14 @@ export default function Sitemap({ setCurrentPage }: SitemapProps) {
             <div>
               <h3 className="text-xl font-black uppercase text-primary-dark mb-6 border-b border-border pb-4">Main Pages</h3>
               <ul className="space-y-4">
-                {["Home", "Services", "Service Centers", "Insurance", "Corporate", "Gallery", "About", "Contact", "Offers", "Coupons", "Testimonials"].map(page => (
-                  <li key={page}>
+                {MAIN_PAGES.map(({ label, path }) => (
+                  <li key={path}>
                     <button
-                      onClick={() => setCurrentPage(page.toLowerCase().replace(' ', '-'))}
+                      onClick={() => navigate(path)}
                       className="text-muted hover:text-primary transition-colors text-sm font-medium flex items-center gap-2 group"
                     >
                       <ArrowRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
-                      {page}
+                      {label}
                     </button>
                   </li>
                 ))}
@@ -76,7 +96,7 @@ export default function Sitemap({ setCurrentPage }: SitemapProps) {
                   {categories.map((category) => (
                     <li key={category.id}>
                       <button
-                        onClick={() => setCurrentPage(`category-${category.slug}`)}
+                        onClick={() => navigate(`/category/${category.slug}`)}
                         className="text-muted hover:text-primary transition-colors text-sm font-medium flex items-center gap-2 group"
                       >
                         <ArrowRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -103,9 +123,7 @@ export default function Sitemap({ setCurrentPage }: SitemapProps) {
                     <li key={`${service._categorySlug}-${service.id}`}>
                       <button
                         onClick={() =>
-                          setCurrentPage(
-                            `service-${service._categorySlug}/${service.slug}`
-                          )
+                          navigate(`/services/${service._categorySlug}/${service.slug}`)
                         }
                         className="text-muted hover:text-primary transition-colors text-sm font-medium flex items-center gap-2 group text-left"
                       >
@@ -125,7 +143,7 @@ export default function Sitemap({ setCurrentPage }: SitemapProps) {
                 {LOCATIONS.map(location => (
                   <li key={location.id}>
                     <button
-                      onClick={() => setCurrentPage(`center-${location.id}`)}
+                      onClick={() => navigate(`/center/${location.id}`)}
                       className="text-muted hover:text-primary transition-colors text-sm font-medium flex items-center gap-2 group text-left"
                     >
                       <ArrowRight className="w-3 h-3 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />

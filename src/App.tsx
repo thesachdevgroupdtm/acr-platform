@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect, useCallback, lazy, Suspense } from "react";
-import { Routes, Route, useLocation, useNavigate, useParams } from "react-router-dom";
+import { useState, useEffect, lazy, Suspense } from "react";
+import { Routes, Route, useLocation } from "react-router-dom";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
 // Phase 2.6b — Home stays eager. It is the most-visited entry and
@@ -44,172 +44,24 @@ import { BUSINESS_INFO } from "./data/businessData";
 import { MessageCircle } from "lucide-react";
 
 /**
- * Phase 3A — react-router migration (Commit A: shim).
+ * Phase 3B — pure react-router migration.
  *
- * The legacy string-keyed `currentPage` machine + parsePageFromUrl /
- * pageToUrl helpers + popstate listener are replaced by
- * BrowserRouter + <Routes>. URL is now the single source of truth.
+ * The Phase 3A shim layer (pageKeyToPath / pathnameToPageKey /
+ * setCurrentPage callback / 5 route-element wrappers) has been
+ * removed. Each page now imports useNavigate / useParams directly
+ * from react-router-dom. Header derives active state from
+ * useLocation. Footer's QUICK_LINKS / USEFUL_LINKS reference URL
+ * paths instead of legacy page keys.
  *
- * Compatibility shim: page components still receive `setCurrentPage`
- * and Header still receives a string-keyed `currentPage`. Both are
- * derived from the router via the helpers below. Pages do not
- * change in this commit (Phase 3B will drop the shim and have each
- * page call useNavigate / useParams directly).
- *
- * Aliases preserved verbatim from the old parsePageFromUrl:
- *   /booking-history             → MyBookings   (alias)
- *   /my-bookings                 → MyBookings   (canonical)
- *   /order/:id                   → OrderDetail
- *   /booking-confirmation/:id    → BookingConfirmation
- *   /services/:category/:service → ServiceDetail
- *   /category/:slug              → ServiceCategory
- *   /center/:id                  → ServiceCenterDetail
- *   /payment                     → NotFound (Phase 2.6a deletion regression — falls through catch-all *)
- *   *                            → NotFound
+ * Routes definition is unchanged in shape from Phase 3A — every
+ * alias (/booking-history → MyBookings, /payment → catch-all
+ * NotFound, etc.) is still wired exactly the same way. The only
+ * difference is each <Route element> now points at the page
+ * component directly, no wrapper.
  */
-
-/**
- * URL pathname → string-keyed page id Header still consumes.
- * BrowserRouter strips the basename for us, so `pathname` here is
- * always relative ("/", "/services", "/category/foo", …).
- */
-function pathnameToPageKey(pathname: string): string {
-  const raw = (pathname || "/").replace(/\/+$/, "");
-  if (raw === "" || raw === "/") return "home";
-
-  const stripped = raw.replace(/^\//, "");
-
-  if (stripped === "booking-history") return "my-bookings";
-
-  const orderMatch = stripped.match(/^order\/(\d+)$/);
-  if (orderMatch) return `order-${orderMatch[1]}`;
-  const confMatch = stripped.match(/^booking-confirmation\/(\d+)$/);
-  if (confMatch) return `booking-confirmation-${confMatch[1]}`;
-
-  const svcMatch = stripped.match(/^services\/([^/]+)\/([^/]+)$/);
-  if (svcMatch) return `service-${svcMatch[1]}/${svcMatch[2]}`;
-
-  const catMatch = stripped.match(/^category\/([^/]+)$/);
-  if (catMatch) return `category-${catMatch[1]}`;
-
-  const centerMatch = stripped.match(/^center\/([^/]+)$/);
-  if (centerMatch) return `center-${centerMatch[1]}`;
-
-  return stripped;
-}
-
-/**
- * Inverse: page-key → router-relative path. Used by the
- * `setCurrentPage` shim so legacy callers (Header, Footer, page
- * components) keep working without modification. BrowserRouter
- * re-prefixes its basename, so we return paths WITHOUT the Vite
- * base prefix here.
- */
-function pageKeyToPath(page: string): string {
-  if (page === "home") return "/";
-  if (page === "my-bookings") return "/booking-history";
-
-  const orderMatch = page.match(/^order-(\d+)$/);
-  if (orderMatch) return `/order/${orderMatch[1]}`;
-  const confMatch = page.match(/^booking-confirmation-(\d+)$/);
-  if (confMatch) return `/booking-confirmation/${confMatch[1]}`;
-
-  const svcMatch = page.match(/^service-(.+)\/(.+)$/);
-  if (svcMatch) return `/services/${svcMatch[1]}/${svcMatch[2]}`;
-  const catMatch = page.match(/^category-(.+)$/);
-  if (catMatch) return `/category/${catMatch[1]}`;
-  const centerMatch = page.match(/^center-(.+)$/);
-  if (centerMatch) return `/center/${centerMatch[1]}`;
-
-  return `/${page}`;
-}
-
-// ─────────────── Route element wrappers ───────────────
-//
-// These pull useParams off the router and forward them as props to
-// each page in the same shape the legacy renderPage() switch used.
-// They are the entire surface area of the shim — Phase 3B replaces
-// them with direct useParams calls inside each page.
-
-interface ShimProps {
-  setCurrentPage: (page: string) => void;
-  openEstimate: (isCorporate?: boolean, initialService?: string) => void;
-  openAuth: (tab?: "login" | "signup", redirectTo?: string) => void;
-}
-
-function ServiceDetailRoute({ setCurrentPage, openEstimate }: ShimProps) {
-  const { category, service } = useParams<{ category: string; service: string }>();
-  return (
-    <ServiceDetail
-      categorySlug={category!}
-      serviceSlug={service!}
-      setCurrentPage={setCurrentPage}
-      openEstimate={openEstimate}
-    />
-  );
-}
-
-function ServiceCategoryRoute({ setCurrentPage, openEstimate }: ShimProps) {
-  const { slug } = useParams<{ slug: string }>();
-  return (
-    <ServiceCategory
-      categorySlug={slug!}
-      setCurrentPage={setCurrentPage}
-      openEstimate={openEstimate}
-    />
-  );
-}
-
-function ServiceCenterDetailRoute({ setCurrentPage, openEstimate }: ShimProps) {
-  const { id } = useParams<{ id: string }>();
-  return (
-    <ServiceCenterDetail
-      centerId={id!}
-      setCurrentPage={setCurrentPage}
-      openEstimate={openEstimate}
-    />
-  );
-}
-
-function OrderDetailRoute({ setCurrentPage }: ShimProps) {
-  const { id } = useParams<{ id: string }>();
-  const numericId = Number(id);
-  // Original behaviour: invalid id → NotFound (Phase 2.6a-fix).
-  if (!Number.isFinite(numericId) || numericId <= 0) {
-    return <NotFound setCurrentPage={setCurrentPage} />;
-  }
-  return <OrderDetail orderId={numericId} setCurrentPage={setCurrentPage} />;
-}
-
-function BookingConfirmationRoute({ setCurrentPage }: ShimProps) {
-  const { id } = useParams<{ id: string }>();
-  const numericId = Number(id);
-  if (!Number.isFinite(numericId) || numericId <= 0) {
-    return <NotFound setCurrentPage={setCurrentPage} />;
-  }
-  return (
-    <BookingConfirmation orderId={numericId} setCurrentPage={setCurrentPage} />
-  );
-}
 
 export default function App() {
   const location = useLocation();
-  const navigate = useNavigate();
-
-  // Header expects a string-keyed `currentPage` for its active-state
-  // computation (services/category-foo/service-foo/center-foo/etc.).
-  // We derive it from the URL on every render.
-  const currentPage = pathnameToPageKey(location.pathname);
-
-  // The shim: legacy callers do `setCurrentPage("services")` →
-  // resolves to /services. Phase 3B will replace these calls with
-  // direct useNavigate inside each page.
-  const setCurrentPage = useCallback(
-    (page: string) => {
-      navigate(pageKeyToPath(page));
-    },
-    [navigate],
-  );
 
   const [estimateModal, setEstimateModal] = useState<{ isOpen: boolean; isCorporate: boolean; initialService: string }>({
     isOpen: false,
@@ -223,8 +75,7 @@ export default function App() {
   });
 
   // Scroll to top on pathname change. Search-only changes (e.g.
-  // ?coupon=FIRST10) preserve scroll position, which matches the
-  // pre-router behaviour where currentPage hadn't changed.
+  // ?coupon=FIRST10) preserve scroll position.
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [location.pathname]);
@@ -237,34 +88,24 @@ export default function App() {
     setAuthModal({ isOpen: true, defaultTab: tab, redirectTo });
   };
 
-  // Pre-built shim prop bundles — three flavours so the route
-  // wrappers don't have to spread three arguments each.
-  const pageShim: ShimProps = { setCurrentPage, openEstimate, openAuth };
-
   return (
     <div className="min-h-screen flex flex-col bg-white selection:bg-primary selection:text-white">
-      <Header
-        currentPage={currentPage}
-        setCurrentPage={setCurrentPage}
-        openEstimate={() => openEstimate(false)}
-        openAuth={openAuth}
-      />
+      <Header openEstimate={() => openEstimate(false)} openAuth={openAuth} />
 
       <main className="flex-grow">
         {/*
-          Phase 2.6b — code-splitting boundaries (preserved verbatim
-          across the Phase 3A router migration).
+          Phase 2.6b boundary stack (preserved verbatim through
+          Phase 3A and 3B).
 
           ChunkErrorBoundary catches the dynamic-import rejection
-          path; Suspense lives INSIDE motion.div (per the Phase 2.6b
-          architecture call) so each new route's chunk fetch can
-          suspend independently of the previous route's exit
-          animation. The motion.div key is now location.pathname
-          (was: currentPage string). Routes is given an explicit
-          `location` prop so the exiting motion.div retains the OLD
-          route's children while the new motion.div mounts with the
-          new route — same separation that mode="wait" already
-          relied on.
+          path (network blocked, stale chunk hashes after a deploy).
+          Suspense lives INSIDE motion.div so each new route's chunk
+          fetch can suspend independently of the previous route's
+          exit animation. The motion.div key is location.pathname.
+          Routes is given an explicit `location` prop so the exiting
+          motion.div retains the OLD route's children while the new
+          motion.div mounts with the new route — same separation
+          that mode="wait" already relied on.
         */}
         <ChunkErrorBoundary>
           <AnimatePresence mode="wait">
@@ -277,36 +118,36 @@ export default function App() {
             >
               <Suspense fallback={<GlobalLoadingFallback />}>
                 <Routes location={location}>
-                  <Route path="/" element={<Home setCurrentPage={setCurrentPage} openEstimate={openEstimate} />} />
-                  <Route path="/services" element={<Services setCurrentPage={setCurrentPage} openEstimate={openEstimate} />} />
-                  <Route path="/services/:category/:service" element={<ServiceDetailRoute {...pageShim} />} />
-                  <Route path="/category/:slug" element={<ServiceCategoryRoute {...pageShim} />} />
-                  <Route path="/service-centers" element={<ServiceCenters setCurrentPage={setCurrentPage} openEstimate={openEstimate} />} />
-                  <Route path="/center/:id" element={<ServiceCenterDetailRoute {...pageShim} />} />
-                  <Route path="/insurance" element={<Insurance setCurrentPage={setCurrentPage} openEstimate={openEstimate} />} />
-                  <Route path="/corporate" element={<Corporate setCurrentPage={setCurrentPage} openEstimate={() => openEstimate(true)} />} />
-                  <Route path="/gallery" element={<Gallery setCurrentPage={setCurrentPage} openEstimate={openEstimate} />} />
-                  <Route path="/about" element={<About setCurrentPage={setCurrentPage} openEstimate={openEstimate} />} />
-                  <Route path="/contact" element={<Contact setCurrentPage={setCurrentPage} openEstimate={openEstimate} />} />
-                  <Route path="/offers" element={<Offers setCurrentPage={setCurrentPage} openEstimate={openEstimate} />} />
-                  <Route path="/coupons" element={<Coupons setCurrentPage={setCurrentPage} openEstimate={openEstimate} />} />
-                  <Route path="/sitemap" element={<Sitemap setCurrentPage={setCurrentPage} openEstimate={openEstimate} />} />
-                  <Route path="/cms-preview" element={<CmsPage setCurrentPage={setCurrentPage} openEstimate={openEstimate} />} />
-                  <Route path="/cart" element={<Cart setCurrentPage={setCurrentPage} openAuth={openAuth} />} />
-                  <Route path="/checkout" element={<Checkout setCurrentPage={setCurrentPage} openAuth={openAuth} />} />
-                  <Route path="/booking-history" element={<MyBookings setCurrentPage={setCurrentPage} openAuth={openAuth} />} />
-                  <Route path="/my-bookings" element={<MyBookings setCurrentPage={setCurrentPage} openAuth={openAuth} />} />
-                  <Route path="/testimonials" element={<Testimonials setCurrentPage={setCurrentPage} />} />
-                  <Route path="/order/:id" element={<OrderDetailRoute {...pageShim} />} />
-                  <Route path="/booking-confirmation/:id" element={<BookingConfirmationRoute {...pageShim} />} />
-                  <Route path="/not-found" element={<NotFound setCurrentPage={setCurrentPage} />} />
+                  <Route path="/" element={<Home openEstimate={openEstimate} />} />
+                  <Route path="/services" element={<Services openEstimate={openEstimate} />} />
+                  <Route path="/services/:category/:service" element={<ServiceDetail openEstimate={openEstimate} />} />
+                  <Route path="/category/:slug" element={<ServiceCategory openEstimate={openEstimate} />} />
+                  <Route path="/service-centers" element={<ServiceCenters openEstimate={openEstimate} />} />
+                  <Route path="/center/:id" element={<ServiceCenterDetail openEstimate={openEstimate} />} />
+                  <Route path="/insurance" element={<Insurance openEstimate={openEstimate} />} />
+                  <Route path="/corporate" element={<Corporate openEstimate={() => openEstimate(true)} />} />
+                  <Route path="/gallery" element={<Gallery openEstimate={openEstimate} />} />
+                  <Route path="/about" element={<About openEstimate={openEstimate} />} />
+                  <Route path="/contact" element={<Contact openEstimate={openEstimate} />} />
+                  <Route path="/offers" element={<Offers openEstimate={openEstimate} />} />
+                  <Route path="/coupons" element={<Coupons openEstimate={openEstimate} />} />
+                  <Route path="/sitemap" element={<Sitemap openEstimate={openEstimate} />} />
+                  <Route path="/cms-preview" element={<CmsPage openEstimate={openEstimate} />} />
+                  <Route path="/cart" element={<Cart openAuth={openAuth} />} />
+                  <Route path="/checkout" element={<Checkout openAuth={openAuth} />} />
+                  <Route path="/booking-history" element={<MyBookings openAuth={openAuth} />} />
+                  <Route path="/my-bookings" element={<MyBookings openAuth={openAuth} />} />
+                  <Route path="/testimonials" element={<Testimonials />} />
+                  <Route path="/order/:id" element={<OrderDetail />} />
+                  <Route path="/booking-confirmation/:id" element={<BookingConfirmation />} />
+                  <Route path="/not-found" element={<NotFound />} />
                   {/*
                     Catch-all — preserves the Phase 2.6a-fix invariant
                     that unknown URLs land on NotFound at the original
                     URL (NOT a silent home redirect). /payment still
                     maps here per Phase 2.6a, locked by the smoke test.
                   */}
-                  <Route path="*" element={<NotFound setCurrentPage={setCurrentPage} />} />
+                  <Route path="*" element={<NotFound />} />
                 </Routes>
               </Suspense>
             </motion.div>
@@ -314,7 +155,7 @@ export default function App() {
         </ChunkErrorBoundary>
       </main>
 
-      <Footer setCurrentPage={setCurrentPage} />
+      <Footer />
 
       {/* Estimate Modal */}
       <AnimatePresence>
@@ -332,7 +173,6 @@ export default function App() {
         isOpen={authModal.isOpen}
         defaultTab={authModal.defaultTab}
         redirectTo={authModal.redirectTo}
-        setCurrentPage={setCurrentPage}
         onClose={() => setAuthModal((prev) => ({ ...prev, isOpen: false }))}
       />
 

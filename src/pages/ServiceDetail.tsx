@@ -1,5 +1,6 @@
 import type * as React from "react";
 import { useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   CheckCircle2,
   ArrowRight,
@@ -58,18 +59,20 @@ const SECTIONS: ReadonlyArray<{ id: string; label: string }> = [
 ];
 
 interface ServiceDetailProps {
-  categorySlug: string;
-  serviceSlug: string;
-  setCurrentPage: (page: string) => void;
   openEstimate?: (isCorporate?: boolean, initialService?: string) => void;
 }
 
 export default function ServiceDetail({
-  categorySlug,
-  serviceSlug,
-  setCurrentPage,
   openEstimate,
 }: ServiceDetailProps) {
+  const navigate = useNavigate();
+  // /services/:category/:service — Phase 3B reads both slugs
+  // straight from useParams. Empty fallbacks keep TS happy; the
+  // route only ever matches when both segments are present.
+  const { category: categorySlug = "", service: serviceSlug = "" } = useParams<{
+    category: string;
+    service: string;
+  }>();
   const { addItem, count, findCartItem, removeItem, replaceVehicleInCart, isLoading: cartLoading } = useCart();
   const [vehicleConflict, setVehicleConflict] = useState<VehicleConflictDetails | null>(null);
   const [replacing, setReplacing] = useState(false);
@@ -230,7 +233,7 @@ export default function ServiceDetail({
   const goToParentForBooking = () => {
     // Navigate user back to the parent category page where the full
     // booking flow lives (location + car + phone + OTP).
-    setCurrentPage(`category-${categorySlug}`);
+    navigate(`/category/${categorySlug}`);
   };
 
   const serviceIncludes = [
@@ -367,10 +370,10 @@ export default function ServiceDetail({
       <PageBanner
         title={service.title}
         breadcrumbs={[
-          { label: "Home", onClick: () => setCurrentPage("home") },
+          { label: "Home", onClick: () => navigate("/") },
           {
             label: category.title,
-            onClick: () => setCurrentPage(`category-${categorySlug}`),
+            onClick: () => navigate(`/category/${categorySlug}`),
           },
           { label: service.title },
         ]}
@@ -656,23 +659,21 @@ export default function ServiceDetail({
                 <p className="text-sm text-neutral-600 leading-relaxed">
                   Browse our complete range of{" "}
                   <button
-                    onClick={() =>
-                      setCurrentPage(`category-${categorySlug}`)
-                    }
+                    onClick={() => navigate(`/category/${categorySlug}`)}
                     className="text-primary font-bold hover:underline"
                   >
                     {category.title} services
                   </button>
                   , visit any of our{" "}
                   <button
-                    onClick={() => setCurrentPage("service-centers")}
+                    onClick={() => navigate("/service-centers")}
                     className="text-primary font-bold hover:underline"
                   >
                     certified service centres in {cityWord}
                   </button>
                   , or{" "}
                   <button
-                    onClick={() => setCurrentPage("contact")}
+                    onClick={() => navigate("/contact")}
                     className="text-primary font-bold hover:underline"
                   >
                     contact our advisors
@@ -735,9 +736,7 @@ export default function ServiceDetail({
                       <div
                         key={related.id}
                         onClick={() =>
-                          setCurrentPage(
-                            `service-${category.slug}/${related.slug}`
-                          )
+                          navigate(`/services/${category.slug}/${related.slug}`)
                         }
                         className="bg-neutral-50 p-5 border border-border hover:border-primary transition-all cursor-pointer group"
                       >
@@ -855,7 +854,7 @@ export default function ServiceDetail({
                   </button>
                 ) : (
                   <button
-                    onClick={() => setCurrentPage(`category-${categorySlug}`)}
+                    onClick={() => navigate(`/category/${categorySlug}`)}
                     className="text-[10px] font-bold uppercase tracking-widest text-primary hover:underline w-full text-center py-2"
                   >
                     Edit details ↑

@@ -1,12 +1,13 @@
 import { motion } from "motion/react";
+import { useNavigate } from "react-router-dom";
 import PageBanner from "../components/PageBanner";
 
 interface GalleryProps {
-  setCurrentPage?: (page: string) => void;
   openEstimate?: (isCorporate?: boolean, initialService?: string) => void;
 }
 
-export default function Gallery({ setCurrentPage }: GalleryProps) {
+export default function Gallery(_props: GalleryProps) {
+  const navigate = useNavigate();
   const images = [
     {
       url: "https://images.unsplash.com/photo-1625047509168-a7026f36de04?auto=format&fit=crop&q=80&w=800",
@@ -45,7 +46,7 @@ export default function Gallery({ setCurrentPage }: GalleryProps) {
       <PageBanner
         title="Gallery"
         breadcrumbs={[
-          { label: "Home", onClick: () => setCurrentPage?.("home") },
+          { label: "Home", onClick: () => navigate("/") },
           { label: "Gallery" }
         ]}
       />

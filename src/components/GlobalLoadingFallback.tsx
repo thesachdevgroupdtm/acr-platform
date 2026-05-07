@@ -9,14 +9,13 @@
  * placeholder. That avoids a chrome-flash when navigating between
  * lazy routes.
  *
- * Visual contract matches RouteResolutionLoader (the Phase 2.5.1
- * gate that fires before this fallback): same primary-coloured
- * spinner, same "Loading" caption. The two loaders compose:
- *   1. Hard-refresh on /any-lazy-route → RouteResolutionLoader
- *      (URL parse) → GlobalLoadingFallback (chunk download) →
- *      page-level skeleton (data fetch) → page.
- *   2. Click-nav from another page → GlobalLoadingFallback
- *      (chunk download, if not cached) → page.
+ * Phase 3B — RouteResolutionLoader (the Phase 2.5.1 URL-parse
+ * gate) was deleted alongside the legacy currentPage state machine,
+ * so this is now the single global loading surface. Visual
+ * treatment unchanged: primary-coloured spinner + "Loading"
+ * caption. The flow on hard-refresh is now:
+ *   GlobalLoadingFallback (chunk download, if any) →
+ *   page-level skeleton (data fetch) → page.
  *
  * The "Loading" caption is matched by the slow-chunk Playwright
  * test (tests/e2e/code-splitting.spec.ts), so the text is

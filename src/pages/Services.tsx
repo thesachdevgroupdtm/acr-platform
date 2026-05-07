@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type * as React from "react";
 import { motion } from "motion/react";
+import { useNavigate } from "react-router-dom";
 import {
   ArrowRight,
   CheckCircle2,
@@ -28,7 +29,6 @@ import { useApiQuery } from "../hooks/useApiQuery";
 import { useSubNavSync } from "../hooks/useSubNavSync";
 
 interface ServicesProps {
-  setCurrentPage: (page: string) => void;
   openEstimate?: (isCorporate?: boolean, initialService?: string) => void;
 }
 
@@ -45,7 +45,8 @@ interface ServicesProps {
 const STICKY_OFFSET_PX = 180;
 const SECTION_NAV_OFFSET_PX = 112; // height of header alone (sub-nav sits at this offset)
 
-export default function Services({ setCurrentPage }: ServicesProps) {
+export default function Services(_props: ServicesProps) {
+  const navigate = useNavigate();
   const { addItem, count, findCartItem, removeItem, replaceVehicleInCart, isLoading: cartLoading } = useCart();
   const { bootstrapped } = useAuth();
   // Phase 2.6a-fix — `cartReady` gates ADDED-badge derivation on
@@ -169,7 +170,7 @@ export default function Services({ setCurrentPage }: ServicesProps) {
       <PageBanner
         title="Our Services"
         breadcrumbs={[
-          { label: "Home", onClick: () => setCurrentPage("home") },
+          { label: "Home", onClick: () => navigate("/") },
           { label: "All Services" },
         ]}
       />
@@ -316,10 +317,10 @@ export default function Services({ setCurrentPage }: ServicesProps) {
                     onAddToCart={(sub) => handleAddToCart(sub, category.slug)}
                     onRemoveFromCart={(itemId) => removeItem(String(itemId))}
                     onViewDetail={(subSlug) =>
-                      setCurrentPage(`service-${category.slug}/${subSlug}`)
+                      navigate(`/services/${category.slug}/${subSlug}`)
                     }
                     onViewCategory={() =>
-                      setCurrentPage(`category-${category.slug}`)
+                      navigate(`/category/${category.slug}`)
                     }
                   />
                 ))}

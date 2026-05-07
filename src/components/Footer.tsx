@@ -1,42 +1,37 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Car, Instagram, Facebook, Twitter, Mail, Phone, MapPin, Youtube, Linkedin, ChevronLeft, ChevronRight } from "lucide-react";
 import { BUSINESS_INFO, LOCATIONS } from "../data/businessData";
 
-interface FooterProps {
-  /** Phase 2.6a-fix demo-readiness — wire Quick Links to real
-   *  page navigation. Optional so any caller that doesn't pass
-   *  a navigator falls back to the (silent) anchor behavior. */
-  setCurrentPage?: (page: string) => void;
-}
-
-// Quick Links → currentPage key. Same vocabulary App.tsx uses.
-const QUICK_LINKS: Array<{ label: string; page: string }> = [
-  { label: "Home",     page: "home" },
-  { label: "Services", page: "services" },
-  { label: "Insurance", page: "insurance" },
-  { label: "Gallery",  page: "gallery" },
-  { label: "About",    page: "about" },
-  { label: "Contact",  page: "contact" },
-  { label: "Sitemap",  page: "sitemap" },
+// Phase 3B — link tables now reference router paths directly.
+// Phase 2.6a-fix's "Quick Links" UX is unchanged; only the wiring
+// shifts from currentPage strings to URL paths.
+const QUICK_LINKS: Array<{ label: string; path: string }> = [
+  { label: "Home",      path: "/" },
+  { label: "Services",  path: "/services" },
+  { label: "Insurance", path: "/insurance" },
+  { label: "Gallery",   path: "/gallery" },
+  { label: "About",     path: "/about" },
+  { label: "Contact",   path: "/contact" },
+  { label: "Sitemap",   path: "/sitemap" },
 ];
 
-const USEFUL_LINKS: Array<{ label: string; page: string }> = [
-  { label: "Service Centers",     page: "service-centers" },
-  { label: "Testimonials",        page: "testimonials" },
-  { label: "Offers & Discounts",  page: "offers" },
-  { label: "Corporate Tie-ups",   page: "corporate" },
-  { label: "Coupons",             page: "coupons" },
-  { label: "Contact Us",          page: "contact" },
+const USEFUL_LINKS: Array<{ label: string; path: string }> = [
+  { label: "Service Centers",     path: "/service-centers" },
+  { label: "Testimonials",        path: "/testimonials" },
+  { label: "Offers & Discounts",  path: "/offers" },
+  { label: "Corporate Tie-ups",   path: "/corporate" },
+  { label: "Coupons",             path: "/coupons" },
+  { label: "Contact Us",          path: "/contact" },
 ];
 
-export default function Footer({ setCurrentPage }: FooterProps) {
+export default function Footer() {
+  const navigate = useNavigate();
   const [currentLocationIdx, setCurrentLocationIdx] = useState(0);
 
-  const navigate = (page: string) => {
-    if (setCurrentPage) {
-      setCurrentPage(page);
-      window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
-    }
+  const goTo = (path: string) => {
+    navigate(path);
+    window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
   };
 
   useEffect(() => {
@@ -114,7 +109,7 @@ export default function Footer({ setCurrentPage }: FooterProps) {
               {QUICK_LINKS.map((item) => (
                 <li key={item.label}>
                   <button
-                    onClick={() => navigate(item.page)}
+                    onClick={() => goTo(item.path)}
                     className="text-[13px] font-medium text-muted hover:text-primary transition-colors block text-left"
                   >
                     {item.label}
@@ -131,7 +126,7 @@ export default function Footer({ setCurrentPage }: FooterProps) {
               {USEFUL_LINKS.map((item) => (
                 <li key={item.label}>
                   <button
-                    onClick={() => navigate(item.page)}
+                    onClick={() => goTo(item.path)}
                     className="text-[13px] font-medium text-muted hover:text-primary transition-colors block text-left"
                   >
                     {item.label}

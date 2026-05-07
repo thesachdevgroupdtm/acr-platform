@@ -1,19 +1,20 @@
 import { motion } from "motion/react";
+import { useNavigate } from "react-router-dom";
 import { FileCheck, ShieldAlert, BadgeCheck, HelpCircle, ArrowRight } from "lucide-react";
 import PageBanner from "../components/PageBanner";
 
 interface InsuranceProps {
-  setCurrentPage?: (page: string) => void;
   openEstimate?: (isCorporate?: boolean, initialService?: string) => void;
 }
 
-export default function Insurance({ setCurrentPage }: InsuranceProps) {
+export default function Insurance(_props: InsuranceProps) {
+  const navigate = useNavigate();
   return (
     <>
       <PageBanner
         title="Insurance Claims"
         breadcrumbs={[
-          { label: "Home", onClick: () => setCurrentPage?.("home") },
+          { label: "Home", onClick: () => navigate("/") },
           { label: "Insurance" }
         ]}
       />

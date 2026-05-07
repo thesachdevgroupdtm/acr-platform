@@ -1,13 +1,13 @@
 import type * as React from "react";
 import { useState } from "react";
 import { motion } from "motion/react";
+import { useNavigate } from "react-router-dom";
 import PageBanner from "../components/PageBanner";
 import { Copy, CheckCircle2, Ticket, Tag, ArrowRight } from "lucide-react";
 import { useCoupons } from "../hooks/useCoupons";
 import type { CouponResource } from "../types/api";
 
 interface CouponsProps {
-  setCurrentPage: (page: string) => void;
   openEstimate?: (isCorporate?: boolean, initialService?: string) => void;
 }
 
@@ -21,7 +21,8 @@ interface CouponsProps {
  * Marketing context — no Apply button on cards (per D-2.5b-2). To
  * apply, the user navigates to Cart and uses the picker modal.
  */
-export default function Coupons({ setCurrentPage }: CouponsProps) {
+export default function Coupons(_props: CouponsProps) {
+  const navigate = useNavigate();
   const { coupons, isLoading, isError } = useCoupons("marketing");
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
@@ -41,7 +42,7 @@ export default function Coupons({ setCurrentPage }: CouponsProps) {
       <PageBanner
         title="Available Coupons"
         breadcrumbs={[
-          { label: "Home", onClick: () => setCurrentPage("home") },
+          { label: "Home", onClick: () => navigate("/") },
           { label: "Coupons" },
         ]}
       />
@@ -58,7 +59,7 @@ export default function Coupons({ setCurrentPage }: CouponsProps) {
               </p>
             </div>
             <button
-              onClick={() => setCurrentPage("services")}
+              onClick={() => navigate("/services")}
               className="text-[10px] sm:text-xs uppercase tracking-widest font-bold text-primary hover:underline flex items-center gap-1"
             >
               Browse Services <ArrowRight className="w-3 h-3" />

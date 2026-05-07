@@ -1,4 +1,5 @@
 import type * as React from "react";
+import { useNavigate } from "react-router-dom";
 import {
   ShoppingCart,
   Minus,
@@ -19,13 +20,13 @@ import { useCart } from "../hooks/useCart";
 import { useAuth } from "../hooks/useAuth";
 
 interface CartProps {
-  setCurrentPage: (page: string) => void;
   openAuth: (tab?: "login" | "signup", redirectTo?: string) => void;
 }
 
 const SERVICE_CHARGE_PCT = 0; // free service charge for now
 
-export default function Cart({ setCurrentPage, openAuth }: CartProps) {
+export default function Cart({ openAuth }: CartProps) {
+  const navigate = useNavigate();
   const { items, updateQty, removeItem, subtotal, count, clearCart, cart, isLoading: cartLoading } =
     useCart();
   const { isAuthenticated, bootstrapped } = useAuth();
@@ -53,10 +54,10 @@ export default function Cart({ setCurrentPage, openAuth }: CartProps) {
   const handleCheckout = () => {
     if (!bootstrapped) return;
     if (!isAuthenticated) {
-      openAuth("login", "checkout");
+      openAuth("login", "/checkout");
       return;
     }
-    setCurrentPage("checkout");
+    navigate("/checkout");
   };
 
 
@@ -66,7 +67,7 @@ export default function Cart({ setCurrentPage, openAuth }: CartProps) {
       <PageBanner
         title="Your Cart"
         breadcrumbs={[
-          { label: "Home", onClick: () => setCurrentPage("home") },
+          { label: "Home", onClick: () => navigate("/") },
           { label: "Cart" },
         ]}
       />
@@ -74,7 +75,7 @@ export default function Cart({ setCurrentPage, openAuth }: CartProps) {
       <div className="pb-14 pt-8">
         <div className="site-container">
           {/* Step indicator: Cart → Checkout → Payment */}
-          <CheckoutSteps current={1} setCurrentPage={setCurrentPage} />
+          <CheckoutSteps current={1} />
 
           {/* Phase 2.6a-fix (D-2.6a-fix-5) — gate empty-state on
               cartLoading + bootstrapped. Pre-fix, hard refresh on
@@ -86,7 +87,7 @@ export default function Cart({ setCurrentPage, openAuth }: CartProps) {
           {cartLoading || !bootstrapped ? (
             <CartSkeleton />
           ) : items.length === 0 ? (
-            <EmptyCart setCurrentPage={setCurrentPage} />
+            <EmptyCart />
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 lg:gap-10 mt-10">
               {/* ITEMS */}
@@ -183,7 +184,7 @@ export default function Cart({ setCurrentPage, openAuth }: CartProps) {
 
                 {/* Continue Shopping */}
                 <button
-                  onClick={() => setCurrentPage("services")}
+                  onClick={() => navigate("/services")}
                   className="text-[10px] sm:text-xs uppercase tracking-widest font-bold text-primary hover:underline flex items-center gap-2 mt-4"
                 >
                   <ArrowLeft className="w-3.5 h-3.5" /> Continue Shopping
@@ -344,11 +345,8 @@ function TrustRow({
   );
 }
 
-function EmptyCart({
-  setCurrentPage,
-}: {
-  setCurrentPage: (p: string) => void;
-}) {
+function EmptyCart() {
+  const navigate = useNavigate();
   return (
     <div className="bg-white border border-border py-20 px-6 text-center mt-10">
       <div className="w-16 h-16 bg-neutral-100 mx-auto mb-5 flex items-center justify-center">
@@ -362,7 +360,7 @@ function EmptyCart({
         We'll handle the rest.
       </p>
       <button
-        onClick={() => setCurrentPage("services")}
+        onClick={() => navigate("/services")}
         className="btn-ink btn-ink-primary px-8 py-4 text-xs font-black uppercase tracking-widest inline-flex items-center gap-2"
       >
         Browse Services <ArrowRight className="w-4 h-4 btn-arrow" />
@@ -381,14 +379,13 @@ function EmptyCart({
 
 export function CheckoutSteps({
   current,
-  setCurrentPage,
 }: {
   current: 1 | 2;
-  setCurrentPage: (p: string) => void;
 }) {
+  const navigate = useNavigate();
   const steps = [
-    { num: 1, label: "Cart", page: "cart" },
-    { num: 2, label: "Checkout", page: "checkout" },
+    { num: 1, label: "Cart", path: "/cart" },
+    { num: 2, label: "Checkout", path: "/checkout" },
   ];
   return (
     <div className="flex items-center justify-center max-w-md mx-auto gap-1 sm:gap-2">
@@ -411,7 +408,7 @@ export function CheckoutSteps({
             <button
               type="button"
               disabled={!isClickable}
-              onClick={() => isClickable && setCurrentPage(s.page)}
+              onClick={() => isClickable && navigate(s.path)}
               className={`flex flex-col items-center gap-1.5 shrink-0 ${
                 isClickable ? "cursor-pointer" : "cursor-default"
               }`}

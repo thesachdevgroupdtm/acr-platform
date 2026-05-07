@@ -1,5 +1,6 @@
 import type * as React from "react";
 import { useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
   Calendar,
@@ -17,11 +18,6 @@ import { useOrderDetail, useCancelOrder } from "../hooks/useOrders";
 import { useAuth } from "../hooks/useAuth";
 import type { OrderStatus } from "../types/api";
 
-interface OrderDetailProps {
-  orderId: number;
-  setCurrentPage: (page: string) => void;
-}
-
 function statusBadge(status: OrderStatus): string {
   switch (status) {
     case "pending":     return "bg-amber-500 text-white";
@@ -35,13 +31,18 @@ function statusBadge(status: OrderStatus): string {
 
 /**
  * Phase 2.5a — full-detail order view. Reachable via the
- * `order-{id}` route key from MyBookings or the booking confirmation
+ * /order/:id route from MyBookings or the booking confirmation
  * page. The cancel CTA is gated to status='pending' (D-2.5a-5).
+ *
+ * Phase 3B — orderId reads from useParams; if the URL segment isn't
+ * a positive integer the App.tsx route fallback would have already
+ * directed here as the catch-all NotFound, so a real /order/:id hit
+ * always parses cleanly. Defensive guard preserved for safety.
  */
-export default function OrderDetail({
-  orderId,
-  setCurrentPage,
-}: OrderDetailProps) {
+export default function OrderDetail() {
+  const navigate = useNavigate();
+  const { id } = useParams<{ id: string }>();
+  const orderId = Number(id);
   const { order, isLoading, isError } = useOrderDetail(orderId);
   const { bootstrapped } = useAuth();
   const cancelMutation = useCancelOrder();
@@ -77,10 +78,10 @@ export default function OrderDetail({
         <PageBanner
           title="Order Details"
           breadcrumbs={[
-            { label: "Home", onClick: () => setCurrentPage("home") },
+            { label: "Home", onClick: () => navigate("/") },
             {
               label: "My Bookings",
-              onClick: () => setCurrentPage("my-bookings"),
+              onClick: () => navigate("/my-bookings"),
             },
             { label: "Details" },
           ]}
@@ -100,10 +101,10 @@ export default function OrderDetail({
         <PageBanner
           title="Order Details"
           breadcrumbs={[
-            { label: "Home", onClick: () => setCurrentPage("home") },
+            { label: "Home", onClick: () => navigate("/") },
             {
               label: "My Bookings",
-              onClick: () => setCurrentPage("my-bookings"),
+              onClick: () => navigate("/my-bookings"),
             },
             { label: "Details" },
           ]}
@@ -113,7 +114,7 @@ export default function OrderDetail({
             We couldn't load that order.
           </p>
           <button
-            onClick={() => setCurrentPage("my-bookings")}
+            onClick={() => navigate("/my-bookings")}
             className="btn-ink btn-ink-primary px-6 py-3 text-xs font-black uppercase tracking-widest"
           >
             Back to My Bookings
@@ -130,10 +131,10 @@ export default function OrderDetail({
       <PageBanner
         title={order.order_number}
         breadcrumbs={[
-          { label: "Home", onClick: () => setCurrentPage("home") },
+          { label: "Home", onClick: () => navigate("/") },
           {
             label: "My Bookings",
-            onClick: () => setCurrentPage("my-bookings"),
+            onClick: () => navigate("/my-bookings"),
           },
           { label: order.order_number },
         ]}
@@ -142,7 +143,7 @@ export default function OrderDetail({
       <div className="pb-14 pt-8">
         <div className="site-container max-w-3xl">
           <button
-            onClick={() => setCurrentPage("my-bookings")}
+            onClick={() => navigate("/my-bookings")}
             className="text-[10px] sm:text-xs uppercase tracking-widest font-bold text-primary hover:underline flex items-center gap-2 mb-5"
           >
             <ArrowLeft className="w-3.5 h-3.5" /> Back to My Bookings

@@ -1,18 +1,19 @@
 import React, { useState } from "react";
 import { motion } from "motion/react";
+import { useNavigate } from "react-router-dom";
 import PageBanner from "../components/PageBanner";
 import FAQAccordion from "../components/FAQAccordion";
-import { 
-  CheckCircle2, ArrowRight, Phone, MessageCircle, HelpCircle, Star, 
+import {
+  CheckCircle2, ArrowRight, Phone, MessageCircle, HelpCircle, Star,
   MapPin, Shield, Zap, Award, Wrench, ThumbsUp, Loader2
 } from "lucide-react";
 
 interface CmsPageProps {
-  setCurrentPage: (page: string) => void;
   openEstimate?: (isCorporate?: boolean, initialService?: string) => void;
 }
 
-export default function CmsPage({ setCurrentPage }: CmsPageProps) {
+export default function CmsPage(_props: CmsPageProps) {
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({ name: "", phone: "", model: "" });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -43,8 +44,8 @@ export default function CmsPage({ setCurrentPage }: CmsPageProps) {
       <PageBanner
         title="VOLVO CAR SERVICE IN DELHI"
         breadcrumbs={[
-          { label: "Home", onClick: () => setCurrentPage("home") },
-          { label: "Brands", onClick: () => setCurrentPage("services") },
+          { label: "Home", onClick: () => navigate("/") },
+          { label: "Brands", onClick: () => navigate("/services") },
           { label: "Volvo Service" }
         ]}
       />

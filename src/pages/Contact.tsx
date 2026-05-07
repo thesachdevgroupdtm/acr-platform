@@ -1,15 +1,16 @@
 import { useState, FormEvent } from "react";
 import { motion } from "motion/react";
+import { useNavigate } from "react-router-dom";
 import { Phone, Mail, MapPin, Clock, MessageCircle, Send, ArrowRight, CheckCircle2 } from "lucide-react";
 import { BUSINESS_INFO } from "../data/businessData";
 import PageBanner from "../components/PageBanner";
 
 interface ContactProps {
-  setCurrentPage?: (page: string) => void;
   openEstimate?: (isCorporate?: boolean, initialService?: string) => void;
 }
 
-export default function Contact({ setCurrentPage }: ContactProps) {
+export default function Contact(_props: ContactProps) {
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     name: "",
     phone: "",
@@ -42,7 +43,7 @@ export default function Contact({ setCurrentPage }: ContactProps) {
       <PageBanner
         title="Contact Us"
         breadcrumbs={[
-          { label: "Home", onClick: () => setCurrentPage?.("home") },
+          { label: "Home", onClick: () => navigate("/") },
           { label: "Contact" }
         ]}
       />

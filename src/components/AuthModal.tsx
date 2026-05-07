@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import { useNavigate } from "react-router-dom";
 import {
   X,
   Mail,
@@ -28,9 +29,12 @@ type Stage = "form" | "otp" | "done";
 interface AuthModalProps {
   isOpen: boolean;
   defaultTab?: Tab;
-  /** Page slug to navigate to on success. Optional. */
+  /**
+   * URL path to navigate to on success (e.g. "/checkout",
+   * "/my-bookings"). Phase 3B — was a page-key string under the
+   * legacy shim; now consumed verbatim by useNavigate.
+   */
   redirectTo?: string;
-  setCurrentPage: (page: string) => void;
   onClose: () => void;
 }
 
@@ -50,9 +54,9 @@ export default function AuthModal({
   isOpen,
   defaultTab = "login",
   redirectTo,
-  setCurrentPage,
   onClose,
 }: AuthModalProps) {
+  const navigate = useNavigate();
   const auth = useAuth();
   const [tab, setTab] = useState<Tab>(defaultTab);
   const [stage, setStage] = useState<Stage>("form");
@@ -98,7 +102,7 @@ export default function AuthModal({
 
   const closeAndMaybeRedirect = () => {
     onClose();
-    if (redirectTo) setCurrentPage(redirectTo);
+    if (redirectTo) navigate(redirectTo);
   };
 
   // ── Coming-soon panel when feature flag is off ──

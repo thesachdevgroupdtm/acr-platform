@@ -1,9 +1,6 @@
 import { ArrowRight, Compass } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import PageBanner from "../components/PageBanner";
-
-interface NotFoundProps {
-  setCurrentPage: (page: string) => void;
-}
 
 /**
  * Phase 2.6a-fix (Test 1) — graceful 404 for unknown URLs.
@@ -14,13 +11,14 @@ interface NotFoundProps {
  * This component renders at the original URL so the browser bar
  * stays honest, and offers a clear path back to /home.
  */
-export default function NotFound({ setCurrentPage }: NotFoundProps) {
+export default function NotFound() {
+  const navigate = useNavigate();
   return (
     <>
       <PageBanner
         title="Page Not Found"
         breadcrumbs={[
-          { label: "Home", onClick: () => setCurrentPage("home") },
+          { label: "Home", onClick: () => navigate("/") },
           { label: "Not Found" },
         ]}
       />
@@ -38,7 +36,7 @@ export default function NotFound({ setCurrentPage }: NotFoundProps) {
               heading back to the home page.
             </p>
             <button
-              onClick={() => setCurrentPage("home")}
+              onClick={() => navigate("/")}
               className="btn-ink btn-ink-primary inline-flex items-center gap-2 px-8 py-4 text-xs font-black uppercase tracking-widest"
             >
               Go to Home

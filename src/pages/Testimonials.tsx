@@ -1,10 +1,7 @@
 import { motion } from "motion/react";
+import { useNavigate } from "react-router-dom";
 import { Star, MapPin, Wrench } from "lucide-react";
 import PageBanner from "../components/PageBanner";
-
-interface TestimonialsProps {
-  setCurrentPage: (page: string) => void;
-}
 
 interface Testimonial {
   name: string;
@@ -162,13 +159,14 @@ function StarRow({ rating }: { rating: 4 | 5 }) {
   );
 }
 
-export default function Testimonials({ setCurrentPage }: TestimonialsProps) {
+export default function Testimonials() {
+  const navigate = useNavigate();
   return (
     <>
       <PageBanner
         title="What Our Customers Say"
         breadcrumbs={[
-          { label: "Home", onClick: () => setCurrentPage("home") },
+          { label: "Home", onClick: () => navigate("/") },
           { label: "Testimonials" },
         ]}
       />
@@ -279,13 +277,13 @@ export default function Testimonials({ setCurrentPage }: TestimonialsProps) {
               </p>
               <div className="flex flex-wrap items-center justify-center gap-3">
                 <button
-                  onClick={() => setCurrentPage("services")}
+                  onClick={() => navigate("/services")}
                   className="btn-ink btn-ink-primary px-8 py-4 text-xs font-black uppercase tracking-widest"
                 >
                   Browse Services
                 </button>
                 <button
-                  onClick={() => setCurrentPage("service-centers")}
+                  onClick={() => navigate("/service-centers")}
                   className="btn-ink btn-ink-white px-8 py-4 text-xs font-black uppercase tracking-widest"
                 >
                   Find a Center

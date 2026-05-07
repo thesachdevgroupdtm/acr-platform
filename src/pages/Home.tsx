@@ -1,5 +1,6 @@
 import { useState, FormEvent, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import { useNavigate } from "react-router-dom";
 import {
   ArrowRight, ShieldCheck, Zap, Award, Clock, ChevronRight, ChevronLeft, Car,
   MessageCircle, Star, CheckCircle2, Play, Shield, Loader2,
@@ -15,11 +16,11 @@ import { useApiQuery } from "../hooks/useApiQuery";
 import HomeFAQ from "../components/HomeFAQ";
 
 interface HomeProps {
-  setCurrentPage: (page: string) => void;
   openEstimate: (isCorporate?: boolean, initialService?: string) => void;
 }
 
-export default function Home({ setCurrentPage, openEstimate }: HomeProps) {
+export default function Home({ openEstimate }: HomeProps) {
+  const navigate = useNavigate();
   // ─── API-only data loading. No static fallback. Skeletons during load. ──
   const home = useApiQuery(["home"], (signal) => fetchHome(signal));
 
@@ -454,7 +455,7 @@ export default function Home({ setCurrentPage, openEstimate }: HomeProps) {
               </div>
 
               <button
-                onClick={() => setCurrentPage("services")}
+                onClick={() => navigate("/services")}
                 className="btn-ink btn-ink-primary px-8 py-3.5 font-bold text-sm"
               >
                 Explore Services <ArrowRight className="w-4 h-4 btn-arrow" />
@@ -599,7 +600,7 @@ export default function Home({ setCurrentPage, openEstimate }: HomeProps) {
                       className="min-w-[280px] md:min-w-[320px] lg:min-w-[calc(25%-18px)] snap-start"
                     >
                       <div
-                        onClick={() => setCurrentPage(`service-${service._categorySlug}/${service.slug}`)}
+                        onClick={() => navigate(`/services/${service._categorySlug}/${service.slug}`)}
                         className="relative h-[360px] group cursor-pointer overflow-hidden border border-border shadow-sm hover:shadow-md transition-all duration-300 bg-primary-dark"
                       >
                         {/* Image */}
@@ -670,7 +671,7 @@ export default function Home({ setCurrentPage, openEstimate }: HomeProps) {
                 <div>
                   <div className="text-xs text-muted mb-2 font-medium">Use Code:</div>
                   <div className="text-lg font-mono font-bold text-primary mb-6">{offer.code}</div>
-                  <button onClick={() => setCurrentPage("offers")} className="btn-ink btn-ink-primary w-full py-3.5 text-sm font-bold">
+                  <button onClick={() => navigate("/offers")} className="btn-ink btn-ink-primary w-full py-3.5 text-sm font-bold">
                     Claim Offer
                   </button>
                 </div>
@@ -989,7 +990,7 @@ export default function Home({ setCurrentPage, openEstimate }: HomeProps) {
           {/* Demo-readiness — link to dedicated /testimonials page. */}
           <div className="mt-10 flex justify-center">
             <button
-              onClick={() => setCurrentPage("testimonials")}
+              onClick={() => navigate("/testimonials")}
               className="text-xs font-bold uppercase tracking-widest text-primary hover:underline inline-flex items-center gap-1.5"
             >
               Read more customer stories
@@ -1189,7 +1190,7 @@ export default function Home({ setCurrentPage, openEstimate }: HomeProps) {
                 Priority service and bulk pricing models with dedicated account management.
               </p>
               <button
-                onClick={() => setCurrentPage("corporate")}
+                onClick={() => navigate("/corporate")}
                 className="btn-ink btn-ink-primary px-8 py-3.5 font-bold text-sm"
               >
                 Explore Corporate Plans <ArrowRight className="w-4 h-4 btn-arrow" />
@@ -1213,7 +1214,7 @@ export default function Home({ setCurrentPage, openEstimate }: HomeProps) {
       </section>
 
       {/* FAQ Section — premium card design (HomeFAQ component). */}
-      <HomeFAQ setCurrentPage={setCurrentPage} />
+      <HomeFAQ />
 
       {/* Blog Highlights */}
       <section className="py-24 bg-white border-b border-border">

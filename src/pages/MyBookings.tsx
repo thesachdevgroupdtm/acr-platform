@@ -1,5 +1,6 @@
 import type * as React from "react";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   ArrowRight,
   Calendar,
@@ -17,14 +18,13 @@ import { useOrdersList, useCancelOrder } from "../hooks/useOrders";
 import type { OrderResource, OrderStatus } from "../types/api";
 
 interface MyBookingsProps {
-  setCurrentPage: (page: string) => void;
   openAuth: (tab?: "login" | "signup", redirectTo?: string) => void;
 }
 
 export default function MyBookings({
-  setCurrentPage,
   openAuth,
 }: MyBookingsProps) {
+  const navigate = useNavigate();
   // Phase 2.6a — FEATURES.bookingsList dark-launch gate +
   // BookingsComingSoon fallback removed. The real /user/orders
   // endpoint has been live since 2.5a.
@@ -66,7 +66,7 @@ export default function MyBookings({
       <PageBanner
         title="My Bookings"
         breadcrumbs={[
-          { label: "Home", onClick: () => setCurrentPage("home") },
+          { label: "Home", onClick: () => navigate("/") },
           { label: "My Bookings" },
         ]}
       />
@@ -81,7 +81,7 @@ export default function MyBookings({
             // wall for ~5s on a slow connection.
             <MyBookingsSkeleton />
           ) : !isAuthenticated || !user ? (
-            <NotLoggedIn openAuth={openAuth} setCurrentPage={setCurrentPage} />
+            <NotLoggedIn openAuth={openAuth} />
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 lg:gap-10">
               {/* Sidebar */}
@@ -130,7 +130,7 @@ export default function MyBookings({
                     BOOKING <span className="text-primary">HISTORY.</span>
                   </h2>
                   <button
-                    onClick={() => setCurrentPage("services")}
+                    onClick={() => navigate("/services")}
                     className="text-[10px] sm:text-xs uppercase tracking-widest font-bold text-primary hover:underline flex items-center gap-1"
                   >
                     Book More <ArrowRight className="w-3 h-3" />
@@ -158,7 +158,7 @@ export default function MyBookings({
                       here.
                     </p>
                     <button
-                      onClick={() => setCurrentPage("services")}
+                      onClick={() => navigate("/services")}
                       className="btn-ink btn-ink-primary px-6 py-3 text-xs font-black uppercase tracking-widest inline-flex items-center gap-2"
                     >
                       Browse Services <ArrowRight className="w-4 h-4 btn-arrow" />
@@ -169,7 +169,7 @@ export default function MyBookings({
                     <BookingCard
                       key={o.id}
                       order={o}
-                      onView={() => setCurrentPage(`order-${o.id}`)}
+                      onView={() => navigate(`/order/${o.id}`)}
                       onCancel={() => openCancelModal(o)}
                       cancelling={cancelMutation.isPending && cancelTarget?.id === o.id}
                     />
@@ -341,11 +341,10 @@ function Cell({
 
 function NotLoggedIn({
   openAuth,
-  setCurrentPage,
 }: {
   openAuth: (tab?: "login" | "signup", redirectTo?: string) => void;
-  setCurrentPage: (p: string) => void;
 }) {
+  const navigate = useNavigate();
   return (
     <div className="bg-white border border-border py-20 px-6 text-center max-w-2xl mx-auto">
       <div className="w-14 h-14 bg-primary/10 mx-auto mb-4 flex items-center justify-center">
@@ -360,19 +359,19 @@ function NotLoggedIn({
       </p>
       <div className="flex flex-col sm:flex-row gap-3 justify-center">
         <button
-          onClick={() => openAuth("login", "my-bookings")}
+          onClick={() => openAuth("login", "/my-bookings")}
           className="btn-ink btn-ink-primary px-7 py-3.5 text-xs font-black uppercase tracking-widest inline-flex items-center justify-center gap-2"
         >
           Login <ArrowRight className="w-4 h-4 btn-arrow" />
         </button>
         <button
-          onClick={() => openAuth("signup", "my-bookings")}
+          onClick={() => openAuth("signup", "/my-bookings")}
           className="bg-white border border-primary text-primary px-7 py-3.5 text-xs font-black uppercase tracking-widest hover:bg-primary/5 transition-colors"
         >
           Create Account
         </button>
         <button
-          onClick={() => setCurrentPage("services")}
+          onClick={() => navigate("/services")}
           className="text-[10px] uppercase tracking-widest font-bold text-neutral-500 hover:text-primary self-center"
         >
           Browse Services

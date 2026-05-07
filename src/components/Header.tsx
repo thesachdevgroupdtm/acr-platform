@@ -1,4 +1,5 @@
 import { motion, AnimatePresence } from "motion/react";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   Menu, X, Phone, MessageCircle, MapPin,
   Facebook, Instagram, Youtube, Linkedin,
@@ -20,12 +21,12 @@ import { FEATURES } from "../config/features";
 interface SubMenuProps {
   subServices: CategorySubService[];
   categorySlug: string;
-  setCurrentPage: (page: string) => void;
   setActiveDropdown: (d: string | null) => void;
   setActiveSubDropdown: (d: string | null) => void;
 }
 
-function SubMenu({ subServices, categorySlug, setCurrentPage, setActiveDropdown, setActiveSubDropdown }: SubMenuProps) {
+function SubMenu({ subServices, categorySlug, setActiveDropdown, setActiveSubDropdown }: SubMenuProps) {
+  const navigate = useNavigate();
   const menuRef = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
@@ -89,7 +90,7 @@ function SubMenu({ subServices, categorySlug, setCurrentPage, setActiveDropdown,
               key={sub.id}
               onClick={(e) => {
                 e.stopPropagation();
-                setCurrentPage(`service-${categorySlug}/${sub.slug}`);
+                navigate(`/services/${categorySlug}/${sub.slug}`);
                 setActiveDropdown(null);
                 setActiveSubDropdown(null);
               }}
@@ -103,13 +104,17 @@ function SubMenu({ subServices, categorySlug, setCurrentPage, setActiveDropdown,
 }
 
 interface HeaderProps {
-  currentPage: string;
-  setCurrentPage: (page: string) => void;
   openEstimate: () => void;
   openAuth: (tab?: "login" | "signup", redirectTo?: string) => void;
 }
 
-export default function Header({ currentPage, setCurrentPage, openEstimate, openAuth }: HeaderProps) {
+export default function Header({ openEstimate, openAuth }: HeaderProps) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  // Phase 3B — active-state derives from the URL pathname instead of
+  // a string-keyed currentPage prop. Pathname is router-relative
+  // (BrowserRouter strips the basename for us).
+  const currentPath = location.pathname;
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [activeSubDropdown, setActiveSubDropdown] = useState<string | null>(null);
@@ -142,37 +147,52 @@ export default function Header({ currentPage, setCurrentPage, openEstimate, open
     subsByCategorySlug[c.slug] = c.services ?? [];
   }
 
+  // Phase 3B — nav items now carry an explicit `path` so click
+  // handlers can hand it straight to navigate(). The legacy `id`
+  // is kept for the React key + the existing dropdown-state machine
+  // (activeDropdown is keyed by item.id).
   const navItems = [
-    { name: "Home", id: "home" },
-    { name: "Services", id: "services", hasDropdown: true },
-    { name: "Service Centers", id: "service-centers", hasDropdown: true },
-    { name: "Insurance", id: "insurance" },
-    { name: "Corporate", id: "corporate" },
-    { name: "Gallery", id: "gallery" },
+    { name: "Home", id: "home", path: "/" },
+    { name: "Services", id: "services", path: "/services", hasDropdown: true },
+    { name: "Service Centers", id: "service-centers", path: "/service-centers", hasDropdown: true },
+    { name: "Insurance", id: "insurance", path: "/insurance" },
+    { name: "Corporate", id: "corporate", path: "/corporate" },
+    { name: "Gallery", id: "gallery", path: "/gallery" },
     {
       name: "More",
       id: "more",
       hasDropdown: true,
       subItems: [
-        { name: "Testimonials", id: "testimonials" },
-        { name: "Offers & Deals", id: "offers" },
-        { name: "Coupons", id: "coupons" },
-        { name: "SEO Page Preview", id: "cms-preview" },
-        { name: "Blog", id: "blog" },
-        { name: "FAQ", id: "faq" },
-        { name: "About Us", id: "about" },
-        { name: "Contact", id: "contact" },
+        { name: "Testimonials",     id: "testimonials", path: "/testimonials" },
+        { name: "Offers & Deals",   id: "offers",       path: "/offers" },
+        { name: "Coupons",          id: "coupons",      path: "/coupons" },
+        { name: "SEO Page Preview", id: "cms-preview",  path: "/cms-preview" },
+        { name: "Blog",             id: "blog",         path: "/blog" },
+        { name: "FAQ",              id: "faq",          path: "/faq" },
+        { name: "About Us",         id: "about",        path: "/about" },
+        { name: "Contact",          id: "contact",      path: "/contact" },
       ]
     },
   ];
 
+  // Phase 3B — active-state computed from currentPath. The two
+  // composite cases preserve Phase 2.5.2 behaviour:
+  //   • "Services" highlights for /services, /category/*, /services/*/*
+  //   • "Service Centers" highlights for /service-centers, /center/*
   const isActiveMenu = (item: any) => {
-    if (currentPage === item.id) return true;
-    if (item.id === 'services' && currentPage.startsWith('category-')) return true;
-    if (item.id === 'services' && currentPage.startsWith('service-') && currentPage !== 'service-centers') return true;
-    if (item.id === 'service-centers' && currentPage.startsWith('center-')) return true;
-    if (item.id === 'more' && item.subItems?.some((sub: any) => sub.id === currentPage)) return true;
-    return false;
+    if (item.id === 'more') {
+      return item.subItems?.some((sub: any) => sub.path === currentPath) ?? false;
+    }
+    if (item.id === 'services') {
+      return currentPath === '/services'
+        || currentPath.startsWith('/category/')
+        || currentPath.startsWith('/services/');
+    }
+    if (item.id === 'service-centers') {
+      return currentPath === '/service-centers'
+        || currentPath.startsWith('/center/');
+    }
+    return currentPath === item.path;
   };
 
   return (
@@ -334,7 +354,7 @@ export default function Header({ currentPage, setCurrentPage, openEstimate, open
                         {/* Action buttons */}
                         <button
                           onClick={() => {
-                            setCurrentPage("my-bookings");
+                            navigate("/my-bookings");
                             setUserMenuOpen(false);
                           }}
                           className="w-full text-left px-4 py-3 text-[11px] font-bold uppercase text-neutral-700 hover:bg-neutral-50 hover:text-primary transition-colors flex items-center gap-2 tracking-widest border-b border-border"
@@ -348,7 +368,7 @@ export default function Header({ currentPage, setCurrentPage, openEstimate, open
                         </button>
                         <button
                           onClick={() => {
-                            setCurrentPage("cart");
+                            navigate("/cart");
                             setUserMenuOpen(false);
                           }}
                           className="w-full text-left px-4 py-3 text-[11px] font-bold uppercase text-neutral-700 hover:bg-neutral-50 hover:text-primary transition-colors flex items-center gap-2 tracking-widest border-b border-border"
@@ -383,7 +403,7 @@ export default function Header({ currentPage, setCurrentPage, openEstimate, open
 
             {/* Cart icon with count badge */}
             <button
-              onClick={() => setCurrentPage("cart")}
+              onClick={() => navigate("/cart")}
               aria-label="View cart"
               className="relative flex items-center hover:opacity-80 transition-all"
             >
@@ -401,8 +421,8 @@ export default function Header({ currentPage, setCurrentPage, openEstimate, open
       <div className="site-container">
         <div className="flex items-center justify-between h-20">
           {/* Logo */}
-          <button 
-            onClick={() => setCurrentPage("home")}
+          <button
+            onClick={() => navigate("/")}
             className="flex items-center gap-4 shrink-0"
           >
             <div className="flex flex-col items-start">
@@ -439,7 +459,10 @@ export default function Header({ currentPage, setCurrentPage, openEstimate, open
               >
                 <button
                   onClick={() => {
-                    setCurrentPage(item.id);
+                    // Phase 3B — "More" has no path of its own; clicking
+                    // its button just toggles its dropdown. Other items
+                    // navigate to their explicit path.
+                    if (item.path) navigate(item.path);
                     setActiveDropdown(null);
                   }}
                   className={`text-[13px] xl:text-[14px] tracking-[0.3px] transition-all duration-300 flex items-center gap-1 py-2 relative hover:text-primary ${
@@ -488,7 +511,7 @@ export default function Header({ currentPage, setCurrentPage, openEstimate, open
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    setCurrentPage(`category-${category.slug}`);
+                                    navigate(`/category/${category.slug}`);
                                     setActiveDropdown(null);
                                     setActiveSubDropdown(null);
                                   }}
@@ -504,7 +527,6 @@ export default function Header({ currentPage, setCurrentPage, openEstimate, open
                                     <SubMenu
                                       subServices={subServices}
                                       categorySlug={category.slug}
-                                      setCurrentPage={setCurrentPage}
                                       setActiveDropdown={setActiveDropdown}
                                       setActiveSubDropdown={setActiveSubDropdown}
                                     />
@@ -521,7 +543,7 @@ export default function Header({ currentPage, setCurrentPage, openEstimate, open
                               key={loc.id}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setCurrentPage(`center-${loc.id}`);
+                                navigate(`/center/${loc.id}`);
                                 setActiveDropdown(null);
                               }}
                               className="w-full text-left px-6 py-2.5 text-[11px] font-bold uppercase text-neutral-600 hover:bg-neutral-50 hover:text-primary transition-all border-l-2 border-transparent hover:border-primary"
@@ -536,7 +558,7 @@ export default function Header({ currentPage, setCurrentPage, openEstimate, open
                               key={sub.id}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setCurrentPage(sub.id);
+                                navigate(sub.path);
                                 setActiveDropdown(null);
                               }}
                               className="w-full text-left px-6 py-2.5 text-[11px] font-bold uppercase text-neutral-600 hover:bg-neutral-50 hover:text-primary transition-all border-l-2 border-transparent hover:border-primary"
@@ -588,14 +610,14 @@ export default function Header({ currentPage, setCurrentPage, openEstimate, open
                   <button
                     onClick={() => {
                       if (!item.hasDropdown) {
-                        setCurrentPage(item.id);
+                        if (item.path) navigate(item.path);
                         setIsMenuOpen(false);
                       } else {
                         setActiveDropdown(activeDropdown === item.id ? null : item.id);
                       }
                     }}
                     className={`text-left text-xl font-black uppercase tracking-tighter flex items-center justify-between py-2 ${
-                      currentPage === item.id ? "text-primary" : "text-neutral-900"
+                      isActiveMenu(item) ? "text-primary" : "text-neutral-900"
                     }`}
                   >
                     {item.name}
@@ -623,7 +645,7 @@ export default function Header({ currentPage, setCurrentPage, openEstimate, open
                               <div key={category.id} className="flex flex-col">
                                 <button
                                   onClick={() => {
-                                    setCurrentPage(`category-${category.slug}`);
+                                    navigate(`/category/${category.slug}`);
                                     setIsMenuOpen(false);
                                   }}
                                   className="text-left py-2 text-sm font-bold uppercase text-neutral-500 hover:text-primary transition-colors"
@@ -636,7 +658,7 @@ export default function Header({ currentPage, setCurrentPage, openEstimate, open
                                       <button
                                         key={sub.id}
                                         onClick={() => {
-                                          setCurrentPage(`service-${category.slug}/${sub.slug}`);
+                                          navigate(`/services/${category.slug}/${sub.slug}`);
                                           setIsMenuOpen(false);
                                         }}
                                         className="text-left py-1.5 text-xs font-bold uppercase text-neutral-400 hover:text-primary transition-colors"
@@ -656,7 +678,7 @@ export default function Header({ currentPage, setCurrentPage, openEstimate, open
                           <button
                             key={loc.id}
                             onClick={() => {
-                              setCurrentPage(`center-${loc.id}`);
+                              navigate(`/center/${loc.id}`);
                               setIsMenuOpen(false);
                             }}
                             className="text-left py-2 text-sm font-bold uppercase text-neutral-500"
@@ -670,7 +692,7 @@ export default function Header({ currentPage, setCurrentPage, openEstimate, open
                           <button
                             key={sub.id}
                             onClick={() => {
-                              setCurrentPage(sub.id);
+                              navigate(sub.path);
                               setIsMenuOpen(false);
                             }}
                             className="text-left py-2 text-sm font-bold uppercase text-neutral-500"

@@ -1,11 +1,11 @@
 import { motion } from "motion/react";
+import { useNavigate } from "react-router-dom";
 import PageBanner from "../components/PageBanner";
 import { ArrowRight, AlertCircle, Tag } from "lucide-react";
 import { useCoupons } from "../hooks/useCoupons";
 import type { CouponResource } from "../types/api";
 
 interface OffersProps {
-  setCurrentPage: (page: string) => void;
   openEstimate?: (isCorporate?: boolean, initialService?: string) => void;
 }
 
@@ -32,7 +32,8 @@ function badgeLabel(c: CouponResource): string {
   return c.badge.toUpperCase();
 }
 
-export default function Offers({ setCurrentPage }: OffersProps) {
+export default function Offers(_props: OffersProps) {
+  const navigate = useNavigate();
   const { coupons, isLoading, isError } = useCoupons("marketing");
 
   return (
@@ -40,7 +41,7 @@ export default function Offers({ setCurrentPage }: OffersProps) {
       <PageBanner
         title="Offers & Deals"
         breadcrumbs={[
-          { label: "Home", onClick: () => setCurrentPage("home") },
+          { label: "Home", onClick: () => navigate("/") },
           { label: "Offers" }
         ]}
       />
@@ -128,7 +129,7 @@ export default function Offers({ setCurrentPage }: OffersProps) {
                     </div>
 
                     <button
-                      onClick={() => setCurrentPage("services")}
+                      onClick={() => navigate("/services")}
                       className="btn-ink btn-ink-primary w-full py-5 text-sm font-black uppercase tracking-widest flex items-center justify-center gap-2 group/btn"
                     >
                       BROWSE SERVICES <ArrowRight className="w-5 h-5 btn-arrow transition-transform duration-300 group-hover/btn:-rotate-45" />

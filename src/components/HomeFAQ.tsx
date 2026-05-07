@@ -1,10 +1,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import { useNavigate } from "react-router-dom";
 import { ChevronDown, ArrowRight } from "lucide-react";
-
-interface HomeFAQProps {
-  setCurrentPage: (page: string) => void;
-}
 
 interface HomeFAQItem {
   q: string;
@@ -58,7 +55,8 @@ const HOME_FAQS: HomeFAQItem[] = [
 const BG_IMAGE_URL =
   "https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?auto=format&fit=crop&w=1920&q=80";
 
-export default function HomeFAQ({ setCurrentPage }: HomeFAQProps) {
+export default function HomeFAQ() {
+  const navigate = useNavigate();
   const [openIndex, setOpenIndex] = useState<number | null>(null);
 
   const toggle = (i: number) => {
@@ -195,7 +193,7 @@ export default function HomeFAQ({ setCurrentPage }: HomeFAQProps) {
             Still have questions?
           </p>
           <button
-            onClick={() => setCurrentPage("contact")}
+            onClick={() => navigate("/contact")}
             className="btn-ink btn-ink-white inline-flex items-center gap-2 px-8 py-4 text-xs font-black uppercase tracking-widest"
           >
             Contact our advisors

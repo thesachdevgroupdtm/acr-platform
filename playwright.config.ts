@@ -73,7 +73,7 @@ export default defineConfig({
       // the Laravel API on :8000 already passes CORS for that origin.
       // Phase 3A — router-pattern tests added to this project.
       name: 'edges',
-      testMatch: /(journey|cart-merge|coupon-flow|auth-edges|router-patterns)\.spec\.ts$/,
+      testMatch: /(journey|cart-merge|coupon-flow|auth-edges|router-patterns|router-params)\.spec\.ts$/,
       use: {
         ...devices['Desktop Chrome'],
         baseURL: 'http://localhost:3000',

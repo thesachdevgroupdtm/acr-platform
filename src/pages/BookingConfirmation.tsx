@@ -1,5 +1,6 @@
 import type * as React from "react";
 import { useMemo } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   CheckCircle2,
   ArrowRight,
@@ -14,23 +15,19 @@ import {
 import PageBanner from "../components/PageBanner";
 import { useOrderDetail } from "../hooks/useOrders";
 
-interface BookingConfirmationProps {
-  orderId: number;
-  setCurrentPage: (page: string) => void;
-}
-
 /**
  * Phase 2.5a — real booking confirmation page. The previous fake
  * `ACR<timestamp>` flow lived inside Payment.tsx; this page replaces
  * it by reading the just-placed order from the backend.
  *
- * Reachable via the route key `booking-confirmation-{id}` from
- * App.tsx after a successful Checkout.placeOrder.
+ * Phase 3B — orderId comes from /booking-confirmation/:id via
+ * useParams. Checkout's place-order flow navigates here directly
+ * with the new id.
  */
-export default function BookingConfirmation({
-  orderId,
-  setCurrentPage,
-}: BookingConfirmationProps) {
+export default function BookingConfirmation() {
+  const navigate = useNavigate();
+  const { id } = useParams<{ id: string }>();
+  const orderId = Number(id);
   const { order, isLoading, isError } = useOrderDetail(orderId);
 
   const titles = useMemo(
@@ -48,7 +45,7 @@ export default function BookingConfirmation({
         <PageBanner
           title="Booking Confirmed"
           breadcrumbs={[
-            { label: "Home", onClick: () => setCurrentPage("home") },
+            { label: "Home", onClick: () => navigate("/") },
             { label: "Booking Confirmed" },
           ]}
         />
@@ -65,7 +62,7 @@ export default function BookingConfirmation({
         <PageBanner
           title="Booking Confirmed"
           breadcrumbs={[
-            { label: "Home", onClick: () => setCurrentPage("home") },
+            { label: "Home", onClick: () => navigate("/") },
             { label: "Booking Confirmed" },
           ]}
         />
@@ -74,7 +71,7 @@ export default function BookingConfirmation({
             We couldn't load that booking. It may belong to a different account.
           </p>
           <button
-            onClick={() => setCurrentPage("my-bookings")}
+            onClick={() => navigate("/my-bookings")}
             className="btn-ink btn-ink-primary px-6 py-3 text-xs font-black uppercase tracking-widest"
           >
             View My Bookings
@@ -89,7 +86,7 @@ export default function BookingConfirmation({
       <PageBanner
         title="Booking Confirmed"
         breadcrumbs={[
-          { label: "Home", onClick: () => setCurrentPage("home") },
+          { label: "Home", onClick: () => navigate("/") },
           { label: "Booking Confirmed" },
         ]}
       />
@@ -226,13 +223,13 @@ export default function BookingConfirmation({
           {/* CTA row */}
           <div className="flex flex-col sm:flex-row gap-3 mt-6">
             <button
-              onClick={() => setCurrentPage("my-bookings")}
+              onClick={() => navigate("/my-bookings")}
               className="btn-ink btn-ink-primary flex-1 py-4 text-xs font-black uppercase tracking-widest inline-flex items-center justify-center gap-2"
             >
               View My Bookings <ArrowRight className="w-4 h-4 btn-arrow" />
             </button>
             <button
-              onClick={() => setCurrentPage("home")}
+              onClick={() => navigate("/")}
               className="bg-white border border-border flex-1 py-4 text-xs font-black uppercase tracking-widest inline-flex items-center justify-center gap-2 text-neutral-700 hover:border-primary hover:text-primary transition-colors"
             >
               <Home className="w-4 h-4" /> Back to Home

@@ -1,17 +1,19 @@
 import { useState } from "react";
 import type * as React from "react";
 import { motion, AnimatePresence } from "motion/react";
+import { useNavigate, useParams } from "react-router-dom";
 import { MapPin, Phone, Star, Clock, Shield, CheckCircle2, MessageCircle, Send, Camera, Info, ChevronDown } from "lucide-react";
 import { LOCATIONS } from "../data/businessData";
 import PageBanner from "../components/PageBanner";
 
 interface ServiceCenterDetailProps {
-  centerId: string;
-  setCurrentPage: (page: string) => void;
   openEstimate?: (isCorporate?: boolean, initialService?: string) => void;
 }
 
-export default function ServiceCenterDetail({ centerId, setCurrentPage }: ServiceCenterDetailProps) {
+export default function ServiceCenterDetail(_props: ServiceCenterDetailProps) {
+  const navigate = useNavigate();
+  // /center/:id route — id maps to LOCATIONS[].id (string).
+  const { id: centerId = "" } = useParams<{ id: string }>();
   const [openServiceIdx, setOpenServiceIdx] = useState<number | null>(null);
   const [openAmenityIdx, setOpenAmenityIdx] = useState<number | null>(null);
 
@@ -102,8 +104,8 @@ export default function ServiceCenterDetail({ centerId, setCurrentPage }: Servic
       <PageBanner
         title={center.name}
         breadcrumbs={[
-          { label: "Home", onClick: () => setCurrentPage("home") },
-          { label: "Centers", onClick: () => setCurrentPage("service-centers") },
+          { label: "Home", onClick: () => navigate("/") },
+          { label: "Centers", onClick: () => navigate("/service-centers") },
           { label: center.name }
         ]}
         label="Expert Multi-Brand Service"

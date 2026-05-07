@@ -1,6 +1,7 @@
 import type * as React from "react";
 import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   CheckCircle2,
   ArrowRight,
@@ -45,8 +46,6 @@ import {
 import { useApiQuery } from "../hooks/useApiQuery";
 
 interface ServiceCategoryProps {
-  categorySlug: string;
-  setCurrentPage: (page: string) => void;
   openEstimate?: (isCorporate?: boolean, initialService?: string) => void;
 }
 
@@ -81,10 +80,11 @@ const SECTION_NAV = [
 const STICKY_OFFSET_PX = 112;
 
 export default function ServiceCategory({
-  categorySlug,
-  setCurrentPage,
   openEstimate,
 }: ServiceCategoryProps) {
+  const navigate = useNavigate();
+  // /category/:slug route — slug is the category slug.
+  const { slug: categorySlug = "" } = useParams<{ slug: string }>();
   // ---------- API: category detail (skeleton-first; no static fallback) ----------
   const { state: bookingCtx0 } = useBookingContext();
   // /services/{slug} takes brand/model/fuel SLUGS per backend contract.
@@ -594,8 +594,8 @@ export default function ServiceCategory({
       <PageBanner
         title={category.title}
         breadcrumbs={[
-          { label: "Home", onClick: () => setCurrentPage("home") },
-          { label: "Services", onClick: () => setCurrentPage("services") },
+          { label: "Home", onClick: () => navigate("/") },
+          { label: "Services", onClick: () => navigate("/services") },
           { label: category.title },
         ]}
       />
@@ -779,9 +779,7 @@ export default function ServiceCategory({
                         <div className="min-w-0">
                           <button
                             onClick={() =>
-                              setCurrentPage(
-                                `service-${category.slug}/${sub.slug}`
-                              )
+                              navigate(`/services/${category.slug}/${sub.slug}`)
                             }
                             className="text-left text-sm font-black uppercase text-neutral-900 tracking-tighter mb-0.5 hover:text-primary transition-colors"
                           >
@@ -1098,14 +1096,14 @@ export default function ServiceCategory({
                   <p>
                     Visit any of our{" "}
                     <button
-                      onClick={() => setCurrentPage("service-centers")}
+                      onClick={() => navigate("/service-centers")}
                       className="text-primary font-bold hover:underline"
                     >
                       certified service centres in {cityWord}
                     </button>
                     , or{" "}
                     <button
-                      onClick={() => setCurrentPage("contact")}
+                      onClick={() => navigate("/contact")}
                       className="text-primary font-bold hover:underline"
                     >
                       contact our advisors

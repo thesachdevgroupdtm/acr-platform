@@ -1,4 +1,5 @@
 import { useState, useEffect, FormEvent, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   ArrowRight,
   ArrowLeft,
@@ -32,7 +33,6 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 
 interface CheckoutProps {
-  setCurrentPage: (page: string) => void;
   openAuth: (tab?: "login" | "signup", redirectTo?: string) => void;
 }
 
@@ -42,7 +42,8 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const GST_PCT = 18;
 
-export default function Checkout({ setCurrentPage, openAuth }: CheckoutProps) {
+export default function Checkout({ openAuth }: CheckoutProps) {
+  const navigate = useNavigate();
   // Phase 2.6a — the FEATURES.checkoutFlow dark-launch gate and
   // CheckoutComingSoon fallback have been removed; the real
   // backend has been live since 2.5a and the flag is permanently
@@ -186,7 +187,7 @@ export default function Checkout({ setCurrentPage, openAuth }: CheckoutProps) {
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (items.length === 0) {
-      setCurrentPage("cart");
+      navigate("/cart");
       return;
     }
     if (!validate()) return;
@@ -227,7 +228,7 @@ export default function Checkout({ setCurrentPage, openAuth }: CheckoutProps) {
 
       // Navigate to confirmation, carrying the new order id in the
       // route state (App routes booking-confirmation-{id}).
-      setCurrentPage(`booking-confirmation-${res.order.id}`);
+      navigate(`/booking-confirmation/${res.order.id}`);
     } catch (e) {
       const status = e instanceof ApiError ? e.status : 0;
       const msg =
@@ -266,14 +267,14 @@ export default function Checkout({ setCurrentPage, openAuth }: CheckoutProps) {
         <PageBanner
           title="Checkout"
           breadcrumbs={[
-            { label: "Home", onClick: () => setCurrentPage("home") },
-            { label: "Cart", onClick: () => setCurrentPage("cart") },
+            { label: "Home", onClick: () => navigate("/") },
+            { label: "Cart", onClick: () => navigate("/cart") },
             { label: "Checkout" },
           ]}
         />
         <div className="pb-14 pt-8">
           <div className="site-container">
-            <CheckoutSteps current={2} setCurrentPage={setCurrentPage} />
+            <CheckoutSteps current={2} />
             <div className="bg-white border border-border py-20 px-6 text-center mt-10 max-w-2xl mx-auto">
               <div className="w-16 h-16 bg-neutral-100 mx-auto mb-5 flex items-center justify-center">
                 <ShoppingCart className="w-8 h-8 text-neutral-400" />
@@ -285,7 +286,7 @@ export default function Checkout({ setCurrentPage, openAuth }: CheckoutProps) {
                 Add services to your cart before proceeding to checkout.
               </p>
               <button
-                onClick={() => setCurrentPage("services")}
+                onClick={() => navigate("/services")}
                 className="btn-ink btn-ink-primary px-8 py-4 text-xs font-black uppercase tracking-widest inline-flex items-center gap-2"
               >
                 Browse Services <ArrowRight className="w-4 h-4 btn-arrow" />
@@ -308,14 +309,14 @@ export default function Checkout({ setCurrentPage, openAuth }: CheckoutProps) {
         <PageBanner
           title="Checkout"
           breadcrumbs={[
-            { label: "Home", onClick: () => setCurrentPage("home") },
-            { label: "Cart", onClick: () => setCurrentPage("cart") },
+            { label: "Home", onClick: () => navigate("/") },
+            { label: "Cart", onClick: () => navigate("/cart") },
             { label: "Checkout" },
           ]}
         />
         <div className="pb-14 pt-8">
           <div className="site-container">
-            <CheckoutSteps current={2} setCurrentPage={setCurrentPage} />
+            <CheckoutSteps current={2} />
             <CheckoutSkeleton />
           </div>
         </div>
@@ -330,14 +331,14 @@ export default function Checkout({ setCurrentPage, openAuth }: CheckoutProps) {
         <PageBanner
           title="Checkout"
           breadcrumbs={[
-            { label: "Home", onClick: () => setCurrentPage("home") },
-            { label: "Cart", onClick: () => setCurrentPage("cart") },
+            { label: "Home", onClick: () => navigate("/") },
+            { label: "Cart", onClick: () => navigate("/cart") },
             { label: "Checkout" },
           ]}
         />
         <div className="pb-14 pt-8">
           <div className="site-container">
-            <CheckoutSteps current={2} setCurrentPage={setCurrentPage} />
+            <CheckoutSteps current={2} />
             <div className="bg-white border border-border py-16 px-6 text-center mt-10 max-w-2xl mx-auto">
               <div className="w-14 h-14 bg-primary/10 mx-auto mb-4 flex items-center justify-center">
                 <Lock className="w-7 h-7 text-primary" />
@@ -379,15 +380,15 @@ export default function Checkout({ setCurrentPage, openAuth }: CheckoutProps) {
       <PageBanner
         title="Checkout"
         breadcrumbs={[
-          { label: "Home", onClick: () => setCurrentPage("home") },
-          { label: "Cart", onClick: () => setCurrentPage("cart") },
+          { label: "Home", onClick: () => navigate("/") },
+          { label: "Cart", onClick: () => navigate("/cart") },
           { label: "Checkout" },
         ]}
       />
 
       <div className="pb-14 pt-8">
         <div className="site-container">
-          <CheckoutSteps current={2} setCurrentPage={setCurrentPage} />
+          <CheckoutSteps current={2} />
 
           <form
             onSubmit={onSubmit}
@@ -570,7 +571,7 @@ export default function Checkout({ setCurrentPage, openAuth }: CheckoutProps) {
 
               <button
                 type="button"
-                onClick={() => setCurrentPage("cart")}
+                onClick={() => navigate("/cart")}
                 className="text-[10px] sm:text-xs uppercase tracking-widest font-bold text-primary hover:underline flex items-center gap-2"
               >
                 <ArrowLeft className="w-3.5 h-3.5" /> Back to Cart
