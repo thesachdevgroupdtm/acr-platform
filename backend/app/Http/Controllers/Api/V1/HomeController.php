@@ -7,6 +7,7 @@ use App\Http\Resources\CarBrandResource;
 use App\Http\Resources\ServiceCategoryResource;
 use App\Models\CarBrand;
 use App\Models\ServiceCategory;
+use App\Models\SiteSeoSettings;
 use Illuminate\Http\JsonResponse;
 
 class HomeController extends Controller
@@ -16,6 +17,11 @@ class HomeController extends Controller
      *
      * Returns the payload the frontend Home page needs in a single round-trip:
      * service categories, car brands, and the SEO defaults.
+     *
+     * Phase 4.5c — `seo` key now matches the FLAT SeoFlatData shape
+     * (mirrors HasSeoMetadata::getSeoData() / /api/v1/seo-pages/{slug}).
+     * Dynamic values pull from SiteSeoSettings so admin overrides flow
+     * through with no controller change.
      */
     public function index(): JsonResponse
     {
@@ -55,26 +61,45 @@ class HomeController extends Controller
             'settings'            => [
                 'site_name' => config('app.name'),
             ],
-            'seo'                 => $this->seoDefault(),
+            'seo'                 => $this->homeSeoFromSiteDefaults(),
         ]);
     }
 
-    private function seoDefault(): array
+    /**
+     * Phase 4.5c — flat SEO payload for the home page. Pulled from
+     * SiteSeoSettings (admin-managed) so changes propagate without
+     * any controller deploy. Title is hardcoded since the home page
+     * doesn't have its own SeoPage record (it's the root route).
+     *
+     * @return array<string, mixed>
+     */
+    private function homeSeoFromSiteDefaults(): array
     {
+        $defaults = SiteSeoSettings::current();
+
         return [
-            'title'       => 'Auto Car Repair — Multi-Brand Service & Collision Repair',
-            'description' => "India's fastest-growing self-owned multi-brand car service network.",
-            'keywords'    => 'car service, car repair, collision repair, multi-brand, Delhi NCR',
-            'canonical'   => null,
-            'og'          => [
-                'title'       => 'Auto Car Repair',
-                'description' => 'Multi-brand car service & collision repair.',
-                'type'        => 'website',
-                'site_name'   => 'Auto Car Repair',
-            ],
-            'twitter'     => [
-                'card' => 'summary_large_image',
-            ],
+            'meta_title' => str_replace(
+                '{{page_title}}',
+                'Home',
+                $defaults->default_meta_title_template
+                    ?? 'ACR — Multi-Brand Car Service & Collision Repair'
+            ),
+            'meta_description' => $defaults->default_meta_description
+                ?? "India's fastest-growing self-owned multi-brand car service network.",
+            'meta_keywords'    => 'car service, car repair, collision repair, multi-brand, Delhi NCR',
+            'canonical_url'    => null,
+            'robots_meta'      => $defaults->default_robots_meta ?? 'index,follow',
+            'og_title'         => null,
+            'og_description'   => null,
+            'og_image'         => $defaults->default_og_image,
+            'og_type'          => 'website',
+            'twitter_card'     => $defaults->default_twitter_card ?? 'summary_large_image',
+            'twitter_title'    => null,
+            'twitter_description' => null,
+            'twitter_image'    => null,
+            'schema_jsonld'    => $defaults->organization_jsonld
+                ? json_encode($defaults->organization_jsonld, JSON_UNESCAPED_SLASHES)
+                : null,
         ];
     }
 }

@@ -103,9 +103,9 @@ export default function HomeFAQ() {
             Frequently Asked
             <span className="h-px w-8 bg-primary" />
           </div>
-          <h2 className="text-3xl sm:text-5xl lg:text-6xl font-black uppercase tracking-tighter text-white mb-4">
-            Questions We Get{" "}
-            <span className="text-primary italic">Asked.</span>
+          <h2 className="section-heading !text-white text-3xl sm:text-5xl lg:text-6xl mb-4">
+            QUESTIONS WE GET{" "}
+            <span className="section-heading-accent">ASKED.</span>
           </h2>
           <p className="text-base sm:text-lg text-neutral-300 max-w-2xl mx-auto leading-relaxed">
             Quick answers to what most customers want to know before booking.

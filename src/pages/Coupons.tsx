@@ -42,7 +42,7 @@ export default function Coupons(_props: CouponsProps) {
       <PageBanner
         title="Available Coupons"
         breadcrumbs={[
-          { label: "Home", onClick: () => navigate("/") },
+          { label: "Home", href: "/" },
           { label: "Coupons" },
         ]}
       />
@@ -51,8 +51,8 @@ export default function Coupons(_props: CouponsProps) {
         <div className="site-container max-w-5xl">
           <div className="flex items-baseline justify-between mb-8">
             <div>
-              <h2 className="text-2xl sm:text-3xl uppercase font-black text-neutral-900 tracking-tighter">
-                CURRENT <span className="text-primary">OFFERS.</span>
+              <h2 className="section-heading">
+                CURRENT <span className="section-heading-accent">OFFERS.</span>
               </h2>
               <p className="text-xs text-neutral-500 mt-1">
                 Tap Copy Code, then apply at checkout.

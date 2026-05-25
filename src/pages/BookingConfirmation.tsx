@@ -45,7 +45,7 @@ export default function BookingConfirmation() {
         <PageBanner
           title="Booking Confirmed"
           breadcrumbs={[
-            { label: "Home", onClick: () => navigate("/") },
+            { label: "Home", href: "/" },
             { label: "Booking Confirmed" },
           ]}
         />
@@ -62,7 +62,7 @@ export default function BookingConfirmation() {
         <PageBanner
           title="Booking Confirmed"
           breadcrumbs={[
-            { label: "Home", onClick: () => navigate("/") },
+            { label: "Home", href: "/" },
             { label: "Booking Confirmed" },
           ]}
         />
@@ -86,7 +86,7 @@ export default function BookingConfirmation() {
       <PageBanner
         title="Booking Confirmed"
         breadcrumbs={[
-          { label: "Home", onClick: () => navigate("/") },
+          { label: "Home", href: "/" },
           { label: "Booking Confirmed" },
         ]}
       />

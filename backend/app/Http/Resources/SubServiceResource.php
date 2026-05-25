@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Support\ImageUrl;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -63,9 +64,14 @@ class SubServiceResource extends JsonResource
             'base_price'      => $this->base_price,
             'vehicle_price'   => $vehiclePrice,
             'effective_price' => $effectivePrice,
-            'image'           => $this->image,
+            // D-P1-6 — full public URL via ImageUrl (was raw relative path).
+            'image'           => ImageUrl::resolve($this->image),
             'time_takes'      => $this->time_takes,
             'time_unit'       => $this->time_unit,
+            // Phase 1 (D-P1-2) — service-interval display copy. Inclusions
+            // are intentionally omitted from the lean list shape (D-P1-5);
+            // they ship on the per-service detail endpoint only.
+            'interval_info'   => $this->interval_info,
         ];
     }
 }

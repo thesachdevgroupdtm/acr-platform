@@ -1,0 +1,60 @@
+Phase 4.2.5 — Raw network probe log (Playwright headed)
+========================================================
+
+Tool: tests/e2e/api-probe.spec.ts (temporary — deleted after this commit)
+Target: http://localhost:3000 (Vite) → http://localhost:8000 (Laravel)
+Date: 2026-05-08
+
+---API_PROBE_BEGIN---
+home | GET http://localhost:8000/api/v1/home -> 200 13200B
+home | GET http://localhost:8000/api/v1/cart -> 200 213B
+coupons | GET http://localhost:8000/api/v1/cart -> 200 213B
+coupons | GET http://localhost:8000/api/v1/home -> 200 13200B
+coupons | GET http://localhost:8000/api/v1/coupons?context=marketing -> 200 853B
+services | GET http://localhost:8000/api/v1/cart -> 200 213B
+services | GET http://localhost:8000/api/v1/home -> 200 13200B
+services | GET http://localhost:8000/api/v1/services -> 200 11657B
+services | GET http://localhost:8000/api/v1/vehicle/brands -> 200 1056B
+category-detail | GET http://localhost:8000/api/v1/cart -> 200 213B
+category-detail | GET http://localhost:8000/api/v1/home -> 200 13200B
+category-detail | GET http://localhost:8000/api/v1/services/car-ac-service-repair -> 200 1248B
+category-detail | GET http://localhost:8000/api/v1/vehicle/brands -> 200 1056B
+service-detail | GET http://localhost:8000/api/v1/cart -> 200 213B
+service-detail | GET http://localhost:8000/api/v1/home -> 200 13200B
+service-detail | GET http://localhost:8000/api/v1/services/car-ac-service-repair/ac-gas-top-up -> 404 91B FAIL
+   (the slug 'ac-gas-top-up' is invalid for this category — not a regression; valid sample: 'full-ac-service')
+cart | GET http://localhost:8000/api/v1/cart -> 200 213B
+cart | GET http://localhost:8000/api/v1/home -> 200 13200B
+service-centers | GET http://localhost:8000/api/v1/cart -> 200 213B
+service-centers | GET http://localhost:8000/api/v1/home -> 200 13200B
+   (Note: NO call to /api/v1/service-centers — page renders from static LOCATIONS)
+about | GET http://localhost:8000/api/v1/cart -> 200 213B
+about | GET http://localhost:8000/api/v1/home -> 200 13200B
+contact | GET http://localhost:8000/api/v1/cart -> 200 213B
+contact | GET http://localhost:8000/api/v1/home -> 200 13200B
+---API_PROBE_END---
+
+---CONSOLE_ERRORS_BEGIN---
+services | Cannot update a component (Services) while rendering a different component (BookingSidebar).
+   To locate the bad setState() call inside Services, follow the stack trace as described in
+   https://react.dev/link/setstate-in-render
+service-detail | Failed to load resource: the server responded with a status of 404 (Not Found)
+   (related to invalid slug above; not a regression)
+---CONSOLE_ERRORS_END---
+
+CORS preflight (verbatim curl response):
+
+$ curl -sv -H "Origin: http://localhost:3000" \
+       -H "Access-Control-Request-Method: GET" \
+       -H "Access-Control-Request-Headers: authorization,content-type" \
+       -X OPTIONS http://127.0.0.1:8000/api/v1/coupons
+
+> OPTIONS /api/v1/coupons HTTP/1.1
+> Host: 127.0.0.1:8000
+> Origin: http://localhost:3000
+< HTTP/1.0 204 No Content
+< Access-Control-Allow-Origin: http://localhost:3000
+< Vary: Origin, Access-Control-Request-Method, Access-Control-Request-Headers
+< Access-Control-Allow-Methods: GET
+< Access-Control-Allow-Headers: authorization,content-type
+< Access-Control-Max-Age: 3600

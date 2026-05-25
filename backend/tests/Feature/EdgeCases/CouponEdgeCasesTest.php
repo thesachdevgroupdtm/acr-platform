@@ -7,6 +7,7 @@ use App\Models\Service;
 use App\Models\ServiceCategory;
 use App\Models\ServiceCenter;
 use App\Models\User;
+use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 
 /**
@@ -152,4 +153,58 @@ it('rejects an active coupon with an expired expiry_date', function () {
 
     $resp->assertStatus(422)
         ->assertJson(['message' => 'This coupon has expired.']);
+});
+
+it('lets a GUEST (not signed in) apply FIRST10 and preview the discounted total', function () {
+    // Guest = no Sanctum::actingAs; identity is purely the cart-session
+    // UUID carried in the X-Cart-Session header. This proves the apply
+    // gate has moved off the apply step (guest coupon preview), while
+    // the existing validation (active / not-expired / min-order / global
+    // limit / applicability) still runs.
+    $guestUuid = (string) Str::uuid();
+    $headers   = ['X-Cart-Session' => $guestUuid];
+
+    $category = ServiceCategory::factory()->create();
+    // base_price 2000 → FIRST10 = 10% = ₹200 (under the ₹500 cap).
+    $service  = Service::factory()->create(['category_id' => $category->id, 'base_price' => 2000]);
+
+    $this->withHeaders($headers)->postJson('/api/v1/cart/items', [
+        'kind'     => 'service',
+        'ref_id'   => $service->id,
+        'quantity' => 1,
+    ])->assertStatus(200);
+
+    $resp = $this->withHeaders($headers)->postJson('/api/v1/cart/coupon', ['code' => 'FIRST10']);
+
+    $resp->assertStatus(200)
+        ->assertJsonPath('cart.totals.coupon.code', 'FIRST10');
+    expect((float) $resp->json('cart.totals.subtotal'))->toBe(2000.0);
+    expect((float) $resp->json('cart.totals.discount'))->toBe(200.0);
+    expect((float) $resp->json('cart.totals.total'))->toBe(1800.0);
+
+    // The discount persists on the guest cart across a fresh GET — the
+    // preview survives navigation/refresh because coupon_id is stored
+    // server-side on the guest cart, not just held in the UI.
+    $fresh = $this->withHeaders($headers)->getJson('/api/v1/cart');
+    $fresh->assertStatus(200)->assertJsonPath('cart.totals.coupon.code', 'FIRST10');
+    expect((float) $fresh->json('cart.totals.discount'))->toBe(200.0);
+});
+
+it('still rejects an invalid coupon code for a guest (validation intact)', function () {
+    $guestUuid = (string) Str::uuid();
+    $headers   = ['X-Cart-Session' => $guestUuid];
+
+    $category = ServiceCategory::factory()->create();
+    $service  = Service::factory()->create(['category_id' => $category->id, 'base_price' => 2000]);
+
+    $this->withHeaders($headers)->postJson('/api/v1/cart/items', [
+        'kind'     => 'service',
+        'ref_id'   => $service->id,
+        'quantity' => 1,
+    ])->assertStatus(200);
+
+    $resp = $this->withHeaders($headers)->postJson('/api/v1/cart/coupon', ['code' => 'NOPE404']);
+
+    $resp->assertStatus(422)
+        ->assertJson(['message' => 'Invalid coupon code.']);
 });

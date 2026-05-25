@@ -15,7 +15,7 @@ export default function About(_props: AboutProps) {
       <PageBanner
         title="About Us"
         breadcrumbs={[
-          { label: "Home", onClick: () => navigate("/") },
+          { label: "Home", href: "/" },
           { label: "About" }
         ]}
       />
@@ -27,7 +27,7 @@ export default function About(_props: AboutProps) {
             initial={{ opacity: 0, x: -50 }}
             animate={{ opacity: 1, x: 0 }}
           >
-            <h1 className="text-4xl md:text-5xl mb-6 text-neutral-900">OUR <span className="text-primary">STORY.</span></h1>
+            <h2 className="section-heading mb-6">OUR <span className="section-heading-accent">STORY.</span></h2>
             <p className="text-lg text-neutral-500 leading-relaxed mb-6">
               {BUSINESS_INFO.about}
             </p>
@@ -58,7 +58,7 @@ export default function About(_props: AboutProps) {
 
         {/* Values Section */}
         <div className="bg-neutral-50 p-8 md:p-12 border border-border mb-16">
-          <h2 className="text-3xl md:text-4xl mb-12 text-center uppercase font-black text-neutral-900">CORE <span className="text-primary">VALUES.</span></h2>
+          <h2 className="section-heading text-center mb-12">CORE <span className="section-heading-accent">VALUES.</span></h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
             {[
               { title: "Precision", desc: "We measure success in millimeters. Every structural repair is executed to factory-exact dimensions.", icon: Target },
@@ -79,7 +79,7 @@ export default function About(_props: AboutProps) {
 
         {/* Team Section */}
         <div className="text-center max-w-4xl mx-auto">
-          <h2 className="text-3xl md:text-4xl mb-8 uppercase font-black text-neutral-900">MEET THE <span className="text-primary">EXPERTS.</span></h2>
+          <h2 className="section-heading mb-8">MEET THE <span className="section-heading-accent">EXPERTS.</span></h2>
           <p className="text-lg text-neutral-500 leading-relaxed mb-12">
             Our team consists of certified structural engineers, master painters, 
             and insurance specialists dedicated to your vehicle's perfection.

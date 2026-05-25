@@ -45,6 +45,20 @@ return [
         '#^http://192\.168\.\d+\.\d+:(3000|4173)$#',
         '#^http://10\.\d+\.\d+\.\d+:(3000|4173)$#',
         '#^http://172\.(1[6-9]|2[0-9]|3[01])\.\d+\.\d+:(3000|4173)$#',
+
+        // Phase 4.2.5b — Vite fallback port range. The npm script
+        // pins `vite --port=3000`, but Vite silently falls back to
+        // 3001/3002/… when 3000 is already bound (a stale dev
+        // instance, another project, etc.). The browser then sends
+        // Origin: http://localhost:3001 and the request was being
+        // CORS-rejected at the network layer with a generic
+        // "Failed to fetch" — surfacing as the operator-reported
+        // "Couldn't load coupons" / "Could not load services" with
+        // no clear root cause in the frontend logs.
+        // Pattern covers loopback hosts on any Vite-range port
+        // (3000-3010); production deployments are unaffected since
+        // they don't use loopback origins.
+        '#^http://(localhost|127\.0\.0\.1):30(0[0-9]|10)$#',
     ],
 
     'allowed_headers' => ['*'],

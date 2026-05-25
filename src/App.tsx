@@ -34,11 +34,16 @@ const OrderDetail = lazy(() => import("./pages/OrderDetail"));
 const BookingConfirmation = lazy(() => import("./pages/BookingConfirmation"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const Testimonials = lazy(() => import("./pages/Testimonials"));
+// Phase 4.5 — premium editorial /explore (replaces ExplorePage).
+// Single component pipeline; no conditional A/B render → no flicker.
+const ExploreEditorial = lazy(() => import("./pages/ExploreEditorial"));
+const SeoPageView = lazy(() => import("./pages/SeoPageView"));
 import EstimateProcess from "./components/EstimateProcess";
 import AuthModal from "./components/AuthModal";
 import SessionExpiredToast from "./components/SessionExpiredToast";
 import GlobalLoadingFallback from "./components/GlobalLoadingFallback";
 import ChunkErrorBoundary from "./components/ChunkErrorBoundary";
+import RuntimeErrorBoundary from "./components/RuntimeErrorBoundary";
 import { motion, AnimatePresence } from "motion/react";
 import { BUSINESS_INFO } from "./data/businessData";
 import { MessageCircle } from "lucide-react";
@@ -116,8 +121,15 @@ export default function App() {
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.4, ease: "easeOut" }}
             >
-              <Suspense fallback={<GlobalLoadingFallback />}>
-                <Routes location={location}>
+              {/* Pass the route pathname as a `resetKey` so a
+                  navigation away from an errored page clears the
+                  boundary's error state. Using a regular prop (not
+                  JSX `key`) because this project ships React 19
+                  without @types/react and the JSX key attribute
+                  doesn't type-check on the class component. */}
+              <RuntimeErrorBoundary resetKey={location.pathname}>
+                <Suspense fallback={<GlobalLoadingFallback />}>
+                  <Routes location={location}>
                   <Route path="/" element={<Home openEstimate={openEstimate} />} />
                   <Route path="/services" element={<Services openEstimate={openEstimate} />} />
                   <Route path="/services/:category/:service" element={<ServiceDetail openEstimate={openEstimate} />} />
@@ -142,14 +154,26 @@ export default function App() {
                   <Route path="/booking-confirmation/:id" element={<BookingConfirmation />} />
                   <Route path="/not-found" element={<NotFound />} />
                   {/*
-                    Catch-all — preserves the Phase 2.6a-fix invariant
-                    that unknown URLs land on NotFound at the original
-                    URL (NOT a silent home redirect). /payment still
-                    maps here per Phase 2.6a, locked by the smoke test.
+                    Phase 4.5b — operator-managed SEO content.
+                    /explore is the hub; /:slug renders any
+                    published SeoPage. The reserved-slug guard
+                    inside SeoPageView preserves the Phase 2.6a-fix
+                    invariant that /payment + other system paths
+                    still land on NotFound rather than firing an
+                    API round-trip.
+                  */}
+                  <Route path="/explore" element={<ExploreEditorial />} />
+                  <Route path="/:slug" element={<SeoPageView />} />
+                  {/*
+                    Catch-all — multi-segment unknown URLs fall here
+                    (e.g. /foo/bar). Single-segment unknowns are
+                    already handled by SeoPageView above (it falls
+                    through to NotFound on 404).
                   */}
                   <Route path="*" element={<NotFound />} />
                 </Routes>
-              </Suspense>
+                </Suspense>
+              </RuntimeErrorBoundary>
             </motion.div>
           </AnimatePresence>
         </ChunkErrorBoundary>

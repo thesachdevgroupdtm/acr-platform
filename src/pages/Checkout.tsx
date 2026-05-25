@@ -49,7 +49,7 @@ export default function Checkout({ openAuth }: CheckoutProps) {
   // backend has been live since 2.5a and the flag is permanently
   // true. If a future ops kill-switch is needed, re-introduce a
   // narrower toggle without the dead component.
-  const { items, subtotal, count, cart } = useCart();
+  const { items, subtotal, count, cart, isLoading: cartLoading } = useCart();
   const { details, setDetails, resetDetails } = useCheckout();
   const { user, isAuthenticated, bootstrapped, setDefaults } = useAuth();
   const { state: booking } = useBookingContext();
@@ -261,14 +261,45 @@ export default function Checkout({ openAuth }: CheckoutProps) {
     } p-3 text-sm focus:border-primary outline-none transition-colors text-neutral-900`;
 
   // ----- Empty cart guard -----
+  // Phase BS-3 (D-BS3-4 from diagnostic): don't render the empty-cart
+  // UI while the cart query is still resolving OR while auth is
+  // bootstrapping. Otherwise a brief refetch window (token flip,
+  // place-order invalidate, navigation remount) flashes the
+  // "Nothing to Checkout" message and the user thinks their data is
+  // gone. The cart query is server-truth; when it actually returns
+  // an empty cart, count===0 holds and the guard fires.
+  if ((cartLoading || !bootstrapped) && count === 0) {
+    return (
+      <>
+        <PageBanner
+          title="Checkout"
+          breadcrumbs={[
+            { label: "Home", href: "/" },
+            { label: "Cart", href: "/cart" },
+            { label: "Checkout" },
+          ]}
+        />
+        <div className="pb-14 pt-8">
+          <div className="site-container">
+            <CheckoutSteps current={2} />
+            <div className="bg-white border border-border py-20 px-6 text-center mt-10 max-w-2xl mx-auto animate-pulse">
+              <div className="w-16 h-16 bg-neutral-100 mx-auto mb-5" />
+              <div className="h-6 w-48 bg-neutral-200 mx-auto mb-3" />
+              <div className="h-3 w-64 bg-neutral-100 mx-auto" />
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
   if (count === 0) {
     return (
       <>
         <PageBanner
           title="Checkout"
           breadcrumbs={[
-            { label: "Home", onClick: () => navigate("/") },
-            { label: "Cart", onClick: () => navigate("/cart") },
+            { label: "Home", href: "/" },
+            { label: "Cart", href: "/cart" },
             { label: "Checkout" },
           ]}
         />
@@ -309,8 +340,8 @@ export default function Checkout({ openAuth }: CheckoutProps) {
         <PageBanner
           title="Checkout"
           breadcrumbs={[
-            { label: "Home", onClick: () => navigate("/") },
-            { label: "Cart", onClick: () => navigate("/cart") },
+            { label: "Home", href: "/" },
+            { label: "Cart", href: "/cart" },
             { label: "Checkout" },
           ]}
         />
@@ -331,8 +362,8 @@ export default function Checkout({ openAuth }: CheckoutProps) {
         <PageBanner
           title="Checkout"
           breadcrumbs={[
-            { label: "Home", onClick: () => navigate("/") },
-            { label: "Cart", onClick: () => navigate("/cart") },
+            { label: "Home", href: "/" },
+            { label: "Cart", href: "/cart" },
             { label: "Checkout" },
           ]}
         />
@@ -380,8 +411,8 @@ export default function Checkout({ openAuth }: CheckoutProps) {
       <PageBanner
         title="Checkout"
         breadcrumbs={[
-          { label: "Home", onClick: () => navigate("/") },
-          { label: "Cart", onClick: () => navigate("/cart") },
+          { label: "Home", href: "/" },
+          { label: "Cart", href: "/cart" },
           { label: "Checkout" },
         ]}
       />

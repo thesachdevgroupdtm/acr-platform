@@ -55,27 +55,7 @@ export default function Footer() {
   const loc = LOCATIONS[currentLocationIdx];
 
   return (
-    <>
-      {/* SEO & Useful Info Section Above Footer */}
-      <div className="bg-white py-12 border-t border-border">
-        <div className="site-container">
-          <div className="max-w-4xl">
-             <h3 className="text-xl font-black uppercase text-primary-dark mb-4">India's Fastest-Growing Self-Owned Multi-Brand Network</h3>
-             <p className="text-[13px] text-muted leading-relaxed mb-4">
-               Auto Car Repair (ACR) is your ultimate destination for comprehensive car maintenance and premium repair. 
-               Whether you need general servicing, expert denting and painting, advanced diagnostics, or cashless 
-               insurance claims, our factory-trained experts use state-of-the-art tools to deliver pristine 
-               quality. By strictly maintaining a 100% self-owned network with no outsourced locations, we guarantee absolute consistency.
-             </p>
-             <p className="text-[13px] text-muted leading-relaxed">
-               Serving the entire Delhi NCR region with state-of-the-art service centers, we work with all major car brands and top insurance providers to offer 
-               a hassle-free service. Trust us to maintain your vehicle's factory standards. Focus on the drive; leave the maintenance to the certified professionals at ACR.
-             </p>
-          </div>
-        </div>
-      </div>
-
-      <footer className="bg-neutral-50 border-t border-border pt-16 pb-10">
+    <footer className="bg-neutral-50 border-t border-border pt-16 pb-10">
         <div className="site-container">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-8 lg:gap-8 mb-16 px-4 lg:px-0">
           {/* Brand */}
@@ -208,6 +188,5 @@ export default function Footer() {
         </div>
       </div>
     </footer>
-    </>
   );
 }

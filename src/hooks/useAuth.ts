@@ -205,20 +205,23 @@ export function useAuth() {
     let cancelled = false;
     let bootstrappedLocal = false;
 
-    // Phase 2.5.3 (D-2.5.3-3) — 10s safety timeout. If the profile
-    // fetch hangs (network failure, sleeping VPN, dropped TCP),
-    // flip to the unauthenticated state with the stored token
-    // cleared so the UI doesn't sit on a skeleton forever. The
-    // user re-logs in on the next interaction.
+    // Phase BS-3 (D-BS3-2 from diagnostic) — 10s safety timeout. If
+    // the profile fetch hangs (slow VPN, sleeping server, dropped
+    // TCP) we unblock the UI but DO NOT wipe the token anymore.
+    // The pre-BS3 behavior force-logged-out everyone on a slow
+    // boot — even though their token was still valid — and the
+    // cart re-keyed to "guest" looking like data was lost. Now the
+    // token stays; the next API call either succeeds (server was
+    // briefly slow) or fails with 401 against /auth/profile which
+    // is the only path allowed to clear the session (see
+    // src/lib/api.ts 401 handler).
     const timeoutId = window.setTimeout(() => {
       if (cancelled || bootstrappedLocal) return;
       bootstrappedLocal = true;
       // eslint-disable-next-line no-console
       console.warn(
-        "[useAuth] Bootstrap timeout (10s); falling back to unauthenticated state.",
+        "[useAuth] Bootstrap timeout (10s); unblocking UI without clearing token.",
       );
-      setToken(null);
-      setUser(null);
       setBootstrapped(true);
     }, 10_000);
 
@@ -355,6 +358,16 @@ export function useAuth() {
             // eslint-disable-next-line no-console
             console.warn("[Phase 2.4] Cart merge after OTP failed", err);
           });
+          // BS-3 cleanup: drop the now-converted guest UUID from
+          // localStorage. If we left it in place, a future logout
+          // would re-use the converted UUID; the backend filters
+          // converted carts out of the active lookup, so the user
+          // would silently start with a brand-new guest cart and
+          // any in-flight code reading `acr_cart_session` from
+          // storage would see a stale identifier.
+          if (typeof window !== "undefined") {
+            window.localStorage.removeItem("acr_cart_session");
+          }
         }
 
         return { success: true, user: u };

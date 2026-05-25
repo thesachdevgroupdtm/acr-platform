@@ -338,7 +338,7 @@ export default function CmsPage(_props: CmsPageProps) {
                   <div key={i} className="bg-white p-8 border border-border shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all">
                      <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-3">
-                           <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-black uppercase text-lg">
+                           <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center text-primary font-black uppercase text-lg">
                              {review.name.charAt(0)}
                            </div>
                            <div>
@@ -347,7 +347,7 @@ export default function CmsPage(_props: CmsPageProps) {
                            </div>
                         </div>
                         {/* fake google logo shape */}
-                        <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm">G</div>
+                        <div className="w-6 h-6 bg-primary rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm">G</div>
                      </div>
                      <div className="flex text-yellow-500 mb-4">
                         <Star className="w-4 h-4 fill-current"/><Star className="w-4 h-4 fill-current"/><Star className="w-4 h-4 fill-current"/><Star className="w-4 h-4 fill-current"/><Star className="w-4 h-4 fill-current"/>

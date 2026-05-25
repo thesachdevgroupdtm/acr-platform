@@ -67,7 +67,7 @@ export default function Cart({ openAuth }: CartProps) {
       <PageBanner
         title="Your Cart"
         breadcrumbs={[
-          { label: "Home", onClick: () => navigate("/") },
+          { label: "Home", href: "/" },
           { label: "Cart" },
         ]}
       />

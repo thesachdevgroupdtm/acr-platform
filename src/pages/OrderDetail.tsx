@@ -22,7 +22,7 @@ function statusBadge(status: OrderStatus): string {
   switch (status) {
     case "pending":     return "bg-amber-500 text-white";
     case "confirmed":   return "bg-primary text-white";
-    case "in_service":  return "bg-indigo-600 text-white";
+    case "in_service":  return "bg-accent text-white";
     case "completed":   return "bg-neutral-900 text-white";
     case "cancelled":   return "bg-neutral-400 text-white";
     default:            return "bg-neutral-300 text-neutral-700";
@@ -78,10 +78,10 @@ export default function OrderDetail() {
         <PageBanner
           title="Order Details"
           breadcrumbs={[
-            { label: "Home", onClick: () => navigate("/") },
+            { label: "Home", href: "/" },
             {
               label: "My Bookings",
-              onClick: () => navigate("/my-bookings"),
+              href: "/my-bookings",
             },
             { label: "Details" },
           ]}
@@ -101,10 +101,10 @@ export default function OrderDetail() {
         <PageBanner
           title="Order Details"
           breadcrumbs={[
-            { label: "Home", onClick: () => navigate("/") },
+            { label: "Home", href: "/" },
             {
               label: "My Bookings",
-              onClick: () => navigate("/my-bookings"),
+              href: "/my-bookings",
             },
             { label: "Details" },
           ]}
@@ -131,10 +131,10 @@ export default function OrderDetail() {
       <PageBanner
         title={order.order_number}
         breadcrumbs={[
-          { label: "Home", onClick: () => navigate("/") },
+          { label: "Home", href: "/" },
           {
             label: "My Bookings",
-            onClick: () => navigate("/my-bookings"),
+            href: "/my-bookings",
           },
           { label: order.order_number },
         ]}

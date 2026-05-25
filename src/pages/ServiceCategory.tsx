@@ -30,11 +30,13 @@ import {
   TESTIMONIALS,
   LOCATIONS,
 } from "../data/businessData";
-import { useBrands, useModels, useFuels } from "../hooks/useVehicle";
+import { useBrands } from "../hooks/useVehicle";
 import { useSubNavSync } from "../hooks/useSubNavSync";
 import PageBanner from "../components/PageBanner";
+import SeoHead from "../components/SeoHead";
 import VehicleReplaceModal from "../components/VehicleReplaceModal";
 import FAQAccordion from "../components/FAQAccordion";
+import { CarSidebar } from "../components/car-sidebar";
 import { useCart } from "../hooks/useCart";
 import { VehicleConflictError, type VehicleConflictDetails } from "../lib/errors";
 import { useAuth } from "../hooks/useAuth";
@@ -50,12 +52,9 @@ interface ServiceCategoryProps {
 }
 
 // ---------- Constants ----------
-const FUEL_TYPES = [
-  { id: "petrol", name: "Petrol", icon: Droplet },
-  { id: "diesel", name: "Diesel", icon: Fuel },
-  { id: "cng", name: "CNG", icon: Wind },
-  { id: "electric", name: "Electric", icon: BatteryCharging },
-] as const;
+// FORMS-1 STEP 2 — FUEL_TYPES removed with the bespoke inline car
+// selector. Fuel options now come from the shared VehicleSelector
+// (FuelStep) via the cart form's vehicle-change modal.
 
 // Phase 2.5.9 — sub-nav lists EVERY visible content section in
 // the page body, in render order. Adding gap-sections (Why Us /
@@ -167,65 +166,21 @@ export default function ServiceCategory({
     rebindKey: `${categorySlug}:${detailQuery.isLoading ? "loading" : "ready"}`,
   });
 
-  // ---------- Shared booking context (syncs with ServiceDetail child page) ----------
-  // The user fills location/car/phone ONCE here on the parent category page
-  // and the same details auto-flow to any child service page they drill into.
-  const { state: bookingCtx, update: updateBookingCtx } = useBookingContext();
+  // ---------- Shared booking context (read-only on this page) ----------
+  // FORMS-1 STEP 2 — the bespoke inline car-selector + OTP form that used
+  // to own location/car/phone here is gone. The right-column CART form now
+  // owns vehicle/location selection and writes the chosen vehicle into
+  // booking context; this page READS it back so the price list and
+  // add-to-cart stay in sync. No local mirrors, no sync effect.
+  const bookingLocation = bookingCtx0.location || LOCATIONS[0]?.id || "";
+  const bookingCar = bookingCtx0.car;
 
-  // ---------- Sticky Booking Card state ----------
-  // These are local mirrors of the shared context. We hydrate from context
-  // on mount and push every change back to context so child pages stay synced.
-  const [bookingLocation, setBookingLocation] = useState<string>(
-    bookingCtx.location || LOCATIONS[0]?.id || ""
-  );
-  const [bookingCar, setBookingCar] = useState<{
-    brand: string;
-    model: string;
-    fuel: string;
-    /** Phase 2.3.3 — IDs/slugs captured by the in-page picker so the
-     *  /services/{slug} query receives proper vehicle context and the
-     *  resulting prices match ServiceDetail's Pricing tab. */
-    brand_id?: number;
-    model_id?: number;
-    fuel_id?: number;
-    brand_slug?: string;
-    model_slug?: string;
-    fuel_slug?: string;
-  } | null>(bookingCtx.car);
-  const [bookingPhone, setBookingPhone] = useState(bookingCtx.phone || "");
-  const [otpSent, setOtpSent] = useState(bookingCtx.otpVerified);
-  const [otpValue, setOtpValue] = useState("");
-  const [otpVerified, setOtpVerified] = useState(bookingCtx.otpVerified);
-  const [bookingErrors, setBookingErrors] = useState<Record<string, string>>(
-    {}
-  );
-  const [pricesShown, setPricesShown] = useState(bookingCtx.pricesShown);
-
-  // ---------- Car Selector Modal state ----------
-  const [showCarSelector, setShowCarSelector] = useState(false);
-  const [carStep, setCarStep] = useState<1 | 2 | 3>(1);
-  const [pendingCar, setPendingCar] = useState<{
-    brand: string;
-    brandId: number | null;
-    brandSlug: string | null;
-    model: string;
-    modelId: number | null;
-    modelSlug: string | null;
-  }>({ brand: "", brandId: null, brandSlug: null, model: "", modelId: null, modelSlug: null });
-  const [carSearch, setCarSearch] = useState("");
-
-  // ---------- Vehicle picker — pure API via React Query ----------
+  // ---------- Vehicle data for page content (supported-brands copy) ----------
+  // Only the brands query remains — the model/fuel queries lived in the
+  // deleted inline selector. Brands feed the overview/SEO copy ("X, Y and
+  // more", "{N}+ supported"), so the query stays here.
   const brandsQuery = useBrands();
-  const modelsQuery = useModels(
-    showCarSelector && carStep === 2 ? pendingCar.brandId : null
-  );
-  const fuelsQuery = useFuels(
-    showCarSelector && carStep === 3 ? pendingCar.brandId : null,
-    showCarSelector && carStep === 3 ? pendingCar.modelId : null,
-  );
   const apiBrandRows = brandsQuery.data?.brands ?? [];
-  const apiModelRows = modelsQuery.data?.models ?? [];
-  const apiFuelRows  = fuelsQuery.data?.fuels   ?? [];
 
   // ---------- Section nav active reset on category navigation ----------
   // When the user navigates between categories, snap the underline
@@ -236,36 +191,11 @@ export default function ServiceCategory({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [categorySlug]);
 
-  // ---------- Pre-verify booking card for logged-in users ----------
-  // The user has already passed phone+email OTP at signup. Skip the OTP step
-  // and just trust their verified phone. They click "Check Prices" directly.
-  useEffect(() => {
-    if (isAuthenticated && user) {
-      setBookingPhone(user.phone);
-      setOtpSent(true);
-      setOtpVerified(true);
-      // Auto-fill saved car & location if user has them
-      if (user.defaultCar && !bookingCar) setBookingCar(user.defaultCar);
-      if (user.defaultLocation && !bookingCtx.location)
-        setBookingLocation(user.defaultLocation);
-    }
-    // bookingCar/bookingCtx.location intentionally omitted - one-time defaults
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated, user]);
-
-  // ---------- Sync local booking state → shared context ----------
-  // Every booking-state change is mirrored to the context so any child
-  // service page rendered next will see the same details.
-  useEffect(() => {
-    updateBookingCtx({
-      location: bookingLocation,
-      car: bookingCar,
-      phone: bookingPhone,
-      otpVerified,
-      pricesShown,
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bookingLocation, bookingCar, bookingPhone, otpVerified, pricesShown]);
+  // FORMS-1 STEP 2 — the logged-in pre-verify effect and the local→context
+  // sync effect were both removed with the inline selector. The cart form's
+  // shared selector writes vehicle/location to context directly, and auth
+  // prefill of the vehicle now happens inside the shared selector
+  // (useSelectorState seeds from booking context / saved car).
 
   if (isLoadingDetail) {
     return (
@@ -302,9 +232,6 @@ export default function ServiceCategory({
   // ---------- Derived helpers ----------
   const selectedLocationName =
     LOCATIONS.find((l) => l.id === bookingLocation)?.name || "your area";
-  const selectedCarLabel = bookingCar
-    ? `${bookingCar.brand} ${bookingCar.model}, ${bookingCar.fuel}`
-    : "Select Your Car";
 
   const cityWord = "Delhi NCR";
   // Brand names — pure API. Empty during initial load; the modal/list
@@ -348,110 +275,10 @@ export default function ServiceCategory({
     }
   };
 
-  // ---------- Booking handlers ----------
-  const onPhoneChange = (val: string) => {
-    const digits = val.replace(/\D/g, "").slice(0, 10);
-    setBookingPhone(digits);
-    if (bookingErrors.phone)
-      setBookingErrors((e) => ({ ...e, phone: "" }));
-    if (otpSent) {
-      setOtpSent(false);
-      setOtpValue("");
-      setOtpVerified(false);
-    }
-  };
-
-  const sendOtp = () => {
-    const errs: Record<string, string> = {};
-    if (!bookingLocation) errs.location = "Please select a location";
-    if (!bookingCar) errs.car = "Please select your car";
-    if (!bookingPhone) errs.phone = "Phone number is required";
-    else if (!/^\d{10}$/.test(bookingPhone))
-      errs.phone = "Enter exactly 10 digits";
-    setBookingErrors(errs);
-    if (Object.keys(errs).length > 0) return;
-    setOtpSent(true);
-    setOtpValue("");
-    setOtpVerified(false);
-  };
-
-  const verifyOtp = () => {
-    if (otpValue.length < 4) {
-      setBookingErrors({ otp: "Enter the OTP sent to your phone" });
-      return;
-    }
-    setOtpVerified(true);
-    setBookingErrors({});
-  };
-
-  const checkPrices = () => {
-    if (!otpVerified) return;
-    setPricesShown(true);
-    setTimeout(() => scrollToSection("pricing"), 50);
-  };
-
-  // ---------- Car Selector handlers ----------
-  const openCarSelector = () => {
-    setShowCarSelector(true);
-    setCarStep(1);
-    setCarSearch("");
-    if (bookingErrors.car) setBookingErrors((e) => ({ ...e, car: "" }));
-  };
-  const closeCarSelector = () => {
-    setShowCarSelector(false);
-    setCarStep(1);
-    setCarSearch("");
-  };
-  const selectBrand = (brand: string, brandId: number | null = null) => {
-    const row = apiBrandRows.find((b) => b.id === brandId);
-    setPendingCar({
-      brand,
-      brandId,
-      brandSlug: row?.slug ?? null,
-      model: "",
-      modelId: null,
-      modelSlug: null,
-    });
-    setCarStep(2);
-    setCarSearch("");
-  };
-  const selectModel = (model: string) => {
-    const row = apiModelRows.find((m) => (m.title || m.name) === model);
-    setPendingCar({
-      ...pendingCar,
-      model,
-      modelId: row?.id ?? null,
-      modelSlug: row?.slug ?? null,
-    });
-    setCarStep(3);
-    setCarSearch("");
-  };
-  const selectFuel = (fuel: string) => {
-    // Phase 2.3.3 — capture fuel_id and fuel_slug from the API row so
-    // bookingCtx.car carries the data /services/{slug} needs to resolve
-    // vehicle-specific prices. Fallback: case-insensitive match against
-    // the static FUEL_TYPES list when the API is slow / unavailable.
-    const row = apiFuelRows.find(
-      (f) => (f.title || f.name)?.toLowerCase() === fuel.toLowerCase()
-    );
-    setBookingCar({
-      brand: pendingCar.brand,
-      model: pendingCar.model,
-      fuel,
-      ...(pendingCar.brandId  != null ? { brand_id:  pendingCar.brandId  } : {}),
-      ...(pendingCar.modelId  != null ? { model_id:  pendingCar.modelId  } : {}),
-      ...(row?.id             != null ? { fuel_id:   row.id              } : {}),
-      ...(pendingCar.brandSlug         ? { brand_slug: pendingCar.brandSlug } : {}),
-      ...(pendingCar.modelSlug         ? { model_slug: pendingCar.modelSlug } : {}),
-      ...(row?.slug                    ? { fuel_slug: row.slug             } : {}),
-    });
-    closeCarSelector();
-  };
-  const carBack = () => {
-    if (carStep === 1) closeCarSelector();
-    else setCarStep((s) => (s - 1) as 1 | 2 | 3);
-    setCarSearch("");
-  };
+  // FORMS-1 STEP 2 — all booking-card + car-selector handlers (onPhoneChange,
+  // sendOtp, verifyOtp, checkPrices, openCarSelector, selectBrand/Model/Fuel,
+  // carBack, …) were deleted with the inline form. Vehicle selection now
+  // happens in the shared VehicleSelector launched from the cart form.
 
   // ---------- Static page content ----------
   const serviceIncludes = [
@@ -571,31 +398,18 @@ export default function ServiceCategory({
     },
   ];
 
-  // ---------- Filtered lists for car selector ----------
-  const filteredBrands = brandList.filter((b) =>
-    b.toLowerCase().includes(carSearch.toLowerCase())
-  );
-  const filteredModels = apiModelRows
-    .map((m) => m.title)
-    .filter((m) => m.toLowerCase().includes(carSearch.toLowerCase()));
-  const filteredFuels = FUEL_TYPES.filter((f) =>
-    f.name.toLowerCase().includes(carSearch.toLowerCase())
-  );
-
-  // ---------- Booking-card field styles ----------
-  const bcInput =
-    "w-full bg-white border border-border p-3 text-sm focus:border-primary outline-none transition-colors text-neutral-900 font-bold uppercase tracking-tighter";
-  const bcInputErr =
-    "w-full bg-white border border-accent-dark p-3 text-sm focus:border-primary outline-none transition-colors text-neutral-900 font-bold uppercase tracking-tighter";
-
   return (
     <>
+      {/* Phase 4.5c — category-level SEO via cascade. Admin-edited
+          meta on the ServiceCategory record wins; otherwise site
+          defaults render through getSeoData(). */}
+      {detailQuery.data?.seo && <SeoHead seo={detailQuery.data.seo} />}
       {/* Banner — title only, NO location appended (avoids wrapping/cropping) */}
       <PageBanner
         title={category.title}
         breadcrumbs={[
-          { label: "Home", onClick: () => navigate("/") },
-          { label: "Services", onClick: () => navigate("/services") },
+          { label: "Home", href: "/" },
+          { label: "Services", href: "/services" },
           { label: category.title },
         ]}
       />
@@ -644,7 +458,7 @@ export default function ServiceCategory({
                 data-subnav-section="overview"
                 className="bg-neutral-50 p-6 sm:p-8 border border-border scroll-mt-40"
               >
-                <h2 className="text-2xl sm:text-3xl uppercase font-black text-neutral-900 mb-5">
+                <h2 className="section-heading mb-5">
                   {category.title.split(" ")[0]}{" "}
                   <span className="text-primary">
                     {category.title.split(" ").slice(1).join(" ") || "OVERVIEW."}
@@ -692,16 +506,16 @@ export default function ServiceCategory({
               {/* PRICING TABLE — with Add to Cart per row */}
               <section id="pricing" data-subnav-section="pricing" className="scroll-mt-40">
                 <div className="flex items-baseline justify-between flex-wrap gap-2 mb-2">
-                  <h2 className="text-2xl sm:text-3xl uppercase font-black text-neutral-900">
+                  <h2 className="section-heading">
                     {category.title}{" "}
-                    <span className="text-primary">PRICE LIST.</span>
+                    <span className="section-heading-accent">PRICE LIST.</span>
                   </h2>
                   <p className="text-[10px] sm:text-xs uppercase tracking-widest font-bold text-neutral-400">
                     {selectedLocationName} · {new Date().getFullYear()}
                   </p>
                 </div>
 
-                {pricesShown && bookingCar && (
+                {vehicleSelected && bookingCar && (
                   <motion.div
                     initial={{ opacity: 0, y: -8 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -719,8 +533,8 @@ export default function ServiceCategory({
                   </motion.div>
                 )}
 
-                {/* CTA banner shown when user hasn't completed Check Price yet */}
-                {!pricesShown && (
+                {/* CTA banner shown until a complete vehicle is selected */}
+                {!vehicleSelected && (
                   <motion.div
                     initial={{ opacity: 0, y: -8 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -734,12 +548,13 @@ export default function ServiceCategory({
                     </div>
                     <button
                       onClick={() => {
-                        // Scroll to the booking sidebar at the top of the page
+                        // Scroll to the cart-form sidebar; its "Select your
+                        // car" empty state opens the shared selector modal.
                         window.scrollTo({ top: 0, behavior: "smooth" });
                       }}
                       className="btn-ink btn-ink-primary px-5 py-2.5 text-[10px] sm:text-xs font-black uppercase tracking-widest flex items-center gap-2 shrink-0"
                     >
-                      Check Price For Free{" "}
+                      Select Your Car{" "}
                       <ArrowRight className="w-3.5 h-3.5 btn-arrow" />
                     </button>
                   </motion.div>
@@ -754,9 +569,10 @@ export default function ServiceCategory({
 
                   {subServices.map((sub) => {
                     const justAdded = addedFlash === String(sub.id);
-                    // Show prices ONLY when user passed OTP AND API marks
-                    // the category as priced for the chosen vehicle.
-                    const showPrice = pricesShown && priceShowFromApi;
+                    // Reveal prices as soon as a complete vehicle is
+                    // selected AND the API marks the category as priced
+                    // for it. No OTP gate — OTP is only for checkout.
+                    const showPrice = vehicleSelected && priceShowFromApi;
                     // Phase 2.3.3 — toggle add/remove on the same button.
                     // First click: addItem. Second click on the same row:
                     // remove the server cart line. The 1.8 s `justAdded`
@@ -818,16 +634,15 @@ export default function ServiceCategory({
                               </>
                             )
                           ) : (
-                            <div className="flex items-center sm:justify-end gap-1.5">
-                              <Lock className="w-3 h-3 text-neutral-400" />
-                              <span className="text-[10px] uppercase tracking-widest font-bold text-neutral-400">
-                                Hidden
-                              </span>
-                            </div>
+                            // No OTP lock anymore — prices reveal on vehicle
+                            // selection. !vehicle → invite selection.
+                            <span className="text-[10px] uppercase tracking-widest font-bold text-neutral-400">
+                              {vehicleSelected ? "On Inspection" : "Select car"}
+                            </span>
                           )}
                         </div>
 
-                        {/* Action column — Add to Cart only after Check Price; else CTA */}
+                        {/* Action column — Add to Cart once a vehicle is set; else CTA */}
                         <div className="sm:w-32 sm:text-right">
                           {showPrice ? (
                             <button
@@ -864,11 +679,13 @@ export default function ServiceCategory({
                           ) : (
                             <button
                               onClick={() =>
-                                window.scrollTo({ top: 0, behavior: "smooth" })
+                                vehicleSelected
+                                  ? navigate(`/services/${category.slug}/${sub.slug}`)
+                                  : window.scrollTo({ top: 0, behavior: "smooth" })
                               }
                               className="px-4 py-2 text-[10px] font-bold uppercase tracking-widest border border-primary text-primary hover:bg-primary hover:text-white transition-colors w-full sm:w-auto flex items-center justify-center gap-1.5"
                             >
-                              Check Price{" "}
+                              {vehicleSelected ? "View Details" : "Select Your Car"}{" "}
                               <ArrowRight className="w-3.5 h-3.5" />
                             </button>
                           )}
@@ -892,7 +709,7 @@ export default function ServiceCategory({
 
               {/* SERVICES INCLUDED */}
               <section id="services" data-subnav-section="services" className="scroll-mt-40">
-                <h2 className="text-2xl sm:text-3xl uppercase font-black text-neutral-900 mb-5">
+                <h2 className="section-heading mb-5">
                   SERVICES <span className="text-primary">INCLUDED.</span>
                 </h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
@@ -924,7 +741,7 @@ export default function ServiceCategory({
                 data-subnav-section="why-us"
                 className="scroll-mt-40"
               >
-                <h2 className="text-2xl sm:text-3xl uppercase font-black text-neutral-900 mb-5">
+                <h2 className="section-heading mb-5">
                   WHY <span className="text-primary">CHOOSE US.</span>
                 </h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
@@ -954,7 +771,7 @@ export default function ServiceCategory({
 
               {/* PROCESS */}
               <section id="process" data-subnav-section="process" className="scroll-mt-40">
-                <h2 className="text-2xl sm:text-3xl uppercase font-black text-neutral-900 mb-5">
+                <h2 className="section-heading mb-5">
                   HOW IT <span className="text-primary">WORKS.</span>
                 </h2>
                 <div className="space-y-3">
@@ -987,7 +804,7 @@ export default function ServiceCategory({
 
               {/* CUSTOMER REVIEWS */}
               <section id="reviews" data-subnav-section="reviews" className="scroll-mt-40">
-                <h2 className="text-2xl sm:text-3xl uppercase font-black text-neutral-900 mb-5">
+                <h2 className="section-heading mb-5">
                   CUSTOMER <span className="text-primary">REVIEWS.</span>
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1019,7 +836,7 @@ export default function ServiceCategory({
 
               {/* FAQs */}
               <section id="faqs" data-subnav-section="faqs" className="scroll-mt-40">
-                <h2 className="text-2xl sm:text-3xl uppercase font-black text-neutral-900 mb-5">
+                <h2 className="section-heading mb-5">
                   COMMON <span className="text-primary">QUESTIONS.</span>
                 </h2>
                 <FAQAccordion faqs={faqs} />
@@ -1031,7 +848,7 @@ export default function ServiceCategory({
                 data-subnav-section="brands"
                 className="scroll-mt-40"
               >
-                <h2 className="text-2xl sm:text-3xl uppercase font-black text-neutral-900 mb-1.5">
+                <h2 className="section-heading mb-1.5">
                   BRANDS WE <span className="text-primary">SERVICE.</span>
                 </h2>
                 <p className="text-xs text-neutral-500 mb-5 max-w-xl leading-relaxed">
@@ -1114,536 +931,29 @@ export default function ServiceCategory({
               </section>
             </main>
 
-            {/* ──────────── STICKY BOOKING CARD (RIGHT) ──────────── */}
-            <aside
-              className="order-1 lg:order-2 lg:sticky lg:self-start space-y-5"
-              // Phase 2.5.7 — was STICKY_OFFSET_PX + 60 (172px); bumped to
-              // +68 (180px) so the sidebar sits below the 52px sub-nav
-              // strip + 16px buffer, no overlap on scroll-up.
-              style={{ top: `${STICKY_OFFSET_PX + 68}px` }}
-            >
-              {/* Phase 2.5.5 (D-2.5.5-6) — Re-Check Prices card is
-                  PRIMARY (top of sidebar); SmartMiniCart sits BELOW it
-                  as the SECONDARY card, conditional on items > 0. */}
-              <div className="bg-white p-5 sm:p-6 border border-border shadow-xl">
-                <h2 className="text-xl sm:text-2xl font-black uppercase tracking-tighter text-neutral-900 mb-1 leading-tight">
-                  Experience The Best{" "}
-                  <span className="text-primary italic">{category.title}</span>{" "}
-                  in {selectedLocationName}
-                </h2>
-                <p className="text-xs text-neutral-500 mb-4">
-                  Get instant quotes for your car service.
-                </p>
-
-                {/* STEP 1 — Location */}
-                <div className="mb-3">
-                  <div className="relative">
-                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400 pointer-events-none" />
-                    <select
-                      value={bookingLocation}
-                      onChange={(e) => {
-                        setBookingLocation(e.target.value);
-                        if (bookingErrors.location)
-                          setBookingErrors((er) => ({ ...er, location: "" }));
-                      }}
-                      className={`${
-                        bookingErrors.location ? bcInputErr : bcInput
-                      } pl-9 appearance-none cursor-pointer`}
-                    >
-                      {LOCATIONS.map((loc) => (
-                        <option key={loc.id} value={loc.id}>
-                          {loc.name}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400 pointer-events-none" />
-                  </div>
-                  {bookingErrors.location && (
-                    <p className="text-[10px] font-bold text-accent-dark mt-1 flex items-center gap-1">
-                      <AlertCircle className="w-3 h-3" />{" "}
-                      {bookingErrors.location}
-                    </p>
-                  )}
-                </div>
-
-                {/* STEP 2 — Select Your Car */}
-                <div className="mb-3">
-                  <button
-                    type="button"
-                    onClick={openCarSelector}
-                    className={`${
-                      bookingErrors.car ? bcInputErr : bcInput
-                    } text-left flex items-center justify-between gap-2`}
-                  >
-                    <span
-                      className={
-                        bookingCar
-                          ? "text-neutral-900 truncate"
-                          : "text-neutral-400 truncate"
-                      }
-                    >
-                      {selectedCarLabel}
-                    </span>
-                    <ChevronDown className="w-4 h-4 text-neutral-400 shrink-0" />
-                  </button>
-                  {bookingErrors.car && (
-                    <p className="text-[10px] font-bold text-accent-dark mt-1 flex items-center gap-1">
-                      <AlertCircle className="w-3 h-3" /> {bookingErrors.car}
-                    </p>
-                  )}
-                </div>
-
-                {/* STEP 3 — Phone (or logged-in user identity) */}
-                {isAuthenticated && user ? (
-                  <div className="mb-3 bg-primary/5 border border-primary/20 px-3 py-2.5 flex items-center gap-2">
-                    <User className="w-4 h-4 text-primary shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-black uppercase text-neutral-900 tracking-tighter truncate">
-                        {user.name}
-                      </p>
-                      <p className="text-[10px] text-neutral-500 truncate">
-                        +91 {user.phone} · Verified
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="mb-3">
-                    <input
-                      type="tel"
-                      inputMode="numeric"
-                      maxLength={10}
-                      value={bookingPhone}
-                      onChange={(e) => onPhoneChange(e.target.value)}
-                      placeholder="ENTER MOBILE NUMBER"
-                      className={
-                        bookingErrors.phone ? bcInputErr : bcInput
-                      }
-                    />
-                    {bookingErrors.phone && (
-                      <p className="text-[10px] font-bold text-accent-dark mt-1 flex items-center gap-1">
-                        <AlertCircle className="w-3 h-3" />{" "}
-                        {bookingErrors.phone}
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                {/* STEP 3b — OTP */}
-                {otpSent && !otpVerified && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: "auto" }}
-                    className="mb-3 overflow-hidden"
-                  >
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      maxLength={6}
-                      value={otpValue}
-                      onChange={(e) => {
-                        const v = e.target.value
-                          .replace(/\D/g, "")
-                          .slice(0, 6);
-                        setOtpValue(v);
-                        if (bookingErrors.otp)
-                          setBookingErrors((er) => ({ ...er, otp: "" }));
-                      }}
-                      placeholder="ENTER OTP"
-                      className={`${
-                        bookingErrors.otp ? bcInputErr : bcInput
-                      } text-center tracking-[0.5em]`}
-                    />
-                    <p className="text-[10px] text-neutral-400 mt-1">
-                      OTP sent to +91 {bookingPhone}.{" "}
-                      <button
-                        onClick={() => {
-                          setOtpSent(false);
-                          setOtpValue("");
-                        }}
-                        className="text-primary font-bold uppercase tracking-widest hover:underline"
-                      >
-                        Change
-                      </button>
-                    </p>
-                    {bookingErrors.otp && (
-                      <p className="text-[10px] font-bold text-accent-dark mt-1 flex items-center gap-1">
-                        <AlertCircle className="w-3 h-3" />{" "}
-                        {bookingErrors.otp}
-                      </p>
-                    )}
-                  </motion.div>
-                )}
-
-                {/* STEP 4 — CTA */}
-                {!otpSent && (
-                  <button
-                    onClick={sendOtp}
-                    className="w-full bg-primary text-white py-3.5 text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-primary-dark transition-colors"
-                  >
-                    Send OTP <ArrowRight className="w-4 h-4" />
-                  </button>
-                )}
-                {otpSent && !otpVerified && (
-                  <button
-                    onClick={verifyOtp}
-                    className="w-full bg-primary text-white py-3.5 text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-primary-dark transition-colors"
-                  >
-                    Verify OTP <CheckCircle2 className="w-4 h-4" />
-                  </button>
-                )}
-                {otpVerified && (
-                  <motion.button
-                    initial={{ scale: 0.96 }}
-                    animate={{ scale: 1 }}
-                    onClick={checkPrices}
-                    className="btn-ink btn-ink-primary w-full py-3.5 text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2"
-                  >
-                    {pricesShown
-                      ? "Re-check Prices For Free"
-                      : "Check Prices For Free"}{" "}
-                    <ArrowRight className="w-4 h-4 btn-arrow" />
-                  </motion.button>
-                )}
-
-                {/* Trust strip */}
-                <div className="grid grid-cols-2 gap-3 pt-4 mt-5 border-t border-border">
-                  <div className="text-center border-r border-border pr-3">
-                    <div className="flex items-center justify-center gap-1 mb-1 text-primary">
-                      <Star className="w-4 h-4 fill-current" />
-                      <span className="text-base font-black text-neutral-900">
-                        4.8
-                        <span className="text-xs text-neutral-400">/5</span>
-                      </span>
-                    </div>
-                    <p className="text-[9px] text-neutral-400 uppercase tracking-widest font-bold leading-tight">
-                      Based on 2,500+ Reviews
-                    </p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-base font-black text-neutral-900 mb-1">
-                      10K<span className="text-primary">+</span>
-                    </p>
-                    <p className="text-[9px] text-neutral-400 uppercase tracking-widest font-bold leading-tight">
-                      Happy Customers
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Phase 2.5.5 (final) — sidebar shows ONLY the
-                  Re-Check Prices booking panel + trust badges
-                  (D-2.5.5-4). The SmartMiniCart that briefly lived
-                  between them was removed per UX audit; the global
-                  top-header cart icon is the single cart-access
-                  surface across browse pages. */}
-
-              {/* TRUST BADGES */}
-              <div className="bg-white p-5 sm:p-6 border border-border shadow-xl">
-                <h4 className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-4">
-                  Why Trust Us
-                </h4>
-                <div className="space-y-3.5">
-                  <div className="flex items-center gap-3">
-                    <div className="bg-primary/5 p-2 shrink-0">
-                      <Shield className="text-primary w-5 h-5" />
-                    </div>
-                    <div className="min-w-0">
-                      <h5 className="text-xs font-black uppercase text-neutral-900 tracking-tighter">
-                        Certified Centre
-                      </h5>
-                      <p className="text-[10px] text-neutral-500">
-                        ISO 9001:2015
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="bg-primary/5 p-2 shrink-0">
-                      <CheckCircle2 className="text-primary w-5 h-5" />
-                    </div>
-                    <div className="min-w-0">
-                      <h5 className="text-xs font-black uppercase text-neutral-900 tracking-tighter">
-                        Genuine Parts
-                      </h5>
-                      <p className="text-[10px] text-neutral-500">
-                        100% OEM/OES
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="bg-primary/5 p-2 shrink-0">
-                      <Clock className="text-primary w-5 h-5" />
-                    </div>
-                    <div className="min-w-0">
-                      <h5 className="text-xs font-black uppercase text-neutral-900 tracking-tighter">
-                        Fast Turnaround
-                      </h5>
-                      <p className="text-[10px] text-neutral-500">
-                        Most repairs in 48 hrs
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </aside>
+            {/* ───── BOOKING SIDEBAR (cart form) — FORMS-1 STEP 2 ─────
+                Category now shows the modular CART form (vehicle summary +
+                services cart + coupon + checkout) instead of the bespoke
+                inline car-selector + OTP that used to live here.
+                currentService omitted → no "Add to cart" CTA and no
+                auto-add; the form reflects the existing cart and its
+                "Select your car" empty state opens the shared
+                VehicleSelector (in-place), which writes the vehicle into
+                booking context. This page reads that back (vehicleSelected)
+                to reveal prices. The component renders its own sticky
+                <aside> + fixed mobile bar, so it mounts as the right grid
+                column directly. (The old sidebar trust-badge mini-card was
+                dropped — the WHY CHOOSE section in the main column already
+                carries the same trust content.) */}
+            <CarSidebar
+              categorySlug={categorySlug}
+              stickyTopPx={STICKY_OFFSET_PX + 68}
+              className="lg:order-2"
+            />
           </div>
         </div>
       </div>
 
-      {/* ──────────── CAR SELECTOR MODAL ──────────── */}
-      <AnimatePresence>
-        {showCarSelector && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-5">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={closeCarSelector}
-              className="absolute inset-0 bg-neutral-900/95 backdrop-blur-sm"
-            />
-
-            <motion.div
-              initial={{ opacity: 0, y: 30, scale: 0.96 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 30, scale: 0.96 }}
-              transition={{ duration: 0.25, ease: "easeOut" }}
-              className="relative w-full max-w-xl bg-white border border-border shadow-2xl flex flex-col h-[560px] max-h-[88vh]"
-            >
-              <div className="px-5 sm:px-6 py-4 border-b border-border flex items-center gap-3 shrink-0">
-                <button
-                  onClick={carBack}
-                  aria-label="Back"
-                  className="w-8 h-8 flex items-center justify-center text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 transition-colors"
-                >
-                  <ArrowLeft className="w-5 h-5" />
-                </button>
-                <h3 className="text-base sm:text-lg font-black uppercase tracking-tighter text-neutral-900 flex-1">
-                  {carStep === 1 && "Select Manufacturer"}
-                  {carStep === 2 && "Select Model"}
-                  {carStep === 3 && "Select Fuel Type"}
-                </h3>
-                <span className="text-[9px] font-bold uppercase tracking-widest text-neutral-400 shrink-0">
-                  Step {carStep} of 3
-                </span>
-                <button
-                  onClick={closeCarSelector}
-                  aria-label="Close"
-                  className="w-8 h-8 flex items-center justify-center text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <div className="px-5 sm:px-6 pt-4 pb-3 shrink-0">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
-                  <input
-                    type="text"
-                    value={carSearch}
-                    onChange={(e) => setCarSearch(e.target.value)}
-                    placeholder={
-                      carStep === 1
-                        ? "Search Brands"
-                        : carStep === 2
-                        ? "Search Models"
-                        : "Search Fuel Type"
-                    }
-                    className="w-full bg-neutral-50 border border-border pl-9 pr-3 py-2.5 text-sm focus:border-primary outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="flex-1 overflow-y-auto px-5 sm:px-6 pb-5">
-                {carStep === 1 && (
-                  brandsQuery.isLoading ? (
-                    <div className="grid grid-cols-3 gap-3">
-                      {Array.from({ length: 9 }).map((_, i) => (
-                        <div
-                          key={`mb-sk-${i}`}
-                          className="bg-neutral-100 border border-border aspect-square animate-pulse"
-                        />
-                      ))}
-                    </div>
-                  ) : brandsQuery.isError ? (
-                    <div className="border border-accent-dark/40 bg-accent-dark/5 p-6 text-center">
-                      <AlertCircle className="w-5 h-5 text-accent-dark mx-auto mb-2" />
-                      <p className="text-xs font-bold uppercase tracking-widest text-accent-dark mb-3">
-                        Couldn't load brands
-                      </p>
-                      <button
-                        onClick={() => brandsQuery.refetch()}
-                        className="text-[10px] font-black uppercase tracking-widest text-primary hover:underline inline-flex items-center gap-1"
-                      >
-                        <RefreshCw className="w-3 h-3" /> Retry
-                      </button>
-                    </div>
-                  ) : apiBrandRows.length === 0 ? (
-                    <div className="text-center py-8 text-xs font-bold uppercase tracking-widest text-neutral-500">
-                      No brands available — please contact support.
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-3 gap-3">
-                      {filteredBrands.map((brand) => {
-                        const row = apiBrandRows.find((b) => b.title === brand);
-                        return (
-                          <button
-                            key={brand}
-                            onClick={() => selectBrand(brand, row?.id ?? null)}
-                            className="bg-white border border-border p-3 sm:p-4 flex flex-col items-center justify-center text-center hover:border-primary hover:bg-primary/5 transition-colors aspect-square"
-                          >
-                            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-primary/10 text-primary flex items-center justify-center font-black text-lg sm:text-xl uppercase tracking-tighter mb-2">
-                              {brand.charAt(0)}
-                            </div>
-                            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-tighter text-neutral-900 leading-tight">
-                              {brand}
-                            </span>
-                          </button>
-                        );
-                      })}
-                      <button
-                        onClick={() => selectBrand("Other", null)}
-                        className="bg-white border border-dashed border-border p-3 sm:p-4 flex flex-col items-center justify-center text-center hover:border-primary hover:bg-primary/5 transition-colors aspect-square"
-                      >
-                        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-neutral-100 text-neutral-500 flex items-center justify-center font-black text-lg sm:text-xl uppercase tracking-tighter mb-2">
-                          ?
-                        </div>
-                        <span className="text-[10px] sm:text-xs font-bold uppercase tracking-tighter text-neutral-900 leading-tight">
-                          Other
-                        </span>
-                      </button>
-                      {filteredBrands.length === 0 && carSearch && (
-                        <div className="col-span-3 text-center py-8 text-sm text-neutral-400">
-                          No brands match "{carSearch}". Tap{" "}
-                          <button
-                            onClick={() => selectBrand("Other", null)}
-                            className="text-primary font-bold underline"
-                          >
-                            Other
-                          </button>{" "}
-                          to continue.
-                        </div>
-                      )}
-                    </div>
-                  )
-                )}
-
-                {carStep === 2 && pendingCar.brand !== "Other" && (
-                  modelsQuery.isLoading ? (
-                    <div className="grid grid-cols-3 gap-3">
-                      {Array.from({ length: 6 }).map((_, i) => (
-                        <div
-                          key={`mm-sk-${i}`}
-                          className="bg-neutral-100 border border-border min-h-[110px] animate-pulse"
-                        />
-                      ))}
-                    </div>
-                  ) : modelsQuery.isError ? (
-                    <div className="border border-accent-dark/40 bg-accent-dark/5 p-6 text-center">
-                      <AlertCircle className="w-5 h-5 text-accent-dark mx-auto mb-2" />
-                      <p className="text-xs font-bold uppercase tracking-widest text-accent-dark mb-3">
-                        Couldn't load models
-                      </p>
-                      <button
-                        onClick={() => modelsQuery.refetch()}
-                        className="text-[10px] font-black uppercase tracking-widest text-primary hover:underline inline-flex items-center gap-1"
-                      >
-                        <RefreshCw className="w-3 h-3" /> Retry
-                      </button>
-                    </div>
-                  ) : apiModelRows.length === 0 ? (
-                    <div className="text-center py-8 text-xs font-bold uppercase tracking-widest text-neutral-500">
-                      No models available for {pendingCar.brand} — please contact support.
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-3 gap-3">
-                      {filteredModels.map((model) => (
-                        <button
-                          key={model}
-                          onClick={() => selectModel(model)}
-                          className="bg-white border border-border p-3 flex flex-col items-center justify-center text-center hover:border-primary hover:bg-primary/5 transition-colors min-h-[110px]"
-                        >
-                          <div className="w-12 h-8 bg-neutral-100 mb-2 flex items-center justify-center text-[8px] font-bold uppercase text-neutral-400 tracking-widest">
-                            CAR
-                          </div>
-                          <span className="text-[10px] sm:text-xs font-bold uppercase tracking-tighter text-neutral-900 leading-tight">
-                            {model}
-                          </span>
-                        </button>
-                      ))}
-                      <button
-                        onClick={() => selectModel("Other")}
-                        className="bg-white border border-dashed border-border p-3 flex flex-col items-center justify-center text-center hover:border-primary hover:bg-primary/5 transition-colors min-h-[110px]"
-                      >
-                        <div className="w-12 h-8 bg-neutral-100 mb-2 flex items-center justify-center text-base font-black text-neutral-500">
-                          ?
-                        </div>
-                        <span className="text-[10px] sm:text-xs font-bold uppercase tracking-tighter text-neutral-900 leading-tight">
-                          Other
-                        </span>
-                      </button>
-                    </div>
-                  )
-                )}
-
-                {carStep === 2 && pendingCar.brand === "Other" && (
-                  <div className="space-y-3">
-                    <p className="text-sm text-neutral-500">
-                      Enter your car model below.
-                    </p>
-                    <input
-                      type="text"
-                      value={carSearch}
-                      onChange={(e) => setCarSearch(e.target.value)}
-                      placeholder="e.g. Renault Kwid"
-                      className="w-full bg-neutral-50 border border-border p-3 text-sm focus:border-primary outline-none"
-                    />
-                    <button
-                      onClick={() =>
-                        selectModel(carSearch.trim() || "Custom")
-                      }
-                      disabled={!carSearch.trim()}
-                      className="w-full bg-primary text-white py-3 text-xs font-black uppercase tracking-widest disabled:opacity-50 hover:bg-primary-dark transition-colors"
-                    >
-                      Continue
-                    </button>
-                  </div>
-                )}
-
-                {carStep === 3 && (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    {filteredFuels.map((f) => {
-                      const Icon = f.icon;
-                      return (
-                        <button
-                          key={f.id}
-                          onClick={() => selectFuel(f.name)}
-                          className="bg-white border border-border p-4 flex flex-col items-center justify-center text-center hover:border-primary hover:bg-primary/5 transition-colors min-h-[120px]"
-                        >
-                          <div className="bg-primary/10 p-3 mb-2">
-                            <Icon className="w-6 h-6 text-primary" />
-                          </div>
-                          <span className="text-xs font-bold uppercase tracking-tighter text-neutral-900">
-                            {f.name}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              <div className="bg-neutral-50 border-t border-border px-5 sm:px-6 py-3 shrink-0">
-                <p className="text-[10px] uppercase tracking-widest font-bold text-neutral-400 truncate">
-                  {pendingCar.brand &&
-                    `Selected: ${pendingCar.brand}${
-                      pendingCar.model ? ` · ${pendingCar.model}` : ""
-                    }`}
-                  {!pendingCar.brand && "Pick your manufacturer to continue"}
-                </p>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
 
       <VehicleReplaceModal
         open={vehicleConflict !== null}

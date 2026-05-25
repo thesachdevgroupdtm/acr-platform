@@ -6,20 +6,21 @@ import {
   ArrowRight,
   CheckCircle2,
   ShoppingCart,
-  Lock,
-  Calculator,
+  Car,
   Star,
   Shield,
   Clock,
   Sparkles,
+  Phone,
 } from "lucide-react";
 import PageBanner from "../components/PageBanner";
-import BookingSidebar from "../components/BookingSidebar";
+import { CarSidebar } from "../components/car-sidebar";
 import VehicleReplaceModal from "../components/VehicleReplaceModal";
 import { useCart } from "../hooks/useCart";
 import { useAuth } from "../hooks/useAuth";
 import { VehicleConflictError, type VehicleConflictDetails } from "../lib/errors";
 import { useBookingContext } from "../hooks/useBookingContext";
+import { LOCATIONS, BUSINESS_INFO } from "../data/businessData";
 import {
   fetchServices,
   type ServiceCategory as ApiServiceCategory,
@@ -132,6 +133,16 @@ export default function Services(_props: ServicesProps) {
   }, [apiCategories]);
   const pricingLoading = vehicleSelected && servicesQuery.isLoading;
 
+  // Phone number used by the "Call Now" CTA on rows where the service
+  // has no pre-defined price (priceState.kind === "no-price" — backend
+  // returned no service_prices row for the chosen vehicle, e.g. quote-
+  // on-inspection services). Picks the user's selected service centre
+  // when available; falls back to the business default otherwise.
+  const locationPhone = useMemo(() => {
+    const loc = LOCATIONS.find((l) => l.id === booking.location);
+    return loc?.phone || BUSINESS_INFO.phone;
+  }, [booking.location]);
+
   const handleAddToCart = async (sub: CategorySubService, categorySlug: string) => {
     try {
       await addItem({
@@ -221,52 +232,6 @@ export default function Services(_props: ServicesProps) {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 lg:gap-12">
             {/* ───── MAIN CONTENT ───── */}
             <main className="lg:col-span-2 order-2 lg:order-1 space-y-12">
-              {/* Intro card */}
-              <section className="bg-neutral-50 p-6 sm:p-8 border border-border">
-                <h2 className="text-2xl sm:text-3xl uppercase font-black text-neutral-900 mb-4 tracking-tighter">
-                  CAR SERVICES{" "}
-                  <span className="text-primary">AVAILABLE.</span>
-                </h2>
-                <p className="text-sm sm:text-base text-neutral-600 leading-relaxed">
-                  ACR is your one-stop destination for everything your car
-                  needs — from regular service to collision repair, AC service,
-                  battery, denting & painting, and detailing. Pick your car &
-                  location on the right to see exact prices, then add the
-                  services you need to your cart and check out in one go.
-                </p>
-                {!booking.pricesShown && (
-                  <div className="mt-5 bg-white border border-dashed border-primary/40 px-4 py-4 flex items-center justify-between gap-4 flex-wrap">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <Calculator className="w-5 h-5 text-primary shrink-0" />
-                      <p className="text-xs sm:text-sm font-bold text-neutral-700 tracking-tighter">
-                        Select your car & location to unlock prices.
-                      </p>
-                    </div>
-                    <button
-                      onClick={() =>
-                        window.scrollTo({ top: 0, behavior: "smooth" })
-                      }
-                      className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-primary hover:underline flex items-center gap-1 shrink-0"
-                    >
-                      Check Price For Free{" "}
-                      <ArrowRight className="w-3 h-3" />
-                    </button>
-                  </div>
-                )}
-                {booking.pricesShown && booking.car && (
-                  <div className="mt-5 bg-primary text-white px-4 py-3 flex items-center gap-3">
-                    <CheckCircle2 className="w-5 h-5 shrink-0" />
-                    <p className="text-xs sm:text-sm font-bold tracking-tighter">
-                      Showing prices for{" "}
-                      <span className="uppercase">
-                        {booking.car.brand} {booking.car.model} ·{" "}
-                        {booking.car.fuel}
-                      </span>
-                    </p>
-                  </div>
-                )}
-              </section>
-
               {/* Render each category as its own section — API-driven */}
               {isLoadingCategories &&
                 Array.from({ length: 4 }).map((_, i) => (
@@ -293,7 +258,7 @@ export default function Services(_props: ServicesProps) {
                   <CategorySection
                     key={category.id}
                     category={category}
-                    pricesShown={booking.pricesShown}
+                    hasVehicle={vehicleSelected}
                     pricesAvailableForCategory={availableCategoryIds.has(category.id)}
                     priceStateFor={(subId) => {
                       if (!vehicleSelected) return { kind: "no-vehicle" };
@@ -322,6 +287,7 @@ export default function Services(_props: ServicesProps) {
                     onViewCategory={() =>
                       navigate(`/category/${category.slug}`)
                     }
+                    locationPhone={locationPhone}
                   />
                 ))}
 
@@ -338,20 +304,16 @@ export default function Services(_props: ServicesProps) {
               </section>
             </main>
 
-            {/* ───── BOOKING SIDEBAR ───── */}
-            <aside className="order-1 lg:order-2 space-y-5">
-              {/* Phase 2.5.5 (final) — sidebar shows ONLY the booking
-                  panel (D-2.5.5-4). All cart-state UI in browse pages
-                  was consolidated to the global top-header cart icon;
-                  the SmartMiniCart that briefly lived here was removed
-                  per UX audit. */}
-              <BookingSidebar
-                titleStart="EXPERIENCE THE BEST"
-                titleAccent="CAR SERVICES"
-                titleEnd="IN"
-                stickyTopPx={STICKY_OFFSET_PX}
-              />
-            </aside>
+            {/* ───── CAR SIDEBAR (shared cart form) ─────
+                REBUILD-VEHICLE — the ONE CarSidebar every service page
+                mounts (identical width/layout). currentService omitted →
+                no auto-add; shows existing cart or the "Select your car"
+                empty state whose button opens the VehicleSelector in-place
+                (no center modal). Prices reveal on hasVehicle. */}
+            <CarSidebar
+              stickyTopPx={STICKY_OFFSET_PX}
+              className="lg:order-2"
+            />
           </div>
         </div>
       </div>
@@ -382,7 +344,7 @@ type PriceState =
 
 interface CategorySectionProps {
   category: ApiServiceCategory;          // sub-services arrive nested via Phase 1.6
-  pricesShown: boolean;                  // user has unlocked prices via OTP
+  hasVehicle: boolean;                   // a complete brand+model+fuel is selected
   pricesAvailableForCategory: boolean;   // backend says this category has prices for the vehicle
   /** Phase 2.3.5 — strict 4-state price status; never base_price. */
   priceStateFor: (subId: number) => PriceState;
@@ -395,11 +357,15 @@ interface CategorySectionProps {
   onRemoveFromCart: (cartItemId: number) => void;
   onViewDetail: (subSlug: string) => void;
   onViewCategory: () => void;
+  /** Phone number to dial when a row's priceState is "no-price"
+   *  (Quote-on-Inspection). Resolved by the parent from the booking
+   *  context's selected service centre, with a business fallback. */
+  locationPhone: string;
 }
 
 const CategorySection: React.FC<CategorySectionProps> = ({
   category,
-  pricesShown,
+  hasVehicle,
   pricesAvailableForCategory,
   priceStateFor,
   addedFlash,
@@ -408,6 +374,7 @@ const CategorySection: React.FC<CategorySectionProps> = ({
   onRemoveFromCart,
   onViewDetail,
   onViewCategory,
+  locationPhone,
 }) => {
   const subs: CategorySubService[] = category.services ?? [];
 
@@ -447,10 +414,11 @@ const CategorySection: React.FC<CategorySectionProps> = ({
 
         {subs.map((sub) => {
           const justAdded = addedFlash === String(sub.id);
-          // Pricing is API-only. Show price strictly when the user has
-          // confirmed via OTP AND the backend marks this category as
-          // priced for the chosen vehicle (available_category_ids).
-          const showPrice = pricesShown && pricesAvailableForCategory;
+          // Pricing is API-only. Reveal prices as soon as a complete
+          // vehicle is selected (hasVehicle) AND the backend marks this
+          // category as priced for that vehicle (available_category_ids).
+          // No OTP gate — phone/OTP is only required at checkout.
+          const showPrice = hasVehicle && pricesAvailableForCategory;
           const cartItem = cartItemFor(sub.id);
           const inCart = !!cartItem;
           // Phase 2.3.5 — strict 4-state machine. Never base_price.
@@ -494,23 +462,38 @@ const CategorySection: React.FC<CategorySectionProps> = ({
                       </span>
                     </>
                   )
-                ) : (
-                  // showPrice=false implies pricesShown=false OR category
-                  // not priced for the vehicle. Either way, the category-
-                  // level "Check Price" / "Hidden" UX already handles
-                  // discovery; this row stays neutral.
+                ) : !hasVehicle ? (
+                  // No vehicle yet — invite selection (NOT a paywall lock).
                   <div className="flex items-center sm:justify-end gap-1.5">
-                    <Lock className="w-3 h-3 text-neutral-400" />
+                    <Car className="w-3 h-3 text-neutral-400" />
                     <span className="text-[10px] uppercase tracking-widest font-bold text-neutral-400">
-                      Hidden
+                      Select car
                     </span>
                   </div>
+                ) : (
+                  // Vehicle selected but this category has no priced row.
+                  <span className="text-[10px] uppercase tracking-widest font-bold text-neutral-400">
+                    On Inspection
+                  </span>
                 )}
               </div>
 
               {/* Action column */}
               <div className="sm:w-32 sm:text-right">
-                {showPrice ? (
+                {showPrice && priceState.kind === "no-price" ? (
+                  // Quote-on-Inspection — no fixed cart-eligible price.
+                  // Replace Add-to-Cart with Call Now so the customer
+                  // can ring the chosen service centre for a quote /
+                  // booking. `tel:` opens the dialer on mobile and
+                  // hands off to the OS handler on desktop.
+                  <a
+                    href={`tel:${locationPhone}`}
+                    className="btn-ink btn-ink-primary px-3 py-2 min-h-[48px] text-[10px] font-bold uppercase tracking-widest w-full justify-center gap-1.5 whitespace-nowrap"
+                    aria-label={`Call ${locationPhone} for ${sub.title} quote`}
+                  >
+                    <Phone className="w-3.5 h-3.5" /> Call Now
+                  </a>
+                ) : showPrice ? (
                   <button
                     onClick={() =>
                       inCart && cartItem
@@ -526,7 +509,7 @@ const CategorySection: React.FC<CategorySectionProps> = ({
                       inCart || justAdded
                         ? "btn-ink-outline"
                         : "btn-ink-primary"
-                    } px-4 py-2 text-[10px] font-bold uppercase tracking-widest w-full sm:w-auto justify-center gap-1.5`}
+                    } px-3 py-2 min-h-[48px] text-[10px] font-bold uppercase tracking-widest w-full justify-center gap-1.5 whitespace-nowrap`}
                     aria-pressed={inCart}
                   >
                     {inCart || justAdded ? (
@@ -539,15 +522,26 @@ const CategorySection: React.FC<CategorySectionProps> = ({
                       </>
                     )}
                   </button>
-                ) : (
+                ) : !hasVehicle ? (
+                  // No vehicle — CTA scrolls to the booking sidebar whose
+                  // "Select your car" opens the shared selector modal.
                   <button
                     onClick={() =>
                       window.scrollTo({ top: 0, behavior: "smooth" })
                     }
-                    className="px-4 py-2 text-[10px] font-bold uppercase tracking-widest border border-primary text-primary hover:bg-primary hover:text-white transition-colors w-full sm:w-auto flex items-center justify-center gap-1.5"
+                    className="px-3 py-2 min-h-[48px] text-[10px] font-bold uppercase tracking-widest border border-primary text-primary hover:bg-primary hover:text-white transition-colors w-full flex items-center justify-center gap-1.5 whitespace-nowrap"
                   >
-                    Check Price <ArrowRight className="w-3.5 h-3.5" />
+                    Select Your Car <ArrowRight className="w-3.5 h-3.5" />
                   </button>
+                ) : (
+                  // Vehicle selected, no priced row — ring the centre.
+                  <a
+                    href={`tel:${locationPhone}`}
+                    className="btn-ink btn-ink-primary px-3 py-2 min-h-[48px] text-[10px] font-bold uppercase tracking-widest w-full justify-center gap-1.5 whitespace-nowrap"
+                    aria-label={`Call ${locationPhone} for ${sub.title} quote`}
+                  >
+                    <Phone className="w-3.5 h-3.5" /> Call Now
+                  </a>
                 )}
               </div>
             </div>

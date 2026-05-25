@@ -1,0 +1,12 @@
+# React app .htaccess — upload to /public_html/app/.htaccess
+# Belt-and-braces SPA fallback in case the parent rewrite is bypassed.
+<IfModule mod_rewrite.c>
+    Options -MultiViews -Indexes
+    RewriteEngine On
+    RewriteBase /app/
+
+    # Real files (assets/index-*.js, *.css, *.svg, etc.) → serve directly
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule . index.html [L]
+</IfModule>

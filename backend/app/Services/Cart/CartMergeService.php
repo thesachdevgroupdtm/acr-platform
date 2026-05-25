@@ -124,12 +124,20 @@ class CartMergeService
                 ->where('cart_id', $guestCart->id)
                 ->update(['cart_id' => $userCart->id]);
 
+            // Carry the guest cart's applied coupon onto the surviving
+            // (user) cart. A guest can now apply a coupon and preview the
+            // discount before signing in; last-cart-wins means the guest
+            // cart is the user's current intent, so its coupon_id wins too
+            // — otherwise the discount the guest just saw would silently
+            // vanish at login. The per-user usage limit is re-checked at
+            // place-order, so carrying it here can't bypass that limit.
+            $userCart->coupon_id  = $guestCart->coupon_id;
+            $userCart->expires_at = now()->addDays(90);
+            $userCart->save();
+
             $guestCart->status     = 'converted';
             $guestCart->expires_at = now();
             $guestCart->save();
-
-            $userCart->expires_at = now()->addDays(90);
-            $userCart->save();
 
             Log::info('Cart merge: last-cart-wins', [
                 'user_id'             => $userId,

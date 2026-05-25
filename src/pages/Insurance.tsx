@@ -14,7 +14,7 @@ export default function Insurance(_props: InsuranceProps) {
       <PageBanner
         title="Insurance Claims"
         breadcrumbs={[
-          { label: "Home", onClick: () => navigate("/") },
+          { label: "Home", href: "/" },
           { label: "Insurance" }
         ]}
       />
@@ -26,7 +26,7 @@ export default function Insurance(_props: InsuranceProps) {
             initial={{ opacity: 0, x: -50 }}
             animate={{ opacity: 1, x: 0 }}
           >
-            <h1 className="text-4xl md:text-5xl mb-6 text-neutral-900">ABSOLUTE <br /><span className="text-primary">EASE.</span></h1>
+            <h2 className="section-heading mb-6">ABSOLUTE <span className="section-heading-accent">EASE.</span></h2>
             <p className="text-lg text-neutral-500 leading-relaxed mb-8">
               Post-collision insurance processing shouldn't compound your stress. As a premium multi-brand network, we operate as a direct cashless facility with every major Indian insurer. We manage the entire bureaucratic process—from surveyor inspection to final approval—so you don't have to.
             </p>
@@ -50,7 +50,7 @@ export default function Insurance(_props: InsuranceProps) {
           <div className="relative">
             <div className="relative bg-white p-8 border border-border shadow-xl">
               <ShieldAlert className="w-10 h-10 text-primary mb-6" />
-              <h3 className="text-2xl mb-4 uppercase font-black text-neutral-900">Partner Insurers</h3>
+              <h4 className="heading-h4 mb-4 uppercase">Partner Insurers</h4>
               <p className="text-sm text-neutral-500 mb-6">We work with all leading insurance providers in India to provide seamless cashless repairs at our centres.</p>
               <div className="grid grid-cols-2 gap-3">
                 {["HDFC ERGO", "ICICI Lombard", "Bajaj Allianz", "Tata AIG", "New India", "United India"].map((name) => (
@@ -65,7 +65,7 @@ export default function Insurance(_props: InsuranceProps) {
 
         {/* Claim Process */}
         <div className="bg-neutral-50 p-8 md:p-12 border border-border">
-          <h2 className="text-3xl md:text-4xl mb-12 text-neutral-900 uppercase font-black">THE CASHLESS <span className="text-primary">PROCESS.</span></h2>
+          <h2 className="section-heading mb-12">THE CASHLESS <span className="section-heading-accent">PROCESS.</span></h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {[
               {
@@ -97,7 +97,7 @@ export default function Insurance(_props: InsuranceProps) {
 
         {/* FAQ Preview */}
         <div className="mt-32 max-w-3xl mx-auto text-center">
-          <h2 className="text-3xl mb-8 uppercase font-black text-neutral-900">Have Questions?</h2>
+          <h2 className="section-heading mb-8">HAVE <span className="section-heading-accent">QUESTIONS?</span></h2>
           <p className="text-muted mb-10">Our insurance experts are available to guide you through the complexities of your specific policy.</p>
           <button className="bg-primary text-white px-10 py-4 font-black uppercase tracking-tighter hover:bg-primary-dark transition-colors">
             Talk to Claim Expert

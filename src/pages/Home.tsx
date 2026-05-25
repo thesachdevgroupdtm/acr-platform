@@ -2,9 +2,9 @@ import { useState, FormEvent, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useNavigate } from "react-router-dom";
 import {
-  ArrowRight, ShieldCheck, Zap, Award, Clock, ChevronRight, ChevronLeft, Car,
+  ArrowRight, ShieldCheck, Award, Clock, ChevronRight, ChevronLeft, Car,
   MessageCircle, Star, CheckCircle2, Play, Shield, Loader2,
-  Users, Wrench, IndianRupee, FileText, Truck, Phone, MapPin, Search, Quote
+  Users, Wrench, IndianRupee, FileText, Phone, MapPin, Search, Quote
 } from "lucide-react";
 import { BUSINESS_INFO, LOCATIONS, TESTIMONIALS } from "../data/businessData";
 import {
@@ -14,6 +14,7 @@ import {
 } from "../lib/api";
 import { useApiQuery } from "../hooks/useApiQuery";
 import HomeFAQ from "../components/HomeFAQ";
+import { HomeCarSelector } from "../components/home-car-selector";
 
 interface HomeProps {
   openEstimate: (isCorporate?: boolean, initialService?: string) => void;
@@ -258,227 +259,24 @@ export default function Home({ openEstimate }: HomeProps) {
               </div>
             </motion.div>
 
-            {/* Quick Booking Widget */}
+            {/* REBUILD-VEHICLE — Home's distinctive hero card is the
+                HomeCarSelector shell: location + SELECT YOUR CAR + mobile
+                + CHECK PRICES, wrapping the shared VehicleSelector
+                in-place. Redirect to /services fires ONLY on the CTA with
+                a selected car + valid mobile. Writes to useBookingContext
+                so picks persist to Services / ServiceDetail / Cart. */}
             <motion.div
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
-              className="bg-white p-8 border border-border shadow-sm relative hidden lg:block w-full max-w-md ml-auto"
+              className="hidden lg:block w-full max-w-md ml-auto"
             >
-              <h3 className="text-xl font-black uppercase tracking-tight mb-6 text-primary-dark">Quick Estimate</h3>
-
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <label className="block text-[10px] uppercase tracking-widest text-muted font-medium">Customer Name</label>
-                      <input
-                        type="text"
-                        placeholder="Full Name"
-                        value={formData.name}
-                        onChange={(e) => {
-                          // Allow only alphabets, spaces, dots, hyphens, apostrophes
-                          const cleaned = e.target.value.replace(/[^A-Za-z\s.'-]/g, '');
-                          setFormData({ ...formData, name: cleaned });
-                          if (errors.name) setErrors(er => ({ ...er, name: '' }));
-                        }}
-                        className={`w-full bg-surface border ${errors.name ? 'border-accent-dark' : 'border-border'} p-3 text-sm text-primary-dark focus:border-primary outline-none transition-all placeholder:text-muted/50`}
-                      />
-                      {errors.name && <p className="text-[10px] font-bold text-accent-dark mt-1">{errors.name}</p>}
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="block text-[10px] uppercase tracking-widest text-muted font-medium">Email Address</label>
-                      <input
-                        type="email"
-                        placeholder="Email"
-                        value={formData.email}
-                        onChange={(e) => {
-                          setFormData({ ...formData, email: e.target.value });
-                          if (errors.email) setErrors(er => ({ ...er, email: '' }));
-                        }}
-                        className={`w-full bg-surface border ${errors.email ? 'border-accent-dark' : 'border-border'} p-3 text-sm text-primary-dark focus:border-primary outline-none transition-all placeholder:text-muted/50`}
-                      />
-                      {errors.email && <p className="text-[10px] font-bold text-accent-dark mt-1">{errors.email}</p>}
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5 col-span-2">
-                      <label className="block text-[10px] uppercase tracking-widest text-muted font-medium">Service Type</label>
-                      <select
-                        value={formData.service}
-                        onChange={(e) => setFormData({ ...formData, service: e.target.value })}
-                        className={`w-full bg-surface border border-border p-3 text-sm text-primary-dark focus:border-primary outline-none transition-all`}
-                      >
-                        <option value="">Select Service Needed</option>
-                        {serviceCategories.map(cat => (
-                          <option key={cat.id} value={cat.title}>{cat.title}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <label className="block text-[10px] uppercase tracking-widest text-muted font-medium">Phone</label>
-                      <input
-                        type="tel"
-                        inputMode="numeric"
-                        placeholder="10 Digits"
-                        maxLength={10}
-                        value={formData.phone}
-                        onChange={(e) => {
-                          setFormData({ ...formData, phone: e.target.value.replace(/\D/g, '').slice(0, 10) });
-                          if (errors.phone) setErrors(er => ({ ...er, phone: '' }));
-                        }}
-                        className={`w-full bg-surface border ${errors.phone ? 'border-accent-dark' : 'border-border'} p-3 text-sm text-primary-dark focus:border-primary outline-none transition-all placeholder:text-muted/50`}
-                      />
-                      {errors.phone && <p className="text-[10px] font-bold text-accent-dark mt-1">{errors.phone}</p>}
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="block text-[10px] uppercase tracking-widest text-muted font-medium">Location</label>
-                      <select
-                        value={formData.location}
-                        onChange={(e) => {
-                          setFormData({ ...formData, location: e.target.value });
-                          if (errors.location) setErrors(er => ({ ...er, location: '' }));
-                        }}
-                        className={`w-full bg-surface border ${errors.location ? 'border-accent-dark' : 'border-border'} p-3 text-sm text-primary-dark focus:border-primary outline-none transition-all`}
-                      >
-                        <option value="">Select Location</option>
-                        {LOCATIONS.map(loc => (
-                          <option key={loc.id} value={loc.name}>{loc.name}</option>
-                        ))}
-                      </select>
-                      {errors.location && <p className="text-[10px] font-bold text-accent-dark mt-1">{errors.location}</p>}
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-2 pt-2 pb-1">
-                    <input type="checkbox" id="consent" className="mt-1 accent-primary" required />
-                    <label htmlFor="consent" className="text-xs text-muted leading-tight cursor-pointer">
-                      I agree to receive communications regarding my estimate and service requests.
-                    </label>
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="btn-ink btn-ink-primary w-full py-4 font-black uppercase tracking-tight text-sm disabled:opacity-70 mt-2"
-                >
-                  <span className="relative z-10 flex items-center justify-center gap-2">
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" /> Processing...
-                      </>
-                    ) : (
-                      <>Get Estimate <ArrowRight className="w-4 h-4 btn-arrow" /></>
-                    )}
-                  </span>
-                </button>
-              </form>
+              <HomeCarSelector />
             </motion.div>
           </div>
         </div>
       </section>
 
-      {/* Marquee - Brand Partnerships */}
-      <section className="bg-white py-8 overflow-hidden border-y border-border">
-        <div className="site-container mb-6 text-center">
-          <span className="text-[10px] font-bold uppercase tracking-widest text-muted">Trusted By / Brands We Work With</span>
-        </div>
-        <div className="flex whitespace-nowrap animate-marquee items-center mb-1">
-          {[...Array(10)].map((_, i) => (
-            <div key={i} className="flex items-center gap-20 mx-10 grayscale opacity-40 hover:grayscale-0 hover:opacity-100 transition-all cursor-default">
-              <span className="text-primary-dark text-xl font-bold uppercase">HDFC ERGO</span>
-              <span className="text-primary-dark text-xl font-bold uppercase">ICICI LOMBARD</span>
-              <span className="text-primary-dark text-xl font-bold uppercase">BAJAJ ALLIANZ</span>
-              <span className="text-primary-dark text-xl font-bold uppercase">TATA AIG</span>
-              <span className="text-primary-dark text-xl font-bold uppercase">NEW INDIA</span>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* About Section - Compact & High Impact */}
-      <section className="bg-surface py-10 md:py-24">
-        <div className="site-container">
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr] gap-16 items-center">
-            {/* Left Side: Clean Image */}
-            <div className="relative">
-              <div className="absolute -top-4 -left-4 w-24 h-24 border-t border-l border-primary/20 z-0" />
-              <img
-                src="https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format&fit=crop&q=80&w=1200"
-                alt="Auto Car Repair Workshop"
-                className="relative z-10 w-full aspect-video lg:aspect-square object-cover shadow-sm transition-all duration-700"
-                referrerPolicy="no-referrer"
-              />
-              <div className="absolute -bottom-4 -right-4 w-24 h-24 border-b border-r border-primary/20 z-0" />
-            </div>
-
-            {/* Right Side: Focused Content */}
-            <div className="space-y-8">
-              <div>
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-8 h-0.5 bg-accent" />
-                  <span className="text-xs uppercase tracking-widest text-muted font-bold">The ACR Standard</span>
-                </div>
-                <h2 className="text-3xl md:text-4xl leading-tight mb-4 text-primary-dark font-black tracking-tighter uppercase">
-                  More Than Repairs. <br />
-                  <span className="text-primary italic">Absolute Trust.</span>
-                </h2>
-              </div>
-
-              <p className="text-sm md:text-base text-muted leading-relaxed max-w-xl">
-                We are India's fastest-growing self-owned multibrand service and collision repair network.
-                By keeping all centers strictly self-owned—never outsourced—we guarantee highly transparent, consistent dealership-level quality at unmatched speeds for every make and model.
-              </p>
-
-              <div className="grid grid-cols-2 gap-6">
-                {[
-                  { icon: Users, title: "100% Self-Owned", desc: "No outsourcing. Complete control." },
-                  { icon: ShieldCheck, title: "Certified Masters", desc: "Multi-brand specialist engineers." },
-                  { icon: Zap, title: "Lightning Fast", desc: "Rapid processing and delivery." },
-                  { icon: Star, title: "Unbeatable Scale", desc: "India's fastest growing network." }
-                ].map((item, i) => (
-                  <div key={i} className="flex items-start gap-4">
-                    <div className="shrink-0 w-8 h-8 flex items-center text-primary">
-                      <item.icon className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-primary-dark mb-1">{item.title}</h4>
-                      <p className="text-muted text-xs leading-tight">{item.desc}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <button
-                onClick={() => navigate("/services")}
-                className="btn-ink btn-ink-primary px-8 py-3.5 font-bold text-sm"
-              >
-                Explore Services <ArrowRight className="w-4 h-4 btn-arrow" />
-              </button>
-            </div>
-          </div>
-
-          {/* Compact Stats Row */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mt-20 pt-10 border-t border-border">
-            {[
-              { label: "50,000+", sub: "Cars Serviced" },
-              { label: "4+", sub: "Service Centers" },
-              { label: "15+", sub: "Years Experience" },
-              { label: "98%", sub: "Customer Satisfaction" }
-            ].map((stat, i) => (
-              <div key={i} className="text-center">
-                <div className="text-3xl font-bold text-primary-dark tracking-normal mb-2">{stat.label}</div>
-                <div className="text-xs font-bold text-muted uppercase tracking-widest">{stat.sub}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
 
       {/* Categorized Services Section - Smart Service Discovery */}
       <section className="py-20 bg-surface border-b border-border overflow-hidden">
@@ -681,17 +479,6 @@ export default function Home({ openEstimate }: HomeProps) {
         </div>
       </section>
 
-      {/* Short Content SEO Block */}
-      <section className="py-12 bg-surface border-b border-border">
-        <div className="site-container">
-          <div className="max-w-4xl mx-auto text-center space-y-4">
-            <h3 className="text-lg font-black uppercase text-primary-dark">Comprehensive Auto Care Solutions in Delhi NCR</h3>
-            <p className="text-sm text-muted leading-relaxed">
-              Auto Car Repair provides an elite tier of automobile servicing, executing high-precision denting and painting, advanced electrical diagnostics, and instantaneous cashless insurance claims. With strictly self-owned and company-operated centers strategically spanning Delhi NCR, we refuse to compromise. We install exclusively genuine OEM parts so your vehicle runs flawlessly for the long haul.
-            </p>
-          </div>
-        </div>
-      </section>
 
       {/* Why Choose Us Section - Trust Building Highlight */}
       <section className="py-20 relative overflow-hidden bg-white">
@@ -720,11 +507,6 @@ export default function Home({ openEstimate }: HomeProps) {
                   title: "100% Genuine OEM",
                   desc: "Authentic manufacturer parts only. We never sacrifice on build quality.",
                   icon: ShieldCheck
-                },
-                {
-                  title: "Advanced Scanners",
-                  desc: "Dealership-level diagnostic tools predicting and solving complex issues securely.",
-                  icon: Zap
                 }
               ].map((feature, i) => (
                 <div
@@ -775,11 +557,6 @@ export default function Home({ openEstimate }: HomeProps) {
                   title: "Cashless Insurance",
                   desc: "Seamless, hassle-free cashless claims with every major provider in India.",
                   icon: FileText
-                },
-                {
-                  title: "Secure Pickup & Drop",
-                  desc: "Premium at-door service handled by our verified logistical drivers.",
-                  icon: Truck
                 }
               ].map((feature, i) => (
                 <div
@@ -871,131 +648,6 @@ export default function Home({ openEstimate }: HomeProps) {
                 </div>
               ))}
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Reviews & Video Testimonials */}
-      <section className="py-20 bg-surface overflow-hidden border-y border-border">
-        <div className="site-container">
-          <div className="text-center max-w-3xl mx-auto mb-16">
-            <div className="flex items-center justify-center gap-3 mb-4">
-              <div className="w-8 h-0.5 bg-accent" />
-              <span className="text-xs uppercase tracking-widest text-muted font-bold">Customer Stories</span>
-              <div className="w-8 h-0.5 bg-accent" />
-            </div>
-            <h2 className="text-3xl md:text-5xl font-black uppercase tracking-tighter text-primary-dark mb-4">
-              Absolute <span className="text-primary italic font-black">Trust.</span>
-            </h2>
-            <p className="text-sm text-muted leading-relaxed">Unfiltered reviews and genuine testimonials from India's most demanding vehicle owners.</p>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Testimonial Carousel */}
-            <div
-              className="lg:col-span-1 relative group"
-              onMouseEnter={() => setIsTestimonialHovered(true)}
-              onMouseLeave={() => setIsTestimonialHovered(false)}
-            >
-              {/* Navigation Arrows */}
-              <button
-                onClick={() => scroll(testimonialScrollRef, 'left')}
-                className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 z-20 w-8 h-8 bg-white border border-border flex items-center justify-center text-primary-dark shadow-sm opacity-0 group-hover:opacity-100 group-hover:translate-x-0 transition-all"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => scroll(testimonialScrollRef, 'right')}
-                className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 z-20 w-8 h-8 bg-white border border-border flex items-center justify-center text-primary-dark shadow-sm opacity-0 group-hover:opacity-100 group-hover:translate-x-0 transition-all"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-
-              <div
-                ref={testimonialScrollRef}
-                className="flex overflow-x-auto no-scrollbar snap-x snap-mandatory h-full"
-              >
-                {TESTIMONIALS.map((t, i) => (
-                  <div key={i} className="min-w-full snap-start h-full">
-                    <div className="bg-white p-8 border border-border h-full flex flex-col justify-between relative shadow-sm">
-                      <div>
-                        <div className="flex items-center justify-between mb-4">
-                          <div className="flex text-[#FBBC05]">
-                            {[...Array(t.rating)].map((_, i) => <Star key={i} className="w-5 h-5 fill-current" />)}
-                          </div>
-                          <div className="flex items-center gap-1.5 opacity-90">
-                            <svg className="w-5 h-5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" /><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" /><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" /><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" /></svg>
-                            <span className="text-[10px] font-black tracking-widest uppercase text-muted">Google Review</span>
-                          </div>
-                        </div>
-                        {/* Pull-quote style */}
-                        <div className="border-l-[2px] border-accent pl-6 py-2 mb-8">
-                          <p className="text-sm font-medium text-primary-dark leading-relaxed">
-                            "{t.text}"
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 bg-surface flex items-center justify-center font-black uppercase text-primary-dark text-sm border border-border">{t.initials}</div>
-                        <div>
-                          <div className="font-black uppercase tracking-tight text-sm text-primary-dark">{t.name}</div>
-                          <div className="flex text-[#FBBC05] md:hidden">
-                            <Star className="w-3 h-3 fill-current" />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Navigation Dots */}
-              <div className="flex justify-center gap-2 mt-6">
-                {TESTIMONIALS.map((_, i) => (
-                  <div key={i} className="w-1.5 h-1.5 bg-border hover:bg-muted cursor-pointer transition-colors" />
-                ))}
-              </div>
-            </div>
-
-            {/* Video Testimonial */}
-            <div className="lg:col-span-2 relative h-[400px] group cursor-pointer overflow-hidden border border-border shadow-sm">
-              <img
-                src="https://images.unsplash.com/photo-1517524206127-48bbd363f3d7?auto=format&fit=crop&q=80&w=1200"
-                alt="Video Testimonial"
-                className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity duration-700"
-                referrerPolicy="no-referrer"
-              />
-              <div className="absolute inset-0 bg-primary-dark/40 group-hover:bg-primary-dark/30 transition-all" />
-
-              <div className="absolute inset-0 flex items-center justify-center">
-                <motion.div
-                  initial={false}
-                  whileHover={{ scale: 1.05 }}
-                  className="relative"
-                >
-                  <div className="relative w-16 h-16 bg-primary flex items-center justify-center shadow-lg">
-                    <Play className="w-6 h-6 text-white fill-current ml-1" />
-                  </div>
-                </motion.div>
-              </div>
-
-              <div className="absolute bottom-0 left-0 p-8">
-                <div className="bg-primary text-white text-[10px] font-bold px-3 py-1 uppercase tracking-widest mb-3 inline-block">Featured Story</div>
-                <h3 className="text-2xl font-black uppercase tracking-tighter text-white mb-1">Customer Experience</h3>
-                <p className="text-white/80 font-bold tracking-widest text-[10px] uppercase">Watch Video Testimonial</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Demo-readiness — link to dedicated /testimonials page. */}
-          <div className="mt-10 flex justify-center">
-            <button
-              onClick={() => navigate("/testimonials")}
-              className="text-xs font-bold uppercase tracking-widest text-primary hover:underline inline-flex items-center gap-1.5"
-            >
-              Read more customer stories
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
           </div>
         </div>
       </section>
@@ -1175,6 +827,131 @@ export default function Home({ openEstimate }: HomeProps) {
         </div>
       </section>
 
+      {/* Reviews & Video Testimonials */}
+      <section className="py-20 bg-surface overflow-hidden border-y border-border">
+        <div className="site-container">
+          <div className="text-center max-w-3xl mx-auto mb-16">
+            <div className="flex items-center justify-center gap-3 mb-4">
+              <div className="w-8 h-0.5 bg-accent" />
+              <span className="text-xs uppercase tracking-widest text-muted font-bold">Customer Stories</span>
+              <div className="w-8 h-0.5 bg-accent" />
+            </div>
+            <h2 className="text-3xl md:text-5xl font-black uppercase tracking-tighter text-primary-dark mb-4">
+              Absolute <span className="text-primary italic font-black">Trust.</span>
+            </h2>
+            <p className="text-sm text-muted leading-relaxed">Unfiltered reviews and genuine testimonials from India's most demanding vehicle owners.</p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Testimonial Carousel */}
+            <div
+              className="lg:col-span-1 relative group"
+              onMouseEnter={() => setIsTestimonialHovered(true)}
+              onMouseLeave={() => setIsTestimonialHovered(false)}
+            >
+              {/* Navigation Arrows */}
+              <button
+                onClick={() => scroll(testimonialScrollRef, 'left')}
+                className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 z-20 w-8 h-8 bg-white border border-border flex items-center justify-center text-primary-dark shadow-sm opacity-0 group-hover:opacity-100 group-hover:translate-x-0 transition-all"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => scroll(testimonialScrollRef, 'right')}
+                className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 z-20 w-8 h-8 bg-white border border-border flex items-center justify-center text-primary-dark shadow-sm opacity-0 group-hover:opacity-100 group-hover:translate-x-0 transition-all"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+
+              <div
+                ref={testimonialScrollRef}
+                className="flex overflow-x-auto no-scrollbar snap-x snap-mandatory h-full"
+              >
+                {TESTIMONIALS.map((t, i) => (
+                  <div key={i} className="min-w-full snap-start h-full">
+                    <div className="bg-white p-8 border border-border h-full flex flex-col justify-between relative shadow-sm">
+                      <div>
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex text-[#FBBC05]">
+                            {[...Array(t.rating)].map((_, i) => <Star key={i} className="w-5 h-5 fill-current" />)}
+                          </div>
+                          <div className="flex items-center gap-1.5 opacity-90">
+                            <svg className="w-5 h-5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" /><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" /><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" /><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" /></svg>
+                            <span className="text-[10px] font-black tracking-widest uppercase text-muted">Google Review</span>
+                          </div>
+                        </div>
+                        {/* Pull-quote style */}
+                        <div className="border-l-[2px] border-accent pl-6 py-2 mb-8">
+                          <p className="text-sm font-medium text-primary-dark leading-relaxed">
+                            "{t.text}"
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 bg-surface flex items-center justify-center font-black uppercase text-primary-dark text-sm border border-border">{t.initials}</div>
+                        <div>
+                          <div className="font-black uppercase tracking-tight text-sm text-primary-dark">{t.name}</div>
+                          <div className="flex text-[#FBBC05] md:hidden">
+                            <Star className="w-3 h-3 fill-current" />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Navigation Dots */}
+              <div className="flex justify-center gap-2 mt-6">
+                {TESTIMONIALS.map((_, i) => (
+                  <div key={i} className="w-1.5 h-1.5 bg-border hover:bg-muted cursor-pointer transition-colors" />
+                ))}
+              </div>
+            </div>
+
+            {/* Video Testimonial */}
+            <div className="lg:col-span-2 relative h-[400px] group cursor-pointer overflow-hidden border border-border shadow-sm">
+              <img
+                src="https://images.unsplash.com/photo-1517524206127-48bbd363f3d7?auto=format&fit=crop&q=80&w=1200"
+                alt="Video Testimonial"
+                className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity duration-700"
+                referrerPolicy="no-referrer"
+              />
+              <div className="absolute inset-0 bg-primary-dark/40 group-hover:bg-primary-dark/30 transition-all" />
+
+              <div className="absolute inset-0 flex items-center justify-center">
+                <motion.div
+                  initial={false}
+                  whileHover={{ scale: 1.05 }}
+                  className="relative"
+                >
+                  <div className="relative w-16 h-16 bg-primary flex items-center justify-center shadow-lg">
+                    <Play className="w-6 h-6 text-white fill-current ml-1" />
+                  </div>
+                </motion.div>
+              </div>
+
+              <div className="absolute bottom-0 left-0 p-8">
+                <div className="bg-primary text-white text-[10px] font-bold px-3 py-1 uppercase tracking-widest mb-3 inline-block">Featured Story</div>
+                <h3 className="text-2xl font-black uppercase tracking-tighter text-white mb-1">Customer Experience</h3>
+                <p className="text-white/80 font-bold tracking-widest text-[10px] uppercase">Watch Video Testimonial</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Demo-readiness — link to dedicated /testimonials page. */}
+          <div className="mt-10 flex justify-center">
+            <button
+              onClick={() => navigate("/testimonials")}
+              className="text-xs font-bold uppercase tracking-widest text-primary hover:underline inline-flex items-center gap-1.5"
+            >
+              Read more customer stories
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      </section>
+
       {/* B2B / Fleet Section */}
       <section className="py-20 bg-white border-y border-border">
         <div className="site-container">
@@ -1251,30 +1028,6 @@ export default function Home({ openEstimate }: HomeProps) {
         </div>
       </section>
 
-      {/* Final CTA */}
-      <section className="py-24 relative bg-primary-dark overflow-hidden">
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-transparent" />
-          <img
-            src="https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format&fit=crop&q=80&w=2000"
-            alt="Background"
-            className="w-full h-full object-cover"
-            referrerPolicy="no-referrer"
-          />
-        </div>
-
-        <div className="site-container relative z-10 text-center">
-          <h2 className="text-4xl md:text-6xl mb-10 leading-tight text-white font-black uppercase tracking-tighter">REPAIR YOU <br /><span className="text-primary italic font-black">CAN TRUST.</span></h2>
-          <div className="flex flex-wrap justify-center gap-4">
-            <button
-              onClick={() => openEstimate()}
-              className="btn-ink btn-ink-primary px-10 py-4 font-bold text-sm shadow-md"
-            >
-              Get Estimate <ArrowRight className="w-4 h-4 btn-arrow" />
-            </button>
-          </div>
-        </div>
-      </section>
     </div>
   );
 }

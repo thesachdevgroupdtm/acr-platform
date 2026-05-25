@@ -52,8 +52,8 @@ export default function Sitemap(_props: SitemapProps) {
       <PageBanner
         title="Sitemap"
         breadcrumbs={[
-          { label: "Home", onClick: () => navigate("/") },
-          { label: "Sitemap" },
+          { label: "Home", href: "/" },
+          { label: "Sitemap" }
         ]}
       />
       <div className="section-spacing bg-white">
@@ -62,7 +62,7 @@ export default function Sitemap(_props: SitemapProps) {
 
             {/* Main Links */}
             <div>
-              <h3 className="text-xl font-black uppercase text-primary-dark mb-6 border-b border-border pb-4">Main Pages</h3>
+              <h2 className="section-heading mb-6 border-b border-border pb-4">MAIN <span className="section-heading-accent">PAGES.</span></h2>
               <ul className="space-y-4">
                 {MAIN_PAGES.map(({ label, path }) => (
                   <li key={path}>
@@ -80,7 +80,7 @@ export default function Sitemap(_props: SitemapProps) {
 
             {/* Service Categories — from /home payload */}
             <div>
-              <h3 className="text-xl font-black uppercase text-primary-dark mb-6 border-b border-border pb-4">Service Categories</h3>
+              <h2 className="section-heading mb-6 border-b border-border pb-4">SERVICE <span className="section-heading-accent">CATEGORIES.</span></h2>
               {home.isLoading ? (
                 <ul className="space-y-4">
                   {Array.from({ length: 8 }).map((_, i) => (
@@ -110,7 +110,7 @@ export default function Sitemap(_props: SitemapProps) {
 
             {/* Sub Services — flattened from /home's nested services */}
             <div>
-              <h3 className="text-xl font-black uppercase text-primary-dark mb-6 border-b border-border pb-4">All Services</h3>
+              <h2 className="section-heading mb-6 border-b border-border pb-4">ALL <span className="section-heading-accent">SERVICES.</span></h2>
               {home.isLoading ? (
                 <ul className="space-y-4">
                   {Array.from({ length: 12 }).map((_, i) => (
@@ -138,7 +138,7 @@ export default function Sitemap(_props: SitemapProps) {
 
             {/* Service Centers — still static (LOCATIONS); separate task to API-back. */}
             <div>
-              <h3 className="text-xl font-black uppercase text-primary-dark mb-6 border-b border-border pb-4">Service Centers</h3>
+              <h2 className="section-heading mb-6 border-b border-border pb-4">SERVICE <span className="section-heading-accent">CENTERS.</span></h2>
               <ul className="space-y-4">
                 {LOCATIONS.map(location => (
                   <li key={location.id}>

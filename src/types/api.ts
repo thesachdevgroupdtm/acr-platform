@@ -240,8 +240,39 @@ export interface ServiceCenterResource {
   longitude: number | null;
 }
 
+/**
+ * Inline SEO shape — duplicated to keep src/types/api.ts free of
+ * cross-file imports. Mirrors `SeoFlatData` in src/lib/api.ts.
+ */
+export interface SeoFlatPayload {
+  meta_title?: string | null;
+  meta_description?: string | null;
+  meta_keywords?: string | null;
+  canonical_url?: string | null;
+  robots_meta?: string | null;
+  og_title?: string | null;
+  og_description?: string | null;
+  og_image?: string | null;
+  og_type?: string | null;
+  twitter_card?: string | null;
+  twitter_title?: string | null;
+  twitter_description?: string | null;
+  twitter_image?: string | null;
+  schema_jsonld?: string | null;
+}
+
 export interface ServiceCentersResponse {
   service_centers: ServiceCenterResource[];
+  // Phase 4.5c — list-level synthesised SEO from SiteSeoSettings.
+  seo?: SeoFlatPayload;
+}
+
+// Phase 4.5c — detail response for GET /api/v1/service-centers/{slug}.
+// Powers SeoHead on any future /service-centers/{slug} customer page.
+export interface ServiceCenterDetailResponse {
+  success: boolean;
+  service_center: ServiceCenterResource;
+  seo?: SeoFlatPayload;
 }
 
 /* ───────────── Orders / Checkout (Phase 2.5a) ───────────── */

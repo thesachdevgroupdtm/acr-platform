@@ -71,6 +71,22 @@ class CheckoutController extends Controller
             );
         }
 
+        // Per-user coupon limit — enforced HERE, at the gated checkout.
+        // Coupon apply is now guest-capable (so visitors can preview the
+        // discount before signing in), which means usage_per_user — a
+        // check that needs a customer identity — cannot run at apply for
+        // a guest. This is the chokepoint where the identity is known and
+        // the usage row is about to be claimed, so re-check it now: if the
+        // signed-in customer has already exhausted their per-user limit on
+        // the applied coupon, reject (don't silently charge full price).
+        $cart->loadMissing('coupon');
+        if ($cart->coupon && $cart->coupon->hasReachedUserLimit($user->id)) {
+            return response()->json(
+                ['message' => 'You have already used this coupon.'],
+                Response::HTTP_UNPROCESSABLE_ENTITY
+            );
+        }
+
         $order = $this->checkout->placeOrder($cart, $validated, $user);
 
         return response()->json(

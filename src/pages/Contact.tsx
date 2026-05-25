@@ -1,8 +1,9 @@
-import { useState, FormEvent } from "react";
+import { useState, useEffect, FormEvent } from "react";
 import { motion } from "motion/react";
 import { useNavigate } from "react-router-dom";
 import { Phone, Mail, MapPin, Clock, MessageCircle, Send, ArrowRight, CheckCircle2 } from "lucide-react";
 import { BUSINESS_INFO } from "../data/businessData";
+import { useBookingContext } from "../hooks/useBookingContext";
 import PageBanner from "../components/PageBanner";
 
 interface ContactProps {
@@ -11,6 +12,7 @@ interface ContactProps {
 
 export default function Contact(_props: ContactProps) {
   const navigate = useNavigate();
+  const { state } = useBookingContext();
   const [formData, setFormData] = useState({
     name: "",
     phone: "",
@@ -20,6 +22,25 @@ export default function Contact(_props: ContactProps) {
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitted, setSubmitted] = useState(false);
+
+  // MANUAL_ENTRY_FLOW (D-MAN-6) — prefill from a manual vehicle entry.
+  // Mount-only + non-destructive: each field is filled only if still empty,
+  // so anything the user has already typed is never overwritten. Phone comes
+  // from the homepage form's 3rd field (persisted into `phone` on Check Price);
+  // Car Model & Year is composed from the typed brand/model/fuel/year. Name,
+  // Service Required and Message are intentionally left for the user.
+  useEffect(() => {
+    if (state.entry_mode !== "manual") return;
+    const composedCar = [state.manual_brand, state.manual_model, state.manual_fuel, state.manual_year]
+      .filter(Boolean)
+      .join(" ");
+    setFormData((prev) => ({
+      ...prev,
+      phone: prev.phone || state.phone || "",
+      carInfo: prev.carInfo || composedCar,
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -43,7 +64,7 @@ export default function Contact(_props: ContactProps) {
       <PageBanner
         title="Contact Us"
         breadcrumbs={[
-          { label: "Home", onClick: () => navigate("/") },
+          { label: "Home", href: "/" },
           { label: "Contact" }
         ]}
       />
@@ -97,7 +118,7 @@ export default function Contact(_props: ContactProps) {
 
           {/* Contact Form */}
           <div className="bg-white border border-border p-8 md:p-10 shadow-xl">
-            <h3 className="text-2xl font-black uppercase mb-8 text-neutral-900">Request an Estimate</h3>
+            <h2 className="section-heading mb-8">REQUEST AN <span className="section-heading-accent">ESTIMATE.</span></h2>
             {submitted ? (
               <div className="bg-primary/5 border border-primary p-8 text-center space-y-3">
                 <CheckCircle2 className="w-12 h-12 text-primary mx-auto" />
@@ -189,7 +210,7 @@ export default function Contact(_props: ContactProps) {
         <div className="mt-24 h-[400px] bg-neutral-50 border border-border relative overflow-hidden flex items-center justify-center">
           <div className="relative z-10 text-center">
             <MapPin className="w-10 h-10 text-primary mx-auto mb-4" />
-            <h3 className="text-2xl font-black uppercase mb-2 text-neutral-900">Find Us on the Map</h3>
+            <h3 className="heading-h3 mb-2">Find Us on the Map</h3>
             <p className="text-sm text-neutral-500 mb-6">Interactive map loading...</p>
             <button className="btn-ink btn-ink-outline px-6 py-2.5 text-[10px] font-bold uppercase tracking-widest flex items-center justify-center gap-2">
               Open in Google Maps <ArrowRight className="w-4 h-4 btn-arrow" />

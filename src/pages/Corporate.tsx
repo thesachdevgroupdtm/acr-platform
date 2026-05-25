@@ -37,7 +37,7 @@ export default function Corporate({ openEstimate }: CorporateProps) {
       <PageBanner
         title="Corporate & Fleet"
         breadcrumbs={[
-          { label: "Home", onClick: () => navigate("/") },
+          { label: "Home", href: "/" },
           { label: "Corporate" }
         ]}
       />
@@ -49,7 +49,7 @@ export default function Corporate({ openEstimate }: CorporateProps) {
             initial={{ opacity: 0, x: -50 }}
             animate={{ opacity: 1, x: 0 }}
           >
-            <h1 className="text-4xl md:text-5xl mb-6 text-neutral-900">ENTERPRISE <br /><span className="text-primary">FLEET.</span></h1>
+            <h2 className="section-heading mb-6">ENTERPRISE <span className="section-heading-accent">FLEET.</span></h2>
             <p className="text-lg text-neutral-500 leading-relaxed mb-8">
               Dealership-grade maintenance and high-precision collision repair exclusively tailored for corporate fleets, large-scale car rentals, and government organizations.
             </p>
@@ -90,7 +90,7 @@ export default function Corporate({ openEstimate }: CorporateProps) {
         {/* Process Section */}
         <div className="bg-neutral-50 p-8 md:p-12 border border-border mb-16">
           <div className="max-w-3xl mx-auto text-center mb-12">
-            <h2 className="text-3xl md:text-4xl mb-6 uppercase font-black text-neutral-900">THE ENTERPRISE <span className="text-primary">MODEL.</span></h2>
+            <h2 className="section-heading mb-6">THE ENTERPRISE <span className="section-heading-accent">MODEL.</span></h2>
             <p className="text-lg text-neutral-500">We don't just fix cars; we architect your fleet's lifecycle to guarantee maximum operational uptime.</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -111,7 +111,7 @@ export default function Corporate({ openEstimate }: CorporateProps) {
         {/* CTA Section */}
         <div className="bg-white border border-primary p-8 md:p-12 flex flex-col md:flex-row items-center justify-between gap-10">
           <div className="max-w-xl">
-            <h2 className="text-neutral-900 text-3xl md:text-4xl font-black uppercase mb-4">READY TO ELEVATE YOUR FLEET?</h2>
+            <h2 className="section-heading mb-4">READY TO ELEVATE YOUR <span className="section-heading-accent">FLEET?</span></h2>
             <p className="text-neutral-500 text-lg">Join 50+ enterprise partners who implicitly trust ACR for their fleet operations.</p>
           </div>
           <button onClick={() => openEstimate?.()} className="btn-ink btn-ink-primary px-10 py-5 font-bold uppercase tracking-widest text-sm flex items-center gap-3 whitespace-nowrap">

@@ -2,9 +2,11 @@
 
 namespace App\Models;
 
+use App\Traits\HasSeoMetadata;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * Phase 2.5a — service_centers (D-2.5a-2).
@@ -17,7 +19,7 @@ use Illuminate\Database\Eloquent\Model;
  */
 class ServiceCenter extends Model
 {
-    use HasFactory;
+    use HasFactory, HasSeoMetadata;
 
     protected $fillable = [
         'slug',
@@ -43,5 +45,16 @@ class ServiceCenter extends Model
     public function scopeActive(Builder $q): Builder
     {
         return $q->where('is_active', true);
+    }
+
+    /**
+     * Phase 4.5c — Filament ServiceCenterResource needs to gate
+     * delete actions on whether any order still points at this
+     * center. The FK lives on orders.service_center_id (see
+     * 2026_05_04_120002_create_orders_table.php).
+     */
+    public function orders(): HasMany
+    {
+        return $this->hasMany(Order::class);
     }
 }

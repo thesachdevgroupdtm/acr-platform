@@ -25,6 +25,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  keepPreviousData,
   useMutation,
   useQuery,
   useQueryClient,
@@ -147,6 +148,14 @@ export function useCart() {
     queryKey: ["cart", token ? "user" : "guest"],
     queryFn: async () => (await fetchCart(activeSessionUuid())).cart,
     staleTime: 30_000,
+    // BS-3 perf pass: when the token flips on login, the queryKey
+    // changes from ["cart","guest"] → ["cart","user"]. Without
+    // placeholderData the new query starts at `undefined`, every
+    // `items.length === 0` check in the UI fires, and the operator
+    // sees "Cart 0" for 100-500ms while the new fetch resolves.
+    // Keeping the previous cart visible across that window prevents
+    // the apparent data-loss the operator reported.
+    placeholderData: keepPreviousData,
   });
 
   const cart = cartQuery.data;

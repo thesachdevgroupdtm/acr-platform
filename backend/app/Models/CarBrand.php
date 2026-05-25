@@ -4,10 +4,42 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class CarBrand extends Model
 {
     use HasFactory;
-    protected $table = 'car_brands';
-    protected $fillable = ['slug', 'title', 'image', 'is_archive', 'status', 'original_image_name', 'created_by', 'updated_by'];
+    use \App\Models\Concerns\CleansOldImage;
+
+    protected $fillable = [
+        'name',
+        'slug',
+        'image',
+        'is_active',
+        'is_auto_created',
+        'auto_created_from',
+        'auto_created_import_id',
+        'reviewed_at',
+        'reviewed_by',
+        'include_in_sitemap',
+        'seo_enriched_at',
+    ];
+
+    protected $casts = [
+        'is_active'          => 'boolean',
+        'is_auto_created'    => 'boolean',
+        'include_in_sitemap' => 'boolean',
+        'reviewed_at'        => 'datetime',
+        'seo_enriched_at'    => 'datetime',
+    ];
+
+    public function models(): HasMany
+    {
+        return $this->hasMany(CarModel::class, 'brand_id');
+    }
+
+    public function prices(): HasMany
+    {
+        return $this->hasMany(ServicePrice::class, 'brand_id');
+    }
 }

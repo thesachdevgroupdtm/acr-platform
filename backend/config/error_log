@@ -1,4 +1,0 @@
-[20-Nov-2025 13:12:52 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home/kitsch1/public_html/autocarrepair.in/config/cache.php:18
-Stack trace:
-#0 {main}
-  thrown in /home/kitsch1/public_html/autocarrepair.in/config/cache.php on line 18

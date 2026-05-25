@@ -18,7 +18,7 @@ export default function NotFound() {
       <PageBanner
         title="Page Not Found"
         breadcrumbs={[
-          { label: "Home", onClick: () => navigate("/") },
+          { label: "Home", href: "/" },
           { label: "Not Found" },
         ]}
       />

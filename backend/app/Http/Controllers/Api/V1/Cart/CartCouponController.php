@@ -18,9 +18,13 @@ use Symfony\Component\HttpFoundation\Response;
  * group so the resolved Cart is already attached to the request.
  *
  * Design notes:
- *  - Apply requires auth (Bearer token) so we can enforce the
- *    usage_per_user limit. Guests get 401 from the route middleware
- *    chain before reaching this controller.
+ *  - Apply is guest-capable (no auth middleware) so a not-signed-in
+ *    visitor can preview the discounted total. The user is resolved
+ *    OPTIONALLY via $request->user('sanctum'): present for a logged-in
+ *    caller (so validate() still enforces usage_per_user at apply),
+ *    null for a guest (validate() skips the per-user check). The
+ *    per-user limit for guests is enforced later, at the gated
+ *    checkout/place-order step where the customer identity is known.
  *  - Last-apply-wins (D-2.5b-3): re-apply just overwrites cart.coupon_id.
  *  - Validate is the gatekeeper; applyToCart never re-checks.
  */
@@ -37,7 +41,11 @@ class CartCouponController extends Controller
         ]);
 
         $cart = $this->cart($request);
-        $user = $request->user();
+        // Optional Bearer user — the route no longer forces auth, so
+        // resolve via the sanctum guard explicitly (the default guard is
+        // session-based and would return null for a token request). Null
+        // for guests; validate() then skips the per-user usage check.
+        $user = $request->user('sanctum');
 
         $cart->load(['items.service', 'coupon']);
 

@@ -49,14 +49,37 @@ export default function CouponInput({ totals, variant = "cart" }: CouponInputPro
   };
 
   if (applied) {
+    // COUPON_COMPACT (D-COUP-3) — `summary` (sidebar/checkout) is a slim
+    // single-line strip: code + discount on the left, Remove on the right.
+    if (variant === "summary") {
+      return (
+        <div>
+          <div className="flex items-center gap-2 bg-primary/5 border border-primary/30 px-3 py-2.5">
+            <Sparkles className="w-4 h-4 text-primary shrink-0" />
+            <p className="flex-1 min-w-0 text-xs font-black uppercase text-neutral-900 tracking-tighter truncate">
+              {applied.code}
+              <span className="ml-1.5 font-bold normal-case tracking-normal text-primary">
+                −₹{applied.discount_amount}
+              </span>
+            </p>
+            <button
+              onClick={handleRemove}
+              disabled={removing}
+              aria-label="Remove coupon"
+              className="shrink-0 text-[11px] font-black uppercase tracking-widest text-primary hover:underline disabled:opacity-50"
+            >
+              Remove
+            </button>
+          </div>
+          {removeError && (
+            <p className="text-[10px] font-bold text-accent-dark mt-1">{removeError}</p>
+          )}
+        </div>
+      );
+    }
+    // `cart` (standalone Cart page) — unchanged.
     return (
-      <div
-        className={
-          variant === "cart"
-            ? "bg-primary/5 border border-primary/30 p-4"
-            : "bg-primary/5 border border-primary/30 p-3"
-        }
-      >
+      <div className="bg-primary/5 border border-primary/30 p-4">
         <div className="flex items-center gap-2.5">
           <Sparkles className="w-4 h-4 text-primary shrink-0" />
           <div className="flex-1 min-w-0">
@@ -83,25 +106,41 @@ export default function CouponInput({ totals, variant = "cart" }: CouponInputPro
     );
   }
 
-  // Empty state — single button that opens the picker modal.
+  // Empty state — opens the existing picker modal/slider on click.
+  // COUPON_COMPACT (D-COUP-1) — `summary` is a slim single-line row.
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className={`w-full ${
-          variant === "cart" ? "bg-neutral-50 p-4" : "bg-neutral-50 p-3"
-        } border border-border flex items-center gap-3 hover:border-primary transition-colors group text-left`}
-      >
-        <Tag className="w-4 h-4 text-primary shrink-0" />
-        <div className="flex-1 min-w-0">
-          <p className="text-xs font-black uppercase tracking-tighter text-neutral-900">
+      {variant === "summary" ? (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="w-full bg-neutral-50 border border-border flex items-center gap-2 px-3 py-2.5 hover:border-primary transition-colors group text-left"
+        >
+          <Tag className="w-4 h-4 text-primary shrink-0" />
+          <span className="flex-1 min-w-0 text-xs font-black uppercase tracking-tighter text-neutral-900 truncate">
             Apply Coupon
-          </p>
-          <p className="text-[10px] text-neutral-500">Browse offers or enter a code</p>
-        </div>
-        <ArrowRight className="w-4 h-4 text-primary group-hover:translate-x-1 transition-transform" />
-      </button>
+          </span>
+          <span className="shrink-0 inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-widest text-primary">
+            Apply
+            <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+          </span>
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="w-full bg-neutral-50 p-4 border border-border flex items-center gap-3 hover:border-primary transition-colors group text-left"
+        >
+          <Tag className="w-4 h-4 text-primary shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-black uppercase tracking-tighter text-neutral-900">
+              Apply Coupon
+            </p>
+            <p className="text-[10px] text-neutral-500">Browse offers or enter a code</p>
+          </div>
+          <ArrowRight className="w-4 h-4 text-primary group-hover:translate-x-1 transition-transform" />
+        </button>
+      )}
 
       <CouponPickerModal
         open={open}

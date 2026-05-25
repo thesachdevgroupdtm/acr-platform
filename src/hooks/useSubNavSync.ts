@@ -148,10 +148,21 @@ export function useSubNavSync({
     // Initial-active fallback — first registered section wins until
     // the observer's first callback overrides. Functional update
     // form keeps any pre-existing activeSlug intact.
-    setActiveSlug((current) => {
-      if (current) return current;
-      const firstSlug = sections[0].getAttribute("data-subnav-section");
-      return firstSlug ?? "";
+    //
+    // Phase 4.2.5 fix #4 — defer with queueMicrotask. Without this,
+    // the synchronous setActiveSlug landed during the parent's
+    // initial render flush in dev/strict mode and produced
+    // "Cannot update a component (Services) while rendering a
+    // different component (BookingSidebar)". The defer keeps
+    // observable behavior identical (still sets the slug before the
+    // first observer fire) but moves the dispatch outside the
+    // current render cycle.
+    queueMicrotask(() => {
+      setActiveSlug((current) => {
+        if (current) return current;
+        const firstSlug = sections[0].getAttribute("data-subnav-section");
+        return firstSlug ?? "";
+      });
     });
 
     const intersecting = new Set<HTMLElement>();

@@ -29,6 +29,74 @@
 }
 
 @layer components {
+  /* ────────────────────────────────────────────────────────────
+     Phase 4.7 — Typography utility classes.
+     Canonical heading system applied across all marketing pages
+     + explore feature + SEO content. Composable via @apply so
+     each page/section uses the same Tailwind chain.
+     ──────────────────────────────────────────────────────────── */
+
+  /* H1 banner — used by PageBanner only. NEVER inline.
+     Phase 4.7.1: weight aligned with brand manual (p. 22)
+     spec — Montserrat Bold (700) at 36-48pt range. */
+  .page-title {
+    @apply font-display font-bold uppercase tracking-tighter text-white leading-tight;
+    font-size: clamp(2.25rem, 5vw, 4rem);
+  }
+
+  /* H2 section heading.
+     Phase 4.7.1: weight dropped to SemiBold (600) per brand
+     manual (p. 22) Montserrat SemiBold 22-28pt spec. The
+     uppercase + dual-color + period creative treatment is
+     preserved per D-4.7.1-4 (it mirrors the manual's own
+     chapter-title rendering, e.g. "Brand Manual.", "Essence.",
+     "Hierarchy."). Wrap the accent word in
+     `<span class="section-heading-accent">…</span>` or use the
+     `<SectionHeading>` component. */
+  .section-heading {
+    @apply font-display font-semibold uppercase tracking-tighter text-neutral-900 leading-tight;
+    font-size: clamp(1.5rem, 3vw, 2.25rem);
+  }
+  /* Phase 4.7.5 — smaller H2 variant for footer dividers / long-string
+     section labels that need to fit on a single line at desktop ≥1280px
+     while still rendering as SemiBold + dual-color accent per CR-2. The
+     clamp keeps it responsive (≈ 18px mobile → 22px desktop). */
+  .section-heading-sm {
+    @apply font-display font-semibold uppercase tracking-tighter text-neutral-900 leading-tight;
+    font-size: clamp(1.125rem, 1.8vw, 1.375rem);
+  }
+  .section-heading-accent {
+    @apply text-primary;
+  }
+
+  /* H2 article body heading — slightly smaller than section-heading
+     for use inside SEO article content. */
+  .article-heading-h2 {
+    @apply font-display font-semibold uppercase tracking-tighter text-neutral-900 leading-tight;
+    font-size: clamp(1.25rem, 2.5vw, 1.75rem);
+  }
+
+  /* H3-H6 utilities — opt-in. Phase 4.7.1: weights aligned with
+     Inter weight scale (Regular/Medium/SemiBold) since H3+ is
+     body context. */
+  .heading-h3 {
+    @apply font-display font-semibold uppercase tracking-tight text-neutral-900 leading-tight text-lg md:text-xl;
+  }
+  .heading-h4 {
+    @apply font-display font-semibold text-neutral-900 leading-snug text-base md:text-lg;
+  }
+  .heading-h5 {
+    @apply font-display font-medium text-neutral-900 leading-snug text-sm;
+  }
+  .heading-h6 {
+    @apply font-display font-medium uppercase tracking-widest text-neutral-600 text-xs;
+  }
+
+  /* Body text — descriptive paragraphs in muted neutral-600. */
+  .body-text {
+    @apply text-base text-neutral-600 leading-relaxed;
+  }
+
   /* Ink Fill Sweep Core */
   .btn-ink {
     @apply relative overflow-hidden inline-flex items-center justify-center gap-2 transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)];
@@ -59,11 +127,19 @@
   }
 
   /* Variants */
+  /* Primary-filled — inverts on hover to white-bg + primary text, the
+     same direction the `.btn-ink-outline` "Added" state uses on the way
+     in. Sweep ::before paints white; the :hover color switch then
+     resolves the text against the now-white surface. Border keeps the
+     boundary visible on white page backgrounds. */
   .btn-ink-primary {
-    @apply bg-primary text-white;
+    @apply bg-primary text-white border border-primary;
   }
   .btn-ink-primary::before {
-    @apply bg-primary-dark;
+    @apply bg-white;
+  }
+  .btn-ink-primary:hover {
+    @apply text-primary;
   }
 
   .btn-ink-dark {
@@ -88,6 +164,19 @@
   }
   .btn-ink-outline:hover {
     @apply text-white;
+  }
+
+  /* Site-wide flip for legacy inline primary-filled buttons. Any
+     element that pairs `bg-primary` with `hover:bg-primary-dark`
+     (the old convention for primary→darker-blue on hover) now
+     inverts on hover to white-bg + primary-text + a 1px primary
+     ring — matching the .btn-ink-primary behavior above without
+     needing to edit each callsite. Uses box-shadow (not border)
+     so non-bordered buttons don't shift layout on hover. */
+  .bg-primary.hover\:bg-primary-dark:hover {
+    background-color: #ffffff !important;
+    color: #1F4FA3 !important;
+    box-shadow: inset 0 0 0 1px #1F4FA3 !important;
   }
 
   /* Arrow Micro-Interaction */
@@ -123,7 +212,9 @@
   }
 
   .premium-gradient {
-    background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+    /* Phase 4.7.3 V-J — Tailwind blue-700/blue-500 were off-brand.
+       Switched to brand-manual ACR Blue → Deep Navy (manual p.17). */
+    background: linear-gradient(135deg, #1F4FA3 0%, #0E2A5C 100%);
   }
 
   .soft-gradient {

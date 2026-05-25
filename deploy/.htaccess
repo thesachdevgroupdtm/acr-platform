@@ -1,0 +1,53 @@
+# Hostinger root .htaccess — upload to /public_html/.htaccess
+<IfModule mod_rewrite.c>
+    <IfModule mod_negotiation.c>
+        Options -MultiViews -Indexes
+    </IfModule>
+
+    RewriteEngine On
+
+    # Preserve Bearer tokens (Authorization header is stripped by some hosts)
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+    # Block direct access to /backend/* — internals must never be web-served
+    RewriteRule ^backend(/.*)?$ - [F,L]
+
+    # React SPA fallback — when /app/<anything> isn't a real file, serve /app/index.html
+    RewriteCond %{REQUEST_URI} ^/app/
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^app/(.*)$ /app/index.html [L]
+
+    # Trailing-slash normalization (Laravel default)
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_URI} (.+)/$
+    RewriteRule ^ %1 [L,R=301]
+
+    # Default: route everything else into Laravel
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^ index.php [L]
+</IfModule>
+
+# CORS — same-origin (acr-mechanics.in/app → acr-mechanics.in/api/v1) doesn't
+# need CORS headers, but uncomment if you also serve the React app from a
+# different origin (e.g., Cloudflare Pages):
+#
+# <IfModule mod_headers.c>
+#     Header always set Access-Control-Allow-Origin "https://your-frontend.example"
+#     Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+#     Header always set Access-Control-Allow-Headers "Authorization, Content-Type, Accept, X-Requested-With"
+# </IfModule>
+
+# Cache long-lived assets emitted by Vite (file names contain hashes)
+<IfModule mod_headers.c>
+    <FilesMatch "\.(js|mjs|css|woff2?|ttf|eot|svg|png|jpg|jpeg|webp|gif|ico)$">
+        Header set Cache-Control "public, max-age=31536000, immutable"
+    </FilesMatch>
+</IfModule>
+
+# Compress text responses
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/css application/javascript application/json
+</IfModule>

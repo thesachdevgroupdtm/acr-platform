@@ -2,6 +2,7 @@ import { motion } from "motion/react";
 import { useNavigate } from "react-router-dom";
 import { Star, MapPin, Wrench } from "lucide-react";
 import PageBanner from "../components/PageBanner";
+import SectionHeading from "../components/layout/SectionHeading";
 
 interface Testimonial {
   name: string;
@@ -166,7 +167,7 @@ export default function Testimonials() {
       <PageBanner
         title="What Our Customers Say"
         breadcrumbs={[
-          { label: "Home", onClick: () => navigate("/") },
+          { label: "Home", href: "/" },
           { label: "Testimonials" },
         ]}
       />
@@ -209,8 +210,8 @@ export default function Testimonials() {
 
           {/* Intro */}
           <div className="max-w-2xl mb-12">
-            <h2 className="text-3xl md:text-4xl font-black uppercase tracking-tighter text-neutral-900 mb-3">
-              Real Stories. <span className="text-primary">Real Cars.</span>
+            <h2 className="section-heading mb-3">
+              REAL STORIES. <span className="section-heading-accent">REAL CARS.</span>
             </h2>
             <p className="text-sm md:text-base text-neutral-500 leading-relaxed">
               Twelve unedited reviews from owners across Delhi NCR — picked
@@ -268,9 +269,9 @@ export default function Testimonials() {
           {/* Bottom CTA */}
           <div className="mt-20 p-10 md:p-14 bg-neutral-900 text-center relative overflow-hidden">
             <div className="relative z-10">
-              <h3 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tighter mb-4">
-                Ready to be our next happy customer?
-              </h3>
+              <SectionHeading background="dark" terminator="?" className="mb-4" align="center">
+                Ready to be our next happy customer
+              </SectionHeading>
               <p className="text-neutral-400 mb-8 max-w-xl mx-auto leading-relaxed">
                 Book a service at any of our four centers across Delhi NCR.
                 Transparent pricing, OEM parts, dealership-quality work.

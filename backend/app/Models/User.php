@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use Filament\Models\Contracts\FilamentUser;
+use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -21,7 +23,7 @@ use Laravel\Sanctum\HasApiTokens;
  * (2.2 / 2.3 / 2.5) — intentionally omitted here to avoid forward-
  * declared dead relations.
  */
-class User extends Authenticatable
+class User extends Authenticatable implements FilamentUser
 {
     use HasApiTokens, HasFactory, Notifiable;
 
@@ -31,6 +33,7 @@ class User extends Authenticatable
         'phone',
         'password',
         'role',
+        'is_admin',
         'is_verified_phone',
         'is_verified_email',
         'last_login_at',
@@ -44,10 +47,26 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
         'last_login_at'     => 'datetime',
+        'is_admin'          => 'boolean',
         'is_verified_phone' => 'boolean',
         'is_verified_email' => 'boolean',
         'password'          => 'hashed',
     ];
+
+    /**
+     * Phase 4.1 — Filament admin-panel access gate.
+     *
+     * Filament calls this for every panel-protected request after
+     * the user has authenticated via the standard guard. Returning
+     * false produces a 403 / redirect to login. The customer OTP
+     * flow (Sanctum bearer tokens) is unaffected — this method is
+     * only consulted when a session-authenticated user hits an
+     * /admin route.
+     */
+    public function canAccessPanel(Panel $panel): bool
+    {
+        return $this->is_admin === true;
+    }
 
     /**
      * History of OTP verifications for this user (any channel).

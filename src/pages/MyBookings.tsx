@@ -66,7 +66,7 @@ export default function MyBookings({
       <PageBanner
         title="My Bookings"
         breadcrumbs={[
-          { label: "Home", onClick: () => navigate("/") },
+          { label: "Home", href: "/" },
           { label: "My Bookings" },
         ]}
       />
@@ -206,7 +206,7 @@ function statusBadge(status: OrderStatus): string {
   switch (status) {
     case "pending":     return "bg-amber-500 text-white";
     case "confirmed":   return "bg-primary text-white";
-    case "in_service":  return "bg-indigo-600 text-white";
+    case "in_service":  return "bg-accent text-white";
     case "completed":   return "bg-neutral-900 text-white";
     case "cancelled":   return "bg-neutral-400 text-white";
     default:            return "bg-neutral-300 text-neutral-700";

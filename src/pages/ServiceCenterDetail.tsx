@@ -104,28 +104,11 @@ export default function ServiceCenterDetail(_props: ServiceCenterDetailProps) {
       <PageBanner
         title={center.name}
         breadcrumbs={[
-          { label: "Home", onClick: () => navigate("/") },
-          { label: "Centers", onClick: () => navigate("/service-centers") },
+          { label: "Home", href: "/" },
+          { label: "Centers", href: "/service-centers" },
           { label: center.name }
         ]}
-        label="Expert Multi-Brand Service"
-        backgroundImage={center.image}
-      >
-        <div className="flex flex-wrap items-center gap-6 text-white/80 text-sm mt-4">
-          <div className="flex items-center gap-2">
-            <Star className="w-4 h-4 text-primary fill-current" />
-            <span className="font-bold">{center.rating} ({center.reviews} Reviews)</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <MapPin className="w-4 h-4 text-primary" />
-            <span className="font-bold">{center.address}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Phone className="w-4 h-4 text-primary" />
-            <span className="font-bold">{center.phone}</span>
-          </div>
-        </div>
-      </PageBanner>
+      />
 
       <div className="pb-32 pt-10">
         <div className="site-container">
@@ -145,9 +128,10 @@ export default function ServiceCenterDetail(_props: ServiceCenterDetailProps) {
             {/* Services & Amenities */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
               <div className="space-y-6">
-                <h3 className="text-2xl font-black uppercase text-neutral-900 flex items-center gap-3">
-                  <Shield className="w-6 h-6 text-primary" /> Services Offered
-                </h3>
+                <h2 className="section-heading flex items-center gap-3">
+                  <Shield className="w-6 h-6 text-primary" />
+                  SERVICES <span className="section-heading-accent">OFFERED.</span>
+                </h2>
                 <div className="space-y-3">
                   {servicesData.map((service, i) => {
                     const isOpen = openServiceIdx === i;
@@ -189,9 +173,10 @@ export default function ServiceCenterDetail(_props: ServiceCenterDetailProps) {
                 </div>
               </div>
               <div className="space-y-6">
-                <h3 className="text-2xl font-black uppercase text-neutral-900 flex items-center gap-3">
-                  <Info className="w-6 h-6 text-primary" /> Amenities
-                </h3>
+                <h2 className="section-heading flex items-center gap-3">
+                  <Info className="w-6 h-6 text-primary" />
+                  <span className="section-heading-accent">AMENITIES.</span>
+                </h2>
                 <div className="space-y-3">
                   {amenitiesData.map((amenity, i) => {
                     const isOpen = openAmenityIdx === i;
@@ -236,7 +221,9 @@ export default function ServiceCenterDetail(_props: ServiceCenterDetailProps) {
 
             {/* Map Placeholder */}
             <div className="space-y-6">
-              <h3 className="text-2xl font-black uppercase text-neutral-900">Location Map</h3>
+              <h2 className="section-heading">
+                LOCATION <span className="section-heading-accent">MAP.</span>
+              </h2>
               <div className="h-[300px] bg-neutral-50 border border-border flex items-center justify-center relative overflow-hidden">
                 <div className="relative z-10 text-center">
                   <MapPin className="w-10 h-10 text-primary mx-auto mb-3" />
@@ -252,7 +239,9 @@ export default function ServiceCenterDetail(_props: ServiceCenterDetailProps) {
           {/* Sidebar - Booking Form */}
           <div className="lg:col-span-1">
             <div className="sticky top-28 bg-white border border-border p-8 shadow-xl">
-              <h3 className="text-2xl font-black uppercase text-neutral-900 mb-6">Book a Visit</h3>
+              <h2 className="section-heading mb-6">
+                BOOK A <span className="section-heading-accent">VISIT.</span>
+              </h2>
               {bookingSubmitted ? (
                 <div className="bg-primary/5 border border-primary p-6 text-center space-y-2">
                   <CheckCircle2 className="w-10 h-10 text-primary mx-auto" />

@@ -41,7 +41,7 @@ export default function Offers(_props: OffersProps) {
       <PageBanner
         title="Offers & Deals"
         breadcrumbs={[
-          { label: "Home", onClick: () => navigate("/") },
+          { label: "Home", href: "/" },
           { label: "Offers" }
         ]}
       />
@@ -53,8 +53,8 @@ export default function Offers(_props: OffersProps) {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
             >
-              <h2 className="text-4xl md:text-6xl font-black uppercase text-neutral-900 tracking-tighter mb-4 leading-none">
-                LIMITED TIME <span className="text-primary">OFFERS.</span>
+              <h2 className="section-heading mb-4">
+                LIMITED TIME <span className="section-heading-accent">OFFERS.</span>
               </h2>
               <p className="text-lg md:text-xl text-neutral-500 leading-relaxed font-medium">
                 Dealership-grade services at transparent prices. Limited slots available.
@@ -98,9 +98,9 @@ export default function Offers(_props: OffersProps) {
                       <div className="inline-block px-4 py-1 mb-3 text-xs font-black uppercase tracking-widest shadow-md bg-white text-primary-dark">
                         {formatDiscount(offer)}
                       </div>
-                      <h3 className="text-2xl md:text-3xl font-black uppercase tracking-tighter text-white leading-tight">
+                      <h4 className="heading-h4 uppercase tracking-tighter !text-white">
                         {offer.name}
-                      </h3>
+                      </h4>
                     </div>
                   </div>
 
@@ -143,9 +143,10 @@ export default function Offers(_props: OffersProps) {
           {/* Bottom CTA */}
           <div className="mt-24 p-10 md:p-16 bg-neutral-900 text-center relative overflow-hidden">
             <div className="relative z-10">
-              <h3 className="text-3xl md:text-4xl font-black text-white uppercase tracking-tighter mb-6">
-                NEED A CUSTOM SOLUTION?
-              </h3>
+              <h2 className="section-heading !text-white mb-6">
+                NEED A CUSTOM{" "}
+                <span className="section-heading-accent">SOLUTION?</span>
+              </h2>
               <p className="text-neutral-400 mb-10 text-lg max-w-2xl mx-auto">
                 Speak directly with our multi-brand technical experts. We'll diligently inspect your vehicle and configure the perfect service package with maximum savings.
               </p>

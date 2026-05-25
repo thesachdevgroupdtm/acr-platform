@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Support\ImageUrl;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -44,7 +45,9 @@ class ServiceResource extends JsonResource
             'title'             => $this->name,
             'name'              => $this->name,
             'description'       => $this->description,
-            'image'             => $this->image,
+            // D-P1-6 — full public URL via ImageUrl (was raw relative path).
+            // null stays null; idempotent on already-absolute URLs.
+            'image'             => ImageUrl::resolve($this->image),
             // Legacy `price` retained as alias of effective_price so any
             // un-migrated consumer keeps working until full sweep.
             'price'             => $effectivePrice,
@@ -55,7 +58,24 @@ class ServiceResource extends JsonResource
             'time_unit'         => $this->time_unit,
             'warrenty_info'     => $this->warrenty_info,
             'recommended_info'  => $this->recommended_info,
+            // Phase 1 (D-P1-2) — service-interval display copy.
+            'interval_info'     => $this->interval_info,
             'note'              => $this->note,
+            // Phase 1 (D-P1-1/5) — "what's included" line items. Only
+            // serialized when the relation is eager-loaded (detail
+            // endpoint), so list endpoints stay lean. Each inclusion's
+            // image is resolved to a full URL (D-P1-6).
+            'inclusions'        => $this->whenLoaded('inclusions', fn () =>
+                $this->inclusions->map(fn ($inc) => [
+                    'id'         => $inc->id,
+                    'label'      => $inc->label,
+                    // Phase 1.5 (D-1.5-1/2) — raw bucket string or null
+                    // (null = ungrouped; Phase 2 buckets it under Essential).
+                    'group_name' => $inc->group_name,
+                    'image'      => ImageUrl::resolve($inc->image),
+                    'position'   => $inc->position,
+                ])->values()
+            ),
             'category_detail'   => $this->whenLoaded('category', fn () =>
                 new ServiceCategoryResource($this->category)
             ),

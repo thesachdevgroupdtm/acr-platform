@@ -189,12 +189,23 @@ export async function api<T = unknown>(
 
   if (!res.ok) {
     if (res.status === 401 && !allowUnauthorized) {
-      // Token expired or invalid — wipe so the next render shows logged-out state
-      setToken(null);
-      // Phase 2.6a — broadcast a session-expired event so a single
-      // app-level toast can render once, instead of every page that
-      // catches 401 having to surface its own banner. The Toast
-      // component (mounted in App.tsx) listens for this on window.
+      // Phase BS-3 (D-BS3-1 from diagnostic): a 401 on a non-auth
+      // endpoint (cart, services, etc.) used to call setToken(null)
+      // and wipe the user's session globally, even for transient
+      // backend hiccups. That cascaded into the cart re-keying to
+      // "guest", which made the user perceive total data-loss.
+      //
+      // New policy: only the canonical auth probe (/auth/profile)
+      // is allowed to terminate the session on 401. For every other
+      // endpoint we still surface the session-expired toast (so the
+      // user knows to re-authenticate) but keep the token in place
+      // so a single transient blip doesn't blow the world up. The
+      // user-cart on the server is unaffected — once they re-auth
+      // or the call succeeds on retry, the UI snaps back.
+      const isAuthProbe = path.includes("/auth/profile");
+      if (isAuthProbe) {
+        setToken(null);
+      }
       if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("acr-session-expired"));
       }
@@ -241,6 +252,7 @@ export interface CarModel {
   slug: string;
   title: string;
   name?: string;
+  segment?: string | null;
   image?: string | null;
 }
 export interface FuelType {
@@ -248,6 +260,7 @@ export interface FuelType {
   slug: string;
   title: string;
   name?: string;
+  image?: string | null;
 }
 
 export interface ServiceCategory {
@@ -355,7 +368,10 @@ export interface HomeResponse {
   membership_package?: unknown[];
   home_page_setting?: Record<string, unknown> | null;
   settings?: Record<string, unknown>;
-  seo?: SeoPayload;
+  // Phase 4.5c — flat SeoFlatData replaces the legacy nested SeoPayload.
+  // No call sites currently read the legacy shape, so this is a safe
+  // narrowing. See SeoFlatData definition lower in this file.
+  seo?: SeoFlatData;
 }
 
 export interface BrandsResponse  { success: boolean; brands: CarBrand[] }
@@ -369,7 +385,7 @@ export interface ServicesResponse {
   brand?: CarBrand | null;
   model?: CarModel | null;
   fuel?: FuelType | null;
-  seo?: SeoPayload;
+  seo?: SeoFlatData;   // Phase 4.5c
 }
 
 export interface CategoryDetailResponse {
@@ -383,7 +399,7 @@ export interface CategoryDetailResponse {
   fuel?: FuelType | null;
   faqs?: Array<{ id: number; question?: string; answer?: string }>;
   faq_contents?: string | null;
-  seo?: SeoPayload;
+  seo?: SeoFlatData;   // Phase 4.5c
 }
 
 export interface ServiceDetailResponse {
@@ -397,8 +413,12 @@ export interface ServiceDetailResponse {
   brand?: CarBrand | null;
   model?: CarModel | null;
   fuel?: FuelType | null;
-  seo?: SeoPayload;
+  seo?: SeoFlatData;   // Phase 4.5c
 }
+
+// Phase 4.5c — ServiceCentersResponse already lives in src/types/api.ts
+// (imported below). The `seo?: SeoFlatData` field is added there to
+// keep the source of truth singular.
 
 export interface PricingRequest {
   brand_id: number;
@@ -685,3 +705,184 @@ export const fetchCoupons = (
   context: "marketing" | "cart" = "marketing",
   signal?: AbortSignal,
 ) => apiGet<CouponsListResponse>("/coupons", { context }, signal);
+
+/* ───────────── Phase 4.5b — SEO Pages + /explore ───────────── */
+
+export interface SeoPageCta {
+  title: string | null;
+  button_text: string | null;
+  button_url: string | null;
+}
+
+export interface SeoPagePayload {
+  id: number;
+  slug: string;
+  title: string;
+  excerpt: string | null;
+  body: string;
+  category: string | null;
+  tags: string[];
+  layout: string;
+  cta: SeoPageCta;
+  published_at: string | null;
+}
+
+export interface SeoFlatData {
+  meta_title?: string | null;
+  meta_description?: string | null;
+  meta_keywords?: string | null;
+  canonical_url?: string | null;
+  robots_meta?: string | null;
+  og_title?: string | null;
+  og_description?: string | null;
+  og_image?: string | null;
+  og_type?: string | null;
+  twitter_card?: string | null;
+  twitter_title?: string | null;
+  twitter_description?: string | null;
+  twitter_image?: string | null;
+  schema_jsonld?: string | null;
+}
+
+export interface SeoPageRelated {
+  slug: string;
+  title: string;
+  excerpt: string | null;
+  category: string | null;
+}
+
+export interface SeoPageRedirect {
+  to: string;
+  status: number;
+}
+
+export interface SeoPageResponse {
+  page?: SeoPagePayload;
+  seo?: SeoFlatData;
+  related_pages?: SeoPageRelated[];
+  redirect: SeoPageRedirect | null;
+}
+
+export interface ExploreCardPayload {
+  id: number;
+  slug: string;
+  title: string;
+  excerpt: string | null;
+  category: string | null;
+  tags: string[];
+  /** Phase 4.5b-polish — surfaced from seo_metadata.og_image so
+   *  the editorial cards (Hero, Feature, Horizontal, Compact)
+   *  have an image to render. */
+  og_image?: string | null;
+  /** Phase 4.5b-polish — true for operator-curated pages that
+   *  surface in /explore Hero + Trending sections. */
+  is_featured?: boolean;
+  published_at: string | null;
+}
+
+export interface ExploreResponse {
+  data: ExploreCardPayload[];
+  meta: {
+    current_page: number;
+    last_page: number;
+    total: number;
+    per_page: number;
+  };
+}
+
+export const fetchSeoPage = (slug: string, signal?: AbortSignal) =>
+  apiGet<SeoPageResponse>(`/seo-pages/${encodeURIComponent(slug)}`, undefined, signal);
+
+/**
+ * Phase 4.5b-polish — extended with `featured` (boolean) and
+ * `sort` ('newest' | 'popular' | 'trending') for the editorial
+ * /explore sections.
+ */
+export const fetchExplore = (
+  q?: {
+    category?: string | null;
+    search?: string | null;
+    page?: number | null;
+    per_page?: number | null;
+    featured?: boolean | null;
+    sort?: "newest" | "popular" | "trending" | null;
+  },
+  signal?: AbortSignal,
+) =>
+  apiGet<ExploreResponse>(
+    "/explore",
+    q as Record<string, string | number | boolean | undefined> | undefined,
+    signal,
+  );
+
+export const fetchExploreCategories = (signal?: AbortSignal) =>
+  apiGet<{ categories: string[] }>("/explore/categories", undefined, signal);
+
+/* ───────────── Phase 4.5 — Explore editorial payload ───────────── */
+
+export interface ExploreCategoryRef {
+  slug: string | null;
+  name: string;
+  /** Phase 4.5.1 — heroicon name for the no-image card fallback. */
+  icon_name?: string | null;
+}
+
+export interface ExploreCard {
+  id: number;
+  slug: string;
+  title: string;
+  excerpt: string | null;
+  hero_image_url: string | null;
+  category: ExploreCategoryRef | null;
+  reading_time_minutes: number;
+  is_featured: boolean;
+  is_trending: boolean;
+  view_count: number;
+  published_at: string | null;
+}
+
+export interface ExploreCategoryBlock {
+  id: number;
+  slug: string;
+  name: string;
+  icon_name: string | null;
+  featured: ExploreCard;
+  items: ExploreCard[];
+}
+
+export interface ExplorePayload {
+  hero: ExploreCard[];
+  trending_grid: ExploreCard[];
+  categories: ExploreCategoryBlock[];
+  rails: {
+    trending_searches: ExploreCard[];
+    most_read_week: ExploreCard[];
+  };
+  meta: {
+    total_pages: number;
+    last_updated_at: string;
+  };
+}
+
+/** Phase 4.5 — single round-trip Explore payload (cached 60s server-side). */
+export const fetchExplorePayload = (signal?: AbortSignal) =>
+  apiGet<ExplorePayload>("/explore", undefined, signal);
+
+/** Phase 4.5 — view tracking. Rate-limited per IP+slug. */
+export const trackSeoPageView = (slug: string, signal?: AbortSignal) =>
+  apiPost<{ ok: boolean; counted: boolean; view_count: number }>(
+    `/seo-pages/${encodeURIComponent(slug)}/track-view`,
+    undefined,
+    signal,
+  );
+
+/** Phase 4.5.1 — extended fetcher accepting category filter. */
+export const fetchExplorePayloadByCategory = (
+  category: string | null,
+  signal?: AbortSignal,
+) =>
+  apiGet<ExplorePayload>(
+    "/explore",
+    category ? { category } : undefined,
+    signal,
+  );

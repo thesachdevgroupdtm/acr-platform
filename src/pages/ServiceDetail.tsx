@@ -22,6 +22,8 @@ import {
   LOCATIONS,
 } from "../data/businessData";
 import PageBanner from "../components/PageBanner";
+import { CarSidebar } from "../components/car-sidebar";
+import SeoHead from "../components/SeoHead";
 import VehicleReplaceModal from "../components/VehicleReplaceModal";
 import FAQAccordion from "../components/FAQAccordion";
 import { useCart } from "../hooks/useCart";
@@ -366,24 +368,19 @@ export default function ServiceDetail({
 
   return (
     <>
-      {/* Banner — service title only, NO location appended */}
+      {/* Phase 4.5c — service-level flat SEO via cascade. Per-service
+          admin overrides win; otherwise meta_title renders via the
+          template + Service.name. */}
+      {detailQuery.data?.seo && <SeoHead seo={detailQuery.data.seo} />}
+      {/* Compact page header — service title + breadcrumb path. */}
       <PageBanner
         title={service.title}
         breadcrumbs={[
-          { label: "Home", onClick: () => navigate("/") },
-          {
-            label: category.title,
-            onClick: () => navigate(`/category/${categorySlug}`),
-          },
+          { label: "Home", href: "/" },
+          { label: category.title, href: `/category/${categorySlug}` },
           { label: service.title },
         ]}
-        label={category.title}
-        backgroundImage={heroImage}
-      >
-        <p className="text-xl text-white/80 leading-relaxed mb-6 max-w-2xl">
-          {category.description}
-        </p>
-      </PageBanner>
+      />
 
       {/* Phase 2.5.7 — sticky in-page sub-nav (D-2.5.7-3). Mirrors
           the /category/{slug} sub-nav so the user has consistent
@@ -418,16 +415,18 @@ export default function ServiceDetail({
 
       <div className="pb-14 pt-8">
         <div className="site-container">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 lg:gap-12">
-            {/* Main Content */}
-            <main className="lg:col-span-2 space-y-12">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12">
+            {/* Main Content — narrowed from 2/3 to 7/12 (~58%) so the
+                BookingSidebar (5/12 ≈ 42%) gets the GoMechanic-style
+                breathing room the operator asked for. */}
+            <main className="lg:col-span-8 space-y-12">
               {/* OVERVIEW */}
               <section
                 id="overview"
                 data-subnav-section="overview"
                 className="bg-neutral-50 p-6 sm:p-8 border border-border scroll-mt-44"
               >
-                <h2 className="text-2xl sm:text-3xl uppercase font-black text-neutral-900 mb-5">
+                <h2 className="section-heading mb-5">
                   SERVICE <span className="text-primary">OVERVIEW.</span>
                 </h2>
                 <p className="text-sm sm:text-base text-neutral-600 leading-relaxed mb-6">
@@ -439,7 +438,13 @@ export default function ServiceDetail({
                   deliver work that lasts.
                 </p>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6 pb-6 border-b border-border">
+                {/* Sub-phase L5 — Price Range cell replaced by the
+                    PricingWidget inserted below this section. Overview
+                    now ships Time Required + Warranty in a clean 2-col
+                    grid; the live vehicle-aware quote lives below where
+                    it has room to show selector + price + CTA without
+                    cramping. */}
+                <div className="grid grid-cols-2 gap-4 mb-6 pb-6 border-b border-border">
                   <div>
                     <h4 className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1">
                       Time Required
@@ -451,14 +456,6 @@ export default function ServiceDetail({
                     </p>
                   </div>
                   <div>
-                    <h4 className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1">
-                      Price Range
-                    </h4>
-                    <p className="text-base font-black text-neutral-900">
-                      {priceDisplay}
-                    </p>
-                  </div>
-                  <div className="col-span-2 sm:col-span-1">
                     <h4 className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1">
                       Warranty
                     </h4>
@@ -480,9 +477,30 @@ export default function ServiceDetail({
                 )}
               </section>
 
+              {/* PricingWidget removed from main column — its role
+                  (vehicle selection + per-vehicle price + book CTA) is
+                  now consolidated into the right-column BookingSidebar
+                  to avoid the double-selector UX. The anchor stays so
+                  the in-page sub-nav still has a "Pricing" target;
+                  the sidebar is what the visitor reads. */}
+              <section
+                id="pricing"
+                data-subnav-section="pricing"
+                className="scroll-mt-44"
+              >
+                <h2 className="section-heading mb-3">
+                  PRICING <span className="text-primary">FOR YOUR CAR.</span>
+                </h2>
+                <p className="text-sm text-neutral-600 leading-relaxed max-w-2xl">
+                  Your vehicle-specific price is shown in the booking
+                  summary on the right. Add services to your booking
+                  and continue when ready.
+                </p>
+              </section>
+
               {/* SERVICES INCLUDED */}
               <section id="included" data-subnav-section="included" className="scroll-mt-44">
-                <h2 className="text-2xl sm:text-3xl uppercase font-black text-neutral-900 mb-5">
+                <h2 className="section-heading mb-5">
                   SERVICES <span className="text-primary">INCLUDED.</span>
                 </h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
@@ -514,7 +532,7 @@ export default function ServiceDetail({
                 data-subnav-section="why-service"
                 className="scroll-mt-44"
               >
-                <h2 className="text-2xl sm:text-3xl uppercase font-black text-neutral-900 mb-5">
+                <h2 className="section-heading mb-5">
                   WHY CHOOSE <span className="text-primary">THIS SERVICE.</span>
                 </h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
@@ -544,7 +562,7 @@ export default function ServiceDetail({
 
               {/* PROCESS */}
               <section id="process" data-subnav-section="process" className="scroll-mt-44">
-                <h2 className="text-2xl sm:text-3xl uppercase font-black text-neutral-900 mb-5">
+                <h2 className="section-heading mb-5">
                   THE <span className="text-primary">PROCESS.</span>
                 </h2>
                 <div className="space-y-3">
@@ -607,7 +625,7 @@ export default function ServiceDetail({
                 data-subnav-section="results"
                 className="scroll-mt-44"
               >
-                <h2 className="text-2xl sm:text-3xl uppercase font-black text-neutral-900 mb-1.5">
+                <h2 className="section-heading mb-1.5">
                   REAL <span className="text-primary">RESULTS.</span>
                 </h2>
                 <p className="text-[10px] sm:text-xs text-neutral-500 uppercase tracking-widest font-bold mb-5">
@@ -641,7 +659,7 @@ export default function ServiceDetail({
 
               {/* FAQs */}
               <section id="faqs" data-subnav-section="faqs" className="scroll-mt-44">
-                <h2 className="text-2xl sm:text-3xl uppercase font-black text-neutral-900 mb-5">
+                <h2 className="section-heading mb-5">
                   COMMON <span className="text-primary">QUESTIONS.</span>
                 </h2>
                 <FAQAccordion faqs={faqs} />
@@ -688,7 +706,7 @@ export default function ServiceDetail({
                 data-subnav-section="reviews"
                 className="pt-12 border-t border-border scroll-mt-44"
               >
-                <h2 className="text-2xl sm:text-3xl uppercase font-black text-neutral-900 mb-5">
+                <h2 className="section-heading mb-5">
                   CUSTOMER <span className="text-primary">REVIEWS.</span>
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -724,7 +742,7 @@ export default function ServiceDetail({
                 data-subnav-section="recommended"
                 className="pt-12 border-t border-border scroll-mt-44"
               >
-                <h2 className="text-2xl sm:text-3xl uppercase font-black text-neutral-900 mb-5">
+                <h2 className="section-heading mb-5">
                   RECOMMENDED{" "}
                   <span className="text-primary">SERVICES.</span>
                 </h2>
@@ -757,12 +775,25 @@ export default function ServiceDetail({
               </section>
             </main>
 
-            {/* Sidebar */}
-            {/* Phase 2.5.7 — sticky `top-[180px]` clears the
-                112px header + 52px new sub-nav + 16px buffer.
-                Pre-2.5.7 was `lg:top-32` (128px) which would have
-                slipped under the sub-nav. */}
-            <aside className="space-y-6 lg:sticky lg:top-[180px] lg:self-start">
+            {/* Sidebar — GoMechanic-style booking progression.
+                Replaces the legacy vehicle-selector + estimate +
+                trust-badges trio. Vehicle + cart + subtotal +
+                continue-CTA all live inside BookingSidebar.
+                Grid: 5/12 ≈ ~550px in a 1320px container. */}
+            <CarSidebar
+              currentService={service}
+              vehiclePrice={
+                priceState.kind === "price" ? priceState.value : null
+              }
+              categorySlug={category.slug}
+              stickyTopPx={STICKY_OFFSET_PX}
+              // FIX1: col-span-4 of 12 == col-span-1 of 3 (same gap), so
+              // the sidebar matches the Services/Category width exactly.
+              className="lg:col-span-4"
+            />
+            {/* The old verbose <aside> below is kept commented so the
+                operator can review the prior content if needed. */}
+            <aside className="hidden space-y-6 lg:sticky lg:top-[180px] lg:self-start">
               {/* Phase 2.5.5 (D-2.5.5-6) — booking context card is
                   PRIMARY (top); SmartMiniCart sits BELOW it as the
                   SECONDARY card, conditional on cart non-empty. */}
@@ -773,7 +804,7 @@ export default function ServiceDetail({
               <div className="bg-white border border-border p-5 sm:p-6 shadow-xl">
                 <h3 className="text-lg sm:text-xl font-black uppercase tracking-tighter mb-1 text-neutral-900">
                   EXPERIENCE THE BEST{" "}
-                  <span className="text-primary italic">{service.title}</span>{" "}
+                  <span className="text-primary">{service.title}</span>{" "}
                   IN <span className="uppercase">{selectedLocationName}</span>
                 </h3>
                 <p className="text-xs text-neutral-500 mb-5">

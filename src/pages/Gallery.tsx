@@ -46,7 +46,7 @@ export default function Gallery(_props: GalleryProps) {
       <PageBanner
         title="Gallery"
         breadcrumbs={[
-          { label: "Home", onClick: () => navigate("/") },
+          { label: "Home", href: "/" },
           { label: "Gallery" }
         ]}
       />
@@ -83,7 +83,7 @@ export default function Gallery(_props: GalleryProps) {
         {/* Before/After Teaser */}
         <div className="mt-24 grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
           <div className="space-y-6">
-            <h2 className="text-3xl md:text-4xl uppercase font-black leading-tight text-neutral-900">THE <br /><span className="text-primary">TRANSFORMATION.</span></h2>
+            <h2 className="section-heading">THE <span className="section-heading-accent">TRANSFORMATION.</span></h2>
             <p className="text-neutral-500 text-lg leading-relaxed">
               We specialize in complex color matching and structural repairs that leave 
               no trace of previous damage. Our work is indistinguishable from the factory finish.

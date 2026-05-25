@@ -2,6 +2,7 @@
 
 use App\Models\Cart;
 use App\Models\CartItem;
+use App\Models\Coupon;
 use App\Models\Service;
 use App\Models\ServiceCategory;
 use App\Models\User;
@@ -153,4 +154,43 @@ it('is idempotent: re-merging a converted guest cart returns the user cart uncha
 
     // User cart still has the single item from the first merge.
     expect($resp->json('cart.items'))->toHaveCount(1);
+});
+
+it('carries a coupon applied on the guest cart onto the user cart on merge', function () {
+    // A guest can now apply a coupon before signing in; this proves the
+    // applied coupon survives login (last-cart-wins carries coupon_id),
+    // so the previewed discount is not silently lost at the auth step.
+    $coupon   = Coupon::where('code', 'FIRST10')->firstOrFail();
+    $category = ServiceCategory::factory()->create();
+    $service  = Service::factory()->create(['category_id' => $category->id, 'base_price' => 2000]);
+
+    $user = User::factory()->create(['phone' => '9999944404']);
+
+    $guestUuid = (string) Str::uuid();
+    $guestCart = Cart::create([
+        'session_uuid' => $guestUuid,
+        'status'       => 'active',
+        'currency'     => 'INR',
+        'coupon_id'    => $coupon->id,
+        'expires_at'   => now()->addDays(30),
+    ]);
+    CartItem::create([
+        'cart_id'             => $guestCart->id,
+        'service_id'          => $service->id,
+        'quantity'            => 1,
+        'unit_price_snapshot' => 2000.00,
+    ]);
+
+    Sanctum::actingAs($user);
+
+    $resp = $this->postJson('/api/v1/cart/merge', [
+        'guest_session_uuid' => $guestUuid,
+    ]);
+
+    $resp->assertStatus(200)
+        ->assertJsonPath('cart.totals.coupon.code', 'FIRST10');
+    expect((float) $resp->json('cart.totals.discount'))->toBe(200.0);
+
+    $userCart = Cart::where('user_id', $user->id)->where('status', 'active')->first();
+    expect($userCart->coupon_id)->toBe($coupon->id);
 });

@@ -12,9 +12,6 @@ class VerifyCsrfToken extends Middleware
      * @var array<int, string>
      */
     protected $except = [
-        'reviews',
-        'payu-fail-callback',
-        'payu-success-callback',
-        'payu-callback'
+        //
     ];
 }
