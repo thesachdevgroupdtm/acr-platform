@@ -23,6 +23,13 @@ class Kernel extends ConsoleKernel
         $schedule->command('orders:auto-confirm')
             ->everyMinute()
             ->withoutOverlapping(60);
+
+        // B6 — prune stale guest carts daily at 03:00 (low-traffic window).
+        // Default 14-day window per D-B6-1. Command is idempotent so the
+        // every-minute schedule:run dispatch is safe (only fires once a day).
+        $schedule->command('carts:prune')
+            ->dailyAt('03:00')
+            ->withoutOverlapping(60);
     }
 
     /**

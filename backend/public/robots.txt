@@ -1,2 +1,6 @@
 User-agent: *
-Disallow:
+Disallow: /admin
+Disallow: /api/v1
+Allow: /
+
+Sitemap: https://acr-mechanics.in/sitemap.xml
