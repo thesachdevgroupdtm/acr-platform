@@ -317,6 +317,7 @@ export default function CarSidebar({
       {/* Desktop sticky aside — fixed min-height so the in-place selector
           fills the SAME footprint as the collapsed card (B-4). */}
       <aside
+        data-testid="car-sidebar"
         className={`hidden lg:block lg:sticky lg:self-start ${className}`}
         style={{ top: stickyTopPx }}
       >

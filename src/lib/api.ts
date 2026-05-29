@@ -301,6 +301,19 @@ export interface CategorySubService {
   time_unit: string | null;
 }
 
+/** Phase 1.5 — inclusion grouping buckets. NULL = ungrouped (frontend
+ *  buckets NULL under Essential). */
+export type InclusionGroup = "Essential" | "Performance" | "Additional";
+
+/** Phase 1 — a single "what's included" line item (detail endpoint). */
+export interface ServiceInclusionItem {
+  id: number;
+  label: string;
+  image?: string | null;
+  position: number;
+  group_name: InclusionGroup | null;
+}
+
 export interface SubService {
   id: number;
   sc_id: number;
@@ -312,6 +325,8 @@ export interface SubService {
   warrenty_info?: string | null;
   recommended_info?: string | null;
   note?: string | null;
+  /** Phase 1 — service-interval display copy ("Every 5000 km or 3 months"). */
+  interval_info?: string | null;
   time_takes?: string | number | null;
   time_takes_option?: string | null;
   time_unit?: string | null;
@@ -321,6 +336,10 @@ export interface SubService {
   vehicle_price?: number | string | null;
   /** Phase 2.6a — `vehicle_price ?? base_price`. */
   effective_price?: number | string | null;
+  /** Phase 2 (PART A) — lean preview for the category card list. */
+  inclusions_preview?: { labels: string[]; total: number };
+  /** Phase 1 — full grouped inclusions (detail endpoint only). */
+  inclusions?: ServiceInclusionItem[];
   category_detail?: ServiceCategory;
 }
 

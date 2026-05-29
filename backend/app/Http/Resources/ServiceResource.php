@@ -61,6 +61,11 @@ class ServiceResource extends JsonResource
             // Phase 1 (D-P1-2) — service-interval display copy.
             'interval_info'     => $this->interval_info,
             'note'              => $this->note,
+            // Phase 2 (PART A) — lean inclusions preview ({labels, total})
+            // for the category card list. Populated by ServiceController@show
+            // via the transient property; empty default elsewhere (the
+            // detail endpoint ships the full `inclusions[]` below instead).
+            'inclusions_preview' => $this->resource->inclusionsPreview,
             // Phase 1 (D-P1-1/5) — "what's included" line items. Only
             // serialized when the relation is eager-loaded (detail
             // endpoint), so list endpoints stay lean. Each inclusion's

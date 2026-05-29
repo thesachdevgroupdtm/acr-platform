@@ -57,6 +57,20 @@ class Service extends Model
      */
     public ?float $resolvedVehiclePrice = null;
 
+    /**
+     * Phase 2 (PART A) — transient lean inclusions preview for list
+     * endpoints. ServiceController@show bulk-loads inclusion labels for
+     * every service in a category (one query, no N+1) and stashes
+     * {labels: first 4, total: count} here; ServiceResource emits it as
+     * `inclusions_preview`. Stays at the default empty shape on endpoints
+     * that don't populate it (e.g. the detail endpoint, which ships the
+     * full `inclusions[]` instead). A real public property so it never
+     * routes through Eloquent's attribute/serialization machinery.
+     *
+     * @var array{labels: array<int,string>, total: int}
+     */
+    public array $inclusionsPreview = ['labels' => [], 'total' => 0];
+
     public function category(): BelongsTo
     {
         return $this->belongsTo(ServiceCategory::class, 'category_id');

@@ -23,8 +23,12 @@ export default defineConfig({
   workers: 1,
   retries: 0,
   reporter: [['list']],
-  timeout: 30_000,
-  expect: { timeout: 5_000 },
+  // Phase 2e — the dev backend is single-threaded `php artisan serve`, and the
+  // service shell now fires real category icon images; under serial suite load
+  // content can take >5s to settle. Bumped per-test + assertion timeouts so
+  // explicit waits don't flake (more tolerant only — never breaks a pass).
+  timeout: 60_000,
+  expect: { timeout: 10_000 },
   use: {
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',
@@ -135,6 +139,17 @@ export default defineConfig({
       //   PHASE=after  npx playwright test --project=phase4_7_3
       name: 'phase4_7_3',
       testMatch: /(phase4_7_3-screenshots|brand-typography)\.spec\.ts$/,
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: 'http://localhost:3000',
+      },
+    },
+    {
+      // Phase 2a — service category page redesign screenshots + assertions.
+      // Needs Vite :3000 + Laravel :8000 up. Run:
+      //   npx playwright test --project=phase2
+      name: 'phase2',
+      testMatch: /service-pages-phase2\.spec\.ts$/,
       use: {
         ...devices['Desktop Chrome'],
         baseURL: 'http://localhost:3000',

@@ -13,6 +13,7 @@ use App\Models\CarModel;
 use App\Models\FuelType;
 use App\Models\Service;
 use App\Models\ServiceCategory;
+use App\Models\ServiceInclusion;
 use App\Models\ServicePrice;
 use App\Models\SiteSeoSettings;
 use Illuminate\Http\JsonResponse;
@@ -199,6 +200,29 @@ class ServiceController extends Controller
             ->where('is_active', true)
             ->orderBy('id')
             ->get();
+
+        // Phase 2 (PART A) — lean inclusions preview for the category card
+        // list. ONE bulk query for every inclusion in the category (lean
+        // columns), grouped in PHP and stashed on each Service's transient
+        // `inclusionsPreview` (no N+1, and the full inclusions[] stays
+        // detail-only because the relation is never eager-loaded here).
+        $inclusionsByService = ServiceInclusion::query()
+            ->whereIn('service_id', $services->pluck('id'))
+            ->orderBy('service_id')->orderBy('position')->orderBy('id')
+            ->get(['id', 'service_id', 'label', 'position'])
+            ->groupBy('service_id');
+        foreach ($services as $s) {
+            $rows = $inclusionsByService->get($s->id) ?? collect();
+            // Phase 2e (D-2e-4) — return ALL labels (lean: labels only, no
+            // images/group, already ordered by position) so the card can
+            // expand the full inclusion list IN PLACE (no detail fetch). The
+            // card itself shows the first few collapsed. `total` stays the
+            // full count (== labels count now).
+            $s->inclusionsPreview = [
+                'labels' => $rows->pluck('label')->values()->all(),
+                'total'  => $rows->count(),
+            ];
+        }
 
         $brand = !empty($validated['brand'])
             ? CarBrand::where('slug', $validated['brand'])->first()

@@ -1,6 +1,5 @@
-import type * as React from "react";
-import { useState, useEffect, useMemo } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { useState, useMemo } from "react";
+import { motion } from "motion/react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   CheckCircle2,
@@ -25,18 +24,23 @@ import {
   ShoppingCart,
   User,
   Lock,
+  Check,
+  Snowflake,
+  Disc3,
+  Paintbrush,
+  Sparkles,
+  Cog,
+  Lightbulb,
+  ClipboardCheck,
 } from "lucide-react";
 import {
   TESTIMONIALS,
   LOCATIONS,
 } from "../data/businessData";
 import { useBrands } from "../hooks/useVehicle";
-import { useSubNavSync } from "../hooks/useSubNavSync";
-import PageBanner from "../components/PageBanner";
 import SeoHead from "../components/SeoHead";
 import VehicleReplaceModal from "../components/VehicleReplaceModal";
 import FAQAccordion from "../components/FAQAccordion";
-import { CarSidebar } from "../components/car-sidebar";
 import { useCart } from "../hooks/useCart";
 import { VehicleConflictError, type VehicleConflictDetails } from "../lib/errors";
 import { useAuth } from "../hooks/useAuth";
@@ -46,6 +50,9 @@ import {
   type SubService as ApiSubService,
 } from "../lib/api";
 import { useApiQuery } from "../hooks/useApiQuery";
+import SectionHeading from "../components/layout/SectionHeading";
+import ServiceCard from "../components/service/ServiceCard";
+import { categoryIcon } from "../components/service/categoryIcon";
 
 interface ServiceCategoryProps {
   openEstimate?: (isCorporate?: boolean, initialService?: string) => void;
@@ -56,27 +63,11 @@ interface ServiceCategoryProps {
 // selector. Fuel options now come from the shared VehicleSelector
 // (FuelStep) via the cart form's vehicle-change modal.
 
-// Phase 2.5.9 — sub-nav lists EVERY visible content section in
-// the page body, in render order. Adding gap-sections (Why Us /
-// Brands / Why ACR) prevents the "stuck on previous section"
-// drift the operator reported on 2.5.8 testing.
-const SECTION_NAV = [
-  { id: "overview",  label: "Overview" },
-  { id: "pricing",   label: "Pricing" },
-  { id: "services",  label: "Services" },
-  { id: "why-us",    label: "Why Us" },     // 2.5.9 — was un-tracked
-  { id: "process",   label: "Process" },
-  { id: "reviews",   label: "Reviews" },
-  { id: "faqs",      label: "FAQs" },
-  { id: "brands",    label: "Brands" },     // 2.5.9 — was un-tracked
-  { id: "why-acr",   label: "Why ACR" },    // 2.5.9 — was un-tracked
-] as const;
-
-// Site Header is `sticky top-0 z-[9999]` — top blue bar (~32px) + main (h-20=80px).
-// Section nav stacks below the FULL header (~112px), not just the main bar.
-// Phase 2.5.7 — the right-side aside uses `top: STICKY_OFFSET_PX + 68 = 180px`
-// so it sits BELOW the 52px sub-nav strip with a 16px buffer.
-const STICKY_OFFSET_PX = 112;
+// Phase 2d (D-2d-4b) — the in-page section-nav scroller + its scrollspy
+// (SECTION_NAV / useSubNavSync / sticky-offset constants) were removed.
+// The shell's cross-category bar is the only nav now.
+// Phase 2c — fallback icon per category lives in
+// src/components/service/categoryIcon.ts (shared with Layer 1).
 
 export default function ServiceCategory({
   openEstimate,
@@ -142,30 +133,6 @@ export default function ServiceCategory({
   // Services.tsx for the why.
   const cartReady = bootstrapped && !cartLoading;
 
-  // ---------- Section nav scroll spy (Phase 2.5.7 hard-fix) ----------
-  // useSubNavSync queries `[data-subnav-section]` to find sections.
-  // The rebindKey combines the categorySlug AND the loading state
-  // so the IntersectionObserver re-binds:
-  //   - when the user navigates between categories (DOM nodes get
-  //     replaced even though slug list is unchanged), AND
-  //   - when the page transitions from skeleton to loaded content
-  //     (the `if (isLoadingDetail) return <Skeleton/>` early return
-  //     means sections don't exist on first mount — without
-  //     re-binding, the observer registers nothing and stays dead
-  //     for the lifetime of the component).
-  // The latter was the actual bug operator hit: the underline
-  // stayed on OVERVIEW because the observer never observed the
-  // real sections.
-  const {
-    activeSlug: activeSection,
-    setActiveSlugManual,
-    scrollToSection,
-    navRef: subNavRef,
-  } = useSubNavSync({
-    stickyOffsetPx: STICKY_OFFSET_PX,
-    rebindKey: `${categorySlug}:${detailQuery.isLoading ? "loading" : "ready"}`,
-  });
-
   // ---------- Shared booking context (read-only on this page) ----------
   // FORMS-1 STEP 2 — the bespoke inline car-selector + OTP form that used
   // to own location/car/phone here is gone. The right-column CART form now
@@ -181,15 +148,6 @@ export default function ServiceCategory({
   // more", "{N}+ supported"), so the query stays here.
   const brandsQuery = useBrands();
   const apiBrandRows = brandsQuery.data?.brands ?? [];
-
-  // ---------- Section nav active reset on category navigation ----------
-  // When the user navigates between categories, snap the underline
-  // to OVERVIEW immediately — the IntersectionObserver will reconcile
-  // once the new sections render and observation kicks in.
-  useEffect(() => {
-    setActiveSlugManual("overview");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [categorySlug]);
 
   // FORMS-1 STEP 2 — the logged-in pre-verify effect and the local→context
   // sync effect were both removed with the inline selector. The cart form's
@@ -404,55 +362,97 @@ export default function ServiceCategory({
           meta on the ServiceCategory record wins; otherwise site
           defaults render through getSeoData(). */}
       {detailQuery.data?.seo && <SeoHead seo={detailQuery.data.seo} />}
-      {/* Banner — title only, NO location appended (avoids wrapping/cropping) */}
-      <PageBanner
-        title={category.title}
-        breadcrumbs={[
-          { label: "Home", href: "/" },
-          { label: "Services", href: "/services" },
-          { label: category.title },
-        ]}
-      />
+      {/* Phase 2b-cont — center content only. ServicesShell owns the
+          PageBanner, the sticky cross-category bar, the grid and the single
+          CarSidebar. Phase 2d (D-2d-4b) — the in-page section-nav scroller
+          was removed; the shell's cross-category bar is the only nav. */}
+      <div className="space-y-12">
+              {/* SERVICE CATALOG — GoMechanic-style cards lead the page (Phase 2 D-2-6). */}
+              <section id="pricing" data-subnav-section="pricing" className="scroll-mt-40">
+                <div className="flex items-baseline justify-between flex-wrap gap-2 mb-4">
+                  <SectionHeading className="mb-0">{`${category.title} Services`}</SectionHeading>
+                  <p className="text-[10px] sm:text-xs uppercase tracking-widest font-bold text-neutral-400">
+                    {subServices.length} services · {selectedLocationName}
+                  </p>
+                </div>
 
-      {/* ──────────── STICKY SECTION NAV ──────────── */}
-      <nav
-        className="sticky z-30 bg-white border-b border-border"
-        style={{ top: `${STICKY_OFFSET_PX}px` }}
-      >
-        <div className="site-container">
-          <div
-            ref={subNavRef as React.RefObject<HTMLDivElement>}
-            className="flex gap-1 sm:gap-2 overflow-x-auto"
-            style={{ scrollbarWidth: "none" }}
-          >
-            {/* Phase 2.5.5 — sub-nav is section-anchors only (D-2.5.5-1).
-                The previous "CART (N)" link was redundant with the
-                top-header cart icon and the contextual SmartMiniCart
-                in the right sidebar; removed per UX audit. */}
-            {SECTION_NAV.map((s) => (
-              <button
-                key={s.id}
-                data-subnav-link={s.id}
-                onClick={() => scrollToSection(s.id)}
-                className={`text-[10px] sm:text-xs uppercase tracking-widest font-bold py-4 px-3 sm:px-5 whitespace-nowrap border-b-2 transition-colors shrink-0 ${
-                  activeSection === s.id
-                    ? "border-primary text-primary"
-                    : "border-transparent text-neutral-500 hover:text-primary"
-                }`}
-              >
-                {s.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      </nav>
+                {/* D-2d-3 — the "Prices personalised for {CAR}" blue pill was
+                    removed (the CarSidebar already shows the selected car).
+                    Only the select-your-car nudge remains, until a vehicle
+                    is picked. */}
+                {!vehicleSelected && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-neutral-50 border border-dashed border-primary/40 px-4 py-4 mb-5 flex items-center justify-between gap-4 flex-wrap"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <Calculator className="w-5 h-5 text-primary shrink-0" />
+                      <p className="text-xs sm:text-sm font-bold text-neutral-700 tracking-tighter">
+                        Select your car & location to see exact prices.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        // Scroll to the cart-form sidebar; its "Select your
+                        // car" empty state opens the shared selector modal.
+                        window.scrollTo({ top: 0, behavior: "smooth" });
+                      }}
+                      className="btn-ink btn-ink-primary px-5 py-2.5 text-[10px] sm:text-xs font-black uppercase tracking-widest flex items-center gap-2 shrink-0"
+                    >
+                      Select Your Car{" "}
+                      <ArrowRight className="w-3.5 h-3.5 btn-arrow" />
+                    </button>
+                  </motion.div>
+                )}
 
-      <div className="pb-14 pt-8">
-        <div className="site-container">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 lg:gap-12">
-            {/* ──────────── MAIN CONTENT ──────────── */}
-            <main className="lg:col-span-2 order-2 lg:order-1 space-y-12">
-              {/* OVERVIEW */}
+                <div className="space-y-4">
+                  {subServices.map((sub) => {
+                    // Price 4-state + cart logic UNCHANGED (D-2-6 / D-2c-5);
+                    // computed here, the shared ServiceCard just renders it.
+                    const showPrice = vehicleSelected && priceShowFromApi;
+                    const cartItem = cartReady
+                      ? findCartItem({
+                          ref_id:   sub.id,
+                          brand_id: bookingCar?.brand_id,
+                          model_id: bookingCar?.model_id,
+                          fuel_id:  bookingCar?.fuel_id,
+                        })
+                      : null;
+                    return (
+                      <ServiceCard
+                        key={sub.id}
+                        service={sub}
+                        categorySlug={category.slug}
+                        categoryTitle={category.title}
+                        fallbackIcon={categoryIcon(category.slug)}
+                        vehicleSelected={vehicleSelected}
+                        showPrice={showPrice}
+                        pricingLoading={pricingLoading}
+                        price={priceMap.get(sub.id) ?? null}
+                        inCart={!!cartItem}
+                        justAdded={addedFlash === String(sub.id)}
+                        onAdd={() => handleAddToCart(sub)}
+                        onRemove={() => cartItem && removeItem(String(cartItem.id))}
+                        onViewDetail={() => navigate(`/services/${category.slug}/${sub.slug}`)}
+                      />
+                    );
+                  })}
+                </div>
+
+                <p className="text-[10px] text-neutral-400 mt-3 italic">
+                  * Prices may vary based on car model, fuel type and parts
+                  required. Final quote provided after vehicle inspection.
+                </p>
+
+                {/* Phase 2.5.5 — the mid-page "X service in your cart"
+                    strip lived here (D-2.5.5-2). Removed per UX audit;
+                    the contextual SmartMiniCart in the right sidebar
+                    now owns this surface, and the page flows directly
+                    from price-list to "Services Included". */}
+              </section>
+
+              {/* OVERVIEW — demoted below the catalog (Phase 2 D-2-9). */}
               <section
                 id="overview"
                 data-subnav-section="overview"
@@ -501,210 +501,6 @@ export default function ServiceCategory({
                     </p>
                   </div>
                 </div>
-              </section>
-
-              {/* PRICING TABLE — with Add to Cart per row */}
-              <section id="pricing" data-subnav-section="pricing" className="scroll-mt-40">
-                <div className="flex items-baseline justify-between flex-wrap gap-2 mb-2">
-                  <h2 className="section-heading">
-                    {category.title}{" "}
-                    <span className="section-heading-accent">PRICE LIST.</span>
-                  </h2>
-                  <p className="text-[10px] sm:text-xs uppercase tracking-widest font-bold text-neutral-400">
-                    {selectedLocationName} · {new Date().getFullYear()}
-                  </p>
-                </div>
-
-                {vehicleSelected && bookingCar && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="bg-primary text-white px-4 py-3 mb-5 flex items-center gap-3"
-                  >
-                    <CheckCircle2 className="w-5 h-5 shrink-0" />
-                    <p className="text-xs sm:text-sm font-bold tracking-tighter">
-                      Prices personalised for{" "}
-                      <span className="uppercase">
-                        {bookingCar.brand} {bookingCar.model} ·{" "}
-                        {bookingCar.fuel}
-                      </span>{" "}
-                      in {selectedLocationName}
-                    </p>
-                  </motion.div>
-                )}
-
-                {/* CTA banner shown until a complete vehicle is selected */}
-                {!vehicleSelected && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="bg-neutral-50 border border-dashed border-primary/40 px-4 py-4 mb-5 flex items-center justify-between gap-4 flex-wrap"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <Calculator className="w-5 h-5 text-primary shrink-0" />
-                      <p className="text-xs sm:text-sm font-bold text-neutral-700 tracking-tighter">
-                        Select your car & location to see exact prices.
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => {
-                        // Scroll to the cart-form sidebar; its "Select your
-                        // car" empty state opens the shared selector modal.
-                        window.scrollTo({ top: 0, behavior: "smooth" });
-                      }}
-                      className="btn-ink btn-ink-primary px-5 py-2.5 text-[10px] sm:text-xs font-black uppercase tracking-widest flex items-center gap-2 shrink-0"
-                    >
-                      Select Your Car{" "}
-                      <ArrowRight className="w-3.5 h-3.5 btn-arrow" />
-                    </button>
-                  </motion.div>
-                )}
-
-                <div className="bg-white border border-border divide-y divide-border">
-                  <div className="hidden sm:grid grid-cols-[1fr_auto_auto] gap-4 px-5 py-3 bg-neutral-50 text-[10px] font-bold uppercase tracking-widest text-neutral-400">
-                    <span>Service Type</span>
-                    <span className="text-right w-28">Price From</span>
-                    <span className="text-right w-32">Action</span>
-                  </div>
-
-                  {subServices.map((sub) => {
-                    const justAdded = addedFlash === String(sub.id);
-                    // Reveal prices as soon as a complete vehicle is
-                    // selected AND the API marks the category as priced
-                    // for it. No OTP gate — OTP is only for checkout.
-                    const showPrice = vehicleSelected && priceShowFromApi;
-                    // Phase 2.3.3 — toggle add/remove on the same button.
-                    // First click: addItem. Second click on the same row:
-                    // remove the server cart line. The 1.8 s `justAdded`
-                    // flash continues to bridge the visual gap between
-                    // the click and the React Query refetch.
-                    const cartItem = cartReady
-                      ? findCartItem({
-                          ref_id:   sub.id,
-                          brand_id: bookingCar?.brand_id,
-                          model_id: bookingCar?.model_id,
-                          fuel_id:  bookingCar?.fuel_id,
-                        })
-                      : null;
-                    const inCart = !!cartItem;
-                    return (
-                      <div
-                        key={sub.id}
-                        className="px-4 sm:px-5 py-4 grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-2 sm:gap-4 sm:items-center"
-                      >
-                        <div className="min-w-0">
-                          <button
-                            onClick={() =>
-                              navigate(`/services/${category.slug}/${sub.slug}`)
-                            }
-                            className="text-left text-sm font-black uppercase text-neutral-900 tracking-tighter mb-0.5 hover:text-primary transition-colors"
-                          >
-                            {sub.title}
-                          </button>
-                          <p className="text-xs text-neutral-500 leading-relaxed line-clamp-2">
-                            {sub.recommended_info ||
-                              `Professional ${sub.title.toLowerCase()} with genuine parts and warranty.`}
-                          </p>
-                        </div>
-
-                        {/* Price column — Phase 2.3.5 strict 4-state machine.
-                            Never base_price. Vehicle-resolved or "Quote on
-                            Inspection"; loading skeleton between. */}
-                        <div className="sm:text-right sm:w-28">
-                          {showPrice ? (
-                            pricingLoading ? (
-                              <div className="sm:ml-auto h-5 w-16 bg-neutral-200 animate-pulse rounded" />
-                            ) : priceMap.has(sub.id) ? (
-                              <>
-                                <p className="text-base font-black text-neutral-900">
-                                  ₹{priceMap.get(sub.id)}
-                                </p>
-                                <span className="text-[9px] uppercase tracking-widest font-bold text-neutral-400">
-                                  Onwards
-                                </span>
-                              </>
-                            ) : (
-                              <>
-                                <p className="text-base font-black text-neutral-900">
-                                  Quote
-                                </p>
-                                <span className="text-[9px] uppercase tracking-widest font-bold text-neutral-400">
-                                  On Inspection
-                                </span>
-                              </>
-                            )
-                          ) : (
-                            // No OTP lock anymore — prices reveal on vehicle
-                            // selection. !vehicle → invite selection.
-                            <span className="text-[10px] uppercase tracking-widest font-bold text-neutral-400">
-                              {vehicleSelected ? "On Inspection" : "Select car"}
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Action column — Add to Cart once a vehicle is set; else CTA */}
-                        <div className="sm:w-32 sm:text-right">
-                          {showPrice ? (
-                            <button
-                              onClick={() =>
-                                inCart && cartItem
-                                  ? removeItem(String(cartItem.id))
-                                  : handleAddToCart(sub)
-                              }
-                              // Phase 2.3.5 — ADDED hover matches BOOK
-                              // NOW's btn-ink ink-sweep for visible
-                              // feedback. ADD TO CART uses btn-ink-primary
-                              // (sweep to primary-dark); ADDED uses
-                              // btn-ink-outline (sweep fills primary,
-                              // text turns white on hover). Both share
-                              // identical box dimensions.
-                              className={`btn-ink ${
-                                inCart || justAdded
-                                  ? "btn-ink-outline"
-                                  : "btn-ink-primary"
-                              } px-4 py-2 text-[10px] font-bold uppercase tracking-widest w-full sm:w-auto justify-center gap-1.5`}
-                              aria-pressed={inCart}
-                            >
-                              {inCart || justAdded ? (
-                                <>
-                                  <CheckCircle2 className="w-3.5 h-3.5" /> Added
-                                </>
-                              ) : (
-                                <>
-                                  <ShoppingCart className="w-3.5 h-3.5" /> Add to
-                                  Cart
-                                </>
-                              )}
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() =>
-                                vehicleSelected
-                                  ? navigate(`/services/${category.slug}/${sub.slug}`)
-                                  : window.scrollTo({ top: 0, behavior: "smooth" })
-                              }
-                              className="px-4 py-2 text-[10px] font-bold uppercase tracking-widest border border-primary text-primary hover:bg-primary hover:text-white transition-colors w-full sm:w-auto flex items-center justify-center gap-1.5"
-                            >
-                              {vehicleSelected ? "View Details" : "Select Your Car"}{" "}
-                              <ArrowRight className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <p className="text-[10px] text-neutral-400 mt-3 italic">
-                  * Prices may vary based on car model, fuel type and parts
-                  required. Final quote provided after vehicle inspection.
-                </p>
-
-                {/* Phase 2.5.5 — the mid-page "X service in your cart"
-                    strip lived here (D-2.5.5-2). Removed per UX audit;
-                    the contextual SmartMiniCart in the right sidebar
-                    now owns this surface, and the page flows directly
-                    from price-list to "Services Included". */}
               </section>
 
               {/* SERVICES INCLUDED */}
@@ -842,42 +638,8 @@ export default function ServiceCategory({
                 <FAQAccordion faqs={faqs} />
               </section>
 
-              {/* BRANDS WE SERVICE */}
-              <section
-                id="brands"
-                data-subnav-section="brands"
-                className="scroll-mt-40"
-              >
-                <h2 className="section-heading mb-1.5">
-                  BRANDS WE <span className="text-primary">SERVICE.</span>
-                </h2>
-                <p className="text-xs text-neutral-500 mb-5 max-w-xl leading-relaxed">
-                  Authorised-grade {category.title.toLowerCase()} for every
-                  major Indian and international car brand.
-                </p>
-                <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2 sm:gap-3">
-                  {brandsQuery.isLoading
-                    ? Array.from({ length: 12 }).map((_, i) => (
-                        <div
-                          key={`bgsk-${i}`}
-                          className="bg-neutral-100 border border-border aspect-square animate-pulse"
-                        />
-                      ))
-                    : brandList.map((brand) => (
-                        <div
-                          key={brand}
-                          className="bg-white border border-border p-3 sm:p-4 flex flex-col items-center justify-center text-center hover:border-primary transition-colors aspect-square"
-                        >
-                          <div className="w-8 h-8 sm:w-10 sm:h-10 bg-primary/10 text-primary flex items-center justify-center font-black text-base sm:text-lg uppercase tracking-tighter mb-1.5">
-                            {brand.charAt(0)}
-                          </div>
-                          <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-tighter text-neutral-900 leading-tight">
-                            {brand}
-                          </span>
-                        </div>
-                      ))}
-                </div>
-              </section>
+              {/* Phase 2d (D-2d-4a) — "Brands We Service" section removed.
+                  (brandsQuery/brandList still feed the Overview + Why-ACR copy.) */}
 
               {/* LOCATION-BASED CONTENT */}
               <section
@@ -929,31 +691,7 @@ export default function ServiceCategory({
                   </p>
                 </div>
               </section>
-            </main>
-
-            {/* ───── BOOKING SIDEBAR (cart form) — FORMS-1 STEP 2 ─────
-                Category now shows the modular CART form (vehicle summary +
-                services cart + coupon + checkout) instead of the bespoke
-                inline car-selector + OTP that used to live here.
-                currentService omitted → no "Add to cart" CTA and no
-                auto-add; the form reflects the existing cart and its
-                "Select your car" empty state opens the shared
-                VehicleSelector (in-place), which writes the vehicle into
-                booking context. This page reads that back (vehicleSelected)
-                to reveal prices. The component renders its own sticky
-                <aside> + fixed mobile bar, so it mounts as the right grid
-                column directly. (The old sidebar trust-badge mini-card was
-                dropped — the WHY CHOOSE section in the main column already
-                carries the same trust content.) */}
-            <CarSidebar
-              categorySlug={categorySlug}
-              stickyTopPx={STICKY_OFFSET_PX + 68}
-              className="lg:order-2"
-            />
-          </div>
-        </div>
       </div>
-
 
       <VehicleReplaceModal
         open={vehicleConflict !== null}

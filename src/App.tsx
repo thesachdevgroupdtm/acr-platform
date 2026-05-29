@@ -21,6 +21,12 @@ const Contact = lazy(() => import("./pages/Contact"));
 const Corporate = lazy(() => import("./pages/Corporate"));
 const ServiceCategory = lazy(() => import("./pages/ServiceCategory"));
 const ServiceDetail = lazy(() => import("./pages/ServiceDetail"));
+// Phase 2b-cont — persistent layout shell wrapping the three service
+// layers (/services, /category/:slug, /services/:cat/:svc). Lazy like
+// the routes it wraps; it owns the sticky cross-category bar, the
+// route-derived PageBanner, the grid and the single CarSidebar so those
+// chrome elements never unmount on catalog-internal navigation.
+const ServicesShell = lazy(() => import("./layouts/ServicesShell"));
 const ServiceCenters = lazy(() => import("./pages/ServiceCenters"));
 const ServiceCenterDetail = lazy(() => import("./pages/ServiceCenterDetail"));
 const Offers = lazy(() => import("./pages/Offers"));
@@ -79,11 +85,24 @@ export default function App() {
     redirectTo: undefined,
   });
 
-  // Scroll to top on pathname change. Search-only changes (e.g.
-  // ?coupon=FIRST10) preserve scroll position.
+  // Phase 2b-cont — the three service layers share ONE persistent shell
+  // (ServicesShell). Give them a STABLE animation key so the App-level
+  // <motion.div key=…> stops remounting the whole subtree (which would
+  // tear down the shell + sidebar) on every catalog-internal nav. Only
+  // entering/leaving the shell re-keys; category↔detail↔services keep the
+  // same key, so the shell's own scoped crossfade owns those transitions.
+  const isShellRoute =
+    location.pathname === "/services" ||
+    location.pathname.startsWith("/services/") ||
+    location.pathname.startsWith("/category/");
+  const animKey = isShellRoute ? "services-shell" : location.pathname;
+
+  // Scroll to top on route change. Keyed on animKey (not pathname) so
+  // catalog-internal nav within the shell does NOT jump to the top
+  // (one-page feel, D-2b-8); search-only changes preserve scroll too.
   useEffect(() => {
     window.scrollTo(0, 0);
-  }, [location.pathname]);
+  }, [animKey]);
 
   const openEstimate = (isCorporate = false, initialService = "") => {
     setEstimateModal({ isOpen: true, isCorporate, initialService });
@@ -115,7 +134,7 @@ export default function App() {
         <ChunkErrorBoundary>
           <AnimatePresence mode="wait">
             <motion.div
-              key={location.pathname}
+              key={animKey}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
@@ -131,9 +150,21 @@ export default function App() {
                 <Suspense fallback={<GlobalLoadingFallback />}>
                   <Routes location={location}>
                   <Route path="/" element={<Home openEstimate={openEstimate} />} />
-                  <Route path="/services" element={<Services openEstimate={openEstimate} />} />
-                  <Route path="/services/:category/:service" element={<ServiceDetail openEstimate={openEstimate} />} />
-                  <Route path="/category/:slug" element={<ServiceCategory openEstimate={openEstimate} />} />
+                  {/*
+                    Phase 2b-cont — the three service layers are nested
+                    under ServicesShell (a pathless layout route). The
+                    shell renders the sticky category bar, the route-
+                    derived PageBanner, the grid and the single CarSidebar;
+                    each child route renders CENTER CONTENT ONLY into the
+                    shell's <Outlet/>. Combined with the stable animKey
+                    above, the shell + sidebar stay mounted across
+                    /services ↔ /category/:slug ↔ /services/:cat/:svc.
+                  */}
+                  <Route element={<ServicesShell openEstimate={openEstimate} />}>
+                    <Route path="/services" element={<Services openEstimate={openEstimate} />} />
+                    <Route path="/services/:category/:service" element={<ServiceDetail openEstimate={openEstimate} />} />
+                    <Route path="/category/:slug" element={<ServiceCategory openEstimate={openEstimate} />} />
+                  </Route>
                   <Route path="/service-centers" element={<ServiceCenters openEstimate={openEstimate} />} />
                   <Route path="/center/:id" element={<ServiceCenterDetail openEstimate={openEstimate} />} />
                   <Route path="/insurance" element={<Insurance openEstimate={openEstimate} />} />

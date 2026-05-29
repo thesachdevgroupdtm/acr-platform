@@ -29,6 +29,10 @@ import type { ComponentType, SVGProps } from "react";
 interface Props {
   category?: { slug: string | null; name: string } | null;
   iconName?: string | null;
+  /** Phase 2 — pass a lucide icon component directly (used by service /
+   *  inclusion cards, whose categories don't carry an `icon_name`). Wins
+   *  over `iconName` when provided. */
+  icon?: ComponentType<SVGProps<SVGSVGElement>>;
   title: string;
   className?: string;
 }
@@ -61,10 +65,11 @@ const DEFAULT_ICON = BookOpen;
 export default function ExploreCardFallback({
   category,
   iconName,
+  icon,
   title,
   className = "",
 }: Props) {
-  const Icon = (iconName && ICON_MAP[iconName]) || DEFAULT_ICON;
+  const Icon = icon || (iconName && ICON_MAP[iconName]) || DEFAULT_ICON;
 
   return (
     <div

@@ -72,6 +72,11 @@ class SubServiceResource extends JsonResource
             // are intentionally omitted from the lean list shape (D-P1-5);
             // they ship on the per-service detail endpoint only.
             'interval_info'   => $this->interval_info,
+            // Phase 2 (PART A) — lean inclusions preview ({labels, total}).
+            // Empty default unless a controller bulk-populates the transient
+            // property (the in-scope category page uses ServiceResource, not
+            // this lean shape; kept here for consistency across list shapes).
+            'inclusions_preview' => $this->resource->inclusionsPreview,
         ];
     }
 }

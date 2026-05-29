@@ -34,7 +34,14 @@ interface PageBannerProps {
   title: string;
   breadcrumbs?: BreadcrumbItem[];
   label?: string;
-  backgroundImage?: string;
+  /**
+   * Banner background. `undefined` → the cinematic Unsplash default
+   * (every existing site-wide caller). Pass an explicit `null` to render
+   * NO image — just the dark gradient — which is how ServicesShell kills
+   * the Unsplash hero on the Layer-3 detail route when the service has no
+   * image (D-2b-7: "hero = service.image → fallback when null").
+   */
+  backgroundImage?: string | null;
   children?: ReactNode;
 }
 
@@ -62,12 +69,14 @@ export default function PageBanner({
 
       {/* Cinematic banner — title only (plus optional label + children) */}
       <div className="relative h-[40vh] min-h-[300px] flex items-center overflow-hidden mb-12">
-        <img
-          src={backgroundImage}
-          className="absolute inset-0 w-full h-full object-cover opacity-30"
-          alt={title}
-          referrerPolicy="no-referrer"
-        />
+        {backgroundImage && (
+          <img
+            src={backgroundImage}
+            className="absolute inset-0 w-full h-full object-cover opacity-30"
+            alt={title}
+            referrerPolicy="no-referrer"
+          />
+        )}
         <div className="absolute inset-0 bg-neutral-900/80" />
         <div className="absolute inset-0 bg-gradient-to-r from-primary/20 via-transparent to-transparent" />
 
