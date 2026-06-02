@@ -1,71 +1,7 @@
-import { 
-  Shield, 
-  Zap, 
-  Paintbrush, 
-  Wrench, 
-  FileText, 
-  Sparkles, 
-  Battery, 
-  LifeBuoy, 
-  Thermometer, 
-  CircleDot, 
-  Settings, 
-  Search, 
-  AlertTriangle, 
-  GlassWater,
-  ShieldCheck
-} from "lucide-react";
-
-export const LOCATIONS = [
-  {
-    id: "moti-nagar",
-    name: "Moti Nagar",
-    city: "Delhi",
-    address: "63, Rama Rd, Block B, Najafgarh Road Industrial Area, New Delhi, Delhi 110015",
-    phone: "9870400861",
-    rating: "4.9",
-    reviews: "1,250",
-    features: ["Collision Repair", "Mechanical Service", "Cashless Insurance"],
-    image: "https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?auto=format&fit=crop&q=80&w=1200",
-    url: "https://maps.app.goo.gl/moti-nagar"
-  },
-  {
-    id: "gurugram",
-    name: "Gurugram",
-    city: "Gurugram",
-    address: "Plot No. 123, Sector 14, Gurugram, Haryana 122001",
-    phone: "9870400861",
-    rating: "4.8",
-    reviews: "980",
-    features: ["Luxury Car Service", "Detailing", "Paint Protection"],
-    image: "https://images.unsplash.com/photo-1590674899484-d5640e854abe?auto=format&fit=crop&q=80&w=1200",
-    url: "https://maps.app.goo.gl/gurugram"
-  },
-  {
-    id: "noida",
-    name: "Noida",
-    city: "Noida",
-    address: "C-45, Sector 63, Noida, Uttar Pradesh 201301",
-    phone: "9870400861",
-    rating: "4.9",
-    reviews: "1,100",
-    features: ["Body Shop", "AC Repair", "Wheel Alignment"],
-    image: "https://images.unsplash.com/photo-1625047509168-a7026f36de04?auto=format&fit=crop&q=80&w=1200",
-    url: "https://maps.app.goo.gl/noida"
-  },
-  {
-    id: "okhla",
-    name: "Okhla",
-    city: "Delhi",
-    address: "Phase III, Okhla Industrial Estate, New Delhi, Delhi 110020",
-    phone: "9870400861",
-    rating: "4.7",
-    reviews: "850",
-    features: ["Express Service", "Genuine Parts", "Fleet Maintenance"],
-    image: "https://images.unsplash.com/photo-1517524206127-48bbd363f3d7?auto=format&fit=crop&q=80&w=1200",
-    url: "https://maps.app.goo.gl/okhla"
-  }
-];
+// B5-partial — LOCATIONS migrated to the backend service_centers table.
+// Read via useServiceCenters() hook (src/hooks/useServiceCenters.ts).
+// TESTIMONIALS and BUSINESS_INFO remain v1 — see B5-followup for the
+// post-launch migration of those to backend tables.
 
 export const BUSINESS_INFO = {
   name: "Auto Car Repair",

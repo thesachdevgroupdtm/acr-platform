@@ -105,6 +105,40 @@ class ServiceCenterResource extends Resource
                     ])
                     ->columns(2),
 
+                // B5-partial — frontend-parity fields migrated from
+                // src/data/businessData.ts LOCATIONS. Optional everywhere;
+                // null values render with sensible fallbacks on the
+                // customer-facing pages.
+                Forms\Components\Section::make('Public Display')
+                    ->description('Customer-facing card content. Edits invalidate the public list cache automatically.')
+                    ->schema([
+                        Forms\Components\TextInput::make('rating')
+                            ->numeric()
+                            ->minValue(1)
+                            ->maxValue(5)
+                            ->step(0.1)
+                            ->helperText('1.0 – 5.0; one decimal.'),
+                        Forms\Components\TextInput::make('reviews_count')
+                            ->maxLength(16)
+                            ->helperText('Display string (e.g. "1,250" — formatting commas allowed).'),
+                        Forms\Components\TagsInput::make('features')
+                            ->placeholder('e.g. Collision Repair')
+                            ->helperText('Short capability tags shown as pills on the centre card.')
+                            ->columnSpanFull(),
+                        Forms\Components\TextInput::make('image')
+                            ->url()
+                            ->maxLength(500)
+                            ->helperText('Hero/card image URL. Existing rows use Unsplash placeholders.')
+                            ->columnSpanFull(),
+                        Forms\Components\TextInput::make('google_maps_url')
+                            ->url()
+                            ->maxLength(500)
+                            ->helperText('Google Maps deep link for the "Get Directions" CTA.')
+                            ->columnSpanFull(),
+                    ])
+                    ->columns(2)
+                    ->collapsed(false),
+
                 // Phase 4.5c — service centers are physical locations,
                 // so 'LocalBusiness' is the canonical Schema.org type.
                 // SchemaTemplateEngine pulls address / phone / openHours
@@ -131,6 +165,10 @@ class ServiceCenterResource extends Resource
                     ->badge()
                     ->color('info'),
                 Tables\Columns\TextColumn::make('phone'),
+                Tables\Columns\TextColumn::make('rating')
+                    ->label('★')
+                    ->placeholder('—')
+                    ->sortable(),
                 Tables\Columns\ToggleColumn::make('is_active')
                     ->label('Active'),
                 // Phase 4.5d Feature 5b — SEO completeness badge.

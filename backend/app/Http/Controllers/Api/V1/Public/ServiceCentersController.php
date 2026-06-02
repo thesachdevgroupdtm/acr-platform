@@ -7,6 +7,7 @@ use App\Http\Resources\V1\ServiceCenterResource;
 use App\Models\ServiceCenter;
 use App\Models\SiteSeoSettings;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * Phase 2.5a — public read endpoint for the checkout dropdown
@@ -22,18 +23,30 @@ use Illuminate\Http\JsonResponse;
  */
 class ServiceCentersController extends Controller
 {
+    /**
+     * B5-partial — 1-hour public-list cache (D-B5-3). Invalidated
+     * automatically when any ServiceCenter row is saved or deleted,
+     * via the model's static booted() hook (see ServiceCenter@booted).
+     */
+    public const LIST_CACHE_KEY = 'service-centers:v1:list';
+    public const LIST_CACHE_TTL = 3600;
+
     public function index(): JsonResponse
     {
-        $centers = ServiceCenter::query()
-            ->with('seoMetadata') // Phase 4.5c — N+1-free list seo.
-            ->where('is_active', true)
-            ->orderBy('sort_order')
-            ->get();
+        $payload = Cache::remember(self::LIST_CACHE_KEY, self::LIST_CACHE_TTL, function () {
+            $centers = ServiceCenter::query()
+                ->with('seoMetadata') // Phase 4.5c — N+1-free list seo.
+                ->where('is_active', true)
+                ->orderBy('sort_order')
+                ->get();
 
-        return response()->json([
-            'service_centers' => ServiceCenterResource::collection($centers),
-            'seo'             => $this->listSeoFromDefaults(),
-        ]);
+            return [
+                'service_centers' => ServiceCenterResource::collection($centers)->resolve(),
+                'seo'             => $this->listSeoFromDefaults(),
+            ];
+        });
+
+        return response()->json($payload);
     }
 
     /**

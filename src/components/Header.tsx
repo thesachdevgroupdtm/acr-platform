@@ -7,7 +7,8 @@ import {
   ShoppingCart, User, LogOut, Package, Car
 } from "lucide-react";
 import { useState, useRef, useLayoutEffect } from "react";
-import { BUSINESS_INFO, LOCATIONS } from "../data/businessData";
+import { BUSINESS_INFO } from "../data/businessData";
+import { useServiceCenters } from "../hooks/useServiceCenters";
 import { useCart } from "../hooks/useCart";
 import { useAuth } from "../hooks/useAuth";
 import {
@@ -119,6 +120,8 @@ export default function Header({ openEstimate, openAuth }: HeaderProps) {
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [activeSubDropdown, setActiveSubDropdown] = useState<string | null>(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  // B5-partial — service centers from the API (was static LOCATIONS).
+  const { centers: serviceCenters } = useServiceCenters();
 
   // Cart and auth hooks - drive the header e-commerce icons
   const { count: cartCount, isLoading: cartLoading } = useCart();
@@ -204,7 +207,7 @@ export default function Header({ openEstimate, openAuth }: HeaderProps) {
           {/* Left Side */}
           <div className="flex items-center gap-6">
             <span className="flex items-center gap-1.5">
-              <MapPin className="w-3 h-3" /> {LOCATIONS.length} Centres Across Delhi NCR
+              <MapPin className="w-3 h-3" /> {serviceCenters.length || 4} Centres Across Delhi NCR
             </span>
             <span className="hidden md:flex items-center gap-1.5">
               Expert Multi-brand Service
@@ -538,12 +541,12 @@ export default function Header({ openEstimate, openAuth }: HeaderProps) {
                           )
                         )}
                         {item.id === "service-centers" && (
-                          LOCATIONS.map((loc) => (
+                          serviceCenters.map((loc) => (
                             <button
-                              key={loc.id}
+                              key={loc.slug}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                navigate(`/center/${loc.id}`);
+                                navigate(`/center/${loc.slug}`);
                                 setActiveDropdown(null);
                               }}
                               className="w-full text-left px-6 py-2.5 text-[11px] font-bold uppercase text-neutral-600 hover:bg-neutral-50 hover:text-primary transition-all border-l-2 border-transparent hover:border-primary"
@@ -674,11 +677,11 @@ export default function Header({ openEstimate, openAuth }: HeaderProps) {
                         )
                       )}
                       {item.id === "service-centers" && (
-                        LOCATIONS.map((loc) => (
+                        serviceCenters.map((loc) => (
                           <button
-                            key={loc.id}
+                            key={loc.slug}
                             onClick={() => {
-                              navigate(`/center/${loc.id}`);
+                              navigate(`/center/${loc.slug}`);
                               setIsMenuOpen(false);
                             }}
                             className="text-left py-2 text-sm font-bold uppercase text-neutral-500"

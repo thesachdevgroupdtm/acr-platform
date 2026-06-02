@@ -33,10 +33,8 @@ import {
   Lightbulb,
   ClipboardCheck,
 } from "lucide-react";
-import {
-  TESTIMONIALS,
-  LOCATIONS,
-} from "../data/businessData";
+import { TESTIMONIALS } from "../data/businessData";
+import { useServiceCenters } from "../hooks/useServiceCenters";
 import { useBrands } from "../hooks/useVehicle";
 import SeoHead from "../components/SeoHead";
 import VehicleReplaceModal from "../components/VehicleReplaceModal";
@@ -139,7 +137,9 @@ export default function ServiceCategory({
   // owns vehicle/location selection and writes the chosen vehicle into
   // booking context; this page READS it back so the price list and
   // add-to-cart stay in sync. No local mirrors, no sync effect.
-  const bookingLocation = bookingCtx0.location || LOCATIONS[0]?.id || "";
+  // B5-partial — service centers from the API (was static LOCATIONS).
+  const { centers: serviceCenters } = useServiceCenters();
+  const bookingLocation = bookingCtx0.location || serviceCenters[0]?.slug || "";
   const bookingCar = bookingCtx0.car;
 
   // ---------- Vehicle data for page content (supported-brands copy) ----------
@@ -189,7 +189,7 @@ export default function ServiceCategory({
 
   // ---------- Derived helpers ----------
   const selectedLocationName =
-    LOCATIONS.find((l) => l.id === bookingLocation)?.name || "your area";
+    serviceCenters.find((l) => l.slug === bookingLocation)?.name || "your area";
 
   const cityWord = "Delhi NCR";
   // Brand names — pure API. Empty during initial load; the modal/list
@@ -341,14 +341,11 @@ export default function ServiceCategory({
     },
     {
       q: `Where can I find ${category.title.toLowerCase()} near me in ${selectedLocationName}?`,
-      a: `We operate certified service centres across ${cityWord} including ${LOCATIONS.slice(
-        0,
-        3
-      )
-        .map((l) => l.name)
-        .join(
-          ", "
-        )} and more. Free pickup and drop is available within our service radius.`,
+      a: `We operate certified service centres across ${cityWord} including ${(
+        serviceCenters.length > 0
+          ? serviceCenters.slice(0, 3).map((l) => l.name).join(", ")
+          : "Moti Nagar, Gurugram, Noida"
+      )} and more. Free pickup and drop is available within our service radius.`,
     },
     {
       q: "Is pickup and drop available?",

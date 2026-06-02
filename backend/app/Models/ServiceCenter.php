@@ -21,6 +21,23 @@ class ServiceCenter extends Model
 {
     use HasFactory, HasSeoMetadata;
 
+    /**
+     * B5-partial — automatic cache invalidation. Any save or delete
+     * via Eloquent (including Filament admin edits) flushes the
+     * public list cache so the next /service-centers request reads
+     * fresh data. Matches the key constant in ServiceCentersController.
+     */
+    protected static function booted(): void
+    {
+        $flush = function () {
+            \Illuminate\Support\Facades\Cache::forget(
+                \App\Http\Controllers\Api\V1\Public\ServiceCentersController::LIST_CACHE_KEY
+            );
+        };
+        static::saved($flush);
+        static::deleted($flush);
+    }
+
     protected $fillable = [
         'slug',
         'name',
@@ -34,12 +51,20 @@ class ServiceCenter extends Model
         'longitude',
         'is_active',
         'sort_order',
+        // B5-partial — frontend-parity fields
+        'rating',
+        'reviews_count',
+        'features',
+        'image',
+        'google_maps_url',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
         'latitude'  => 'decimal:7',
         'longitude' => 'decimal:7',
+        'rating'    => 'decimal:1',
+        'features'  => 'array',
     ];
 
     public function scopeActive(Builder $q): Builder

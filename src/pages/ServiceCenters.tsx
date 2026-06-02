@@ -1,7 +1,6 @@
 import { motion } from "motion/react";
 import { useNavigate } from "react-router-dom";
 import { MapPin, Phone, Star, ArrowRight, Clock, Shield } from "lucide-react";
-import { LOCATIONS } from "../data/businessData";
 import PageBanner from "../components/PageBanner";
 import SeoHead from "../components/SeoHead";
 import ApiErrorState from "../components/ApiErrorState";
@@ -14,33 +13,27 @@ interface ServiceCentersProps {
 }
 
 /**
- * Phase 4.2.5 fix #2 — migrated from a fully static `LOCATIONS`
- * loop to API-driven rendering via `/api/v1/service-centers`.
+ * Phase 4.2.5 fix #2 + B5-partial completion — fully API-driven.
  *
- * The backend is the single source of truth for which centers exist
- * (id/slug/name/address/phone). Until the backend grows
- * `image`/`features`/`rating` columns (Phase 4.5+), we enrich each
- * row by looking up the legacy `LOCATIONS` constant by slug for
- * presentation-only fields. Centers that don't have a legacy match
- * still render with sensible fallbacks (placeholder image, empty
- * feature list).
+ * The backend is the single source of truth for every center field
+ * (id/slug/name/address/phone PLUS rating/reviews/features/image/
+ * google_maps_url since B5). The STATIC_BY_SLUG legacy-data
+ * enrichment shim is gone; null fields fall back inline.
  */
 
-const STATIC_BY_SLUG = new Map(LOCATIONS.map((l) => [l.id, l]));
+const FALLBACK_IMAGE =
+  "https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?auto=format&fit=crop&q=80&w=1200";
 
 function enrich(row: ServiceCenterResource) {
-  const legacy = STATIC_BY_SLUG.get(row.slug);
   return {
     id: row.id,
     slug: row.slug,
     name: row.name,
     address: row.address,
     phone: row.phone,
-    rating: legacy?.rating ?? "4.8",
-    image:
-      legacy?.image ??
-      "https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?auto=format&fit=crop&q=80&w=1200",
-    features: legacy?.features ?? [],
+    rating: row.rating !== null ? row.rating.toFixed(1) : "4.8",
+    image: row.image ?? FALLBACK_IMAGE,
+    features: row.features,
   };
 }
 

@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Car, Instagram, Facebook, Twitter, Mail, Phone, MapPin, Youtube, Linkedin, ChevronLeft, ChevronRight } from "lucide-react";
-import { BUSINESS_INFO, LOCATIONS } from "../data/businessData";
+import { BUSINESS_INFO } from "../data/businessData";
+import { useServiceCenters } from "../hooks/useServiceCenters";
 
 // Phase 3B — link tables now reference router paths directly.
 // Phase 2.6a-fix's "Quick Links" UX is unchanged; only the wiring
@@ -28,6 +29,9 @@ const USEFUL_LINKS: Array<{ label: string; path: string }> = [
 export default function Footer() {
   const navigate = useNavigate();
   const [currentLocationIdx, setCurrentLocationIdx] = useState(0);
+  // B5-partial — service centers from the API (was static LOCATIONS).
+  const { centers } = useServiceCenters();
+  const locationCount = centers.length;
 
   const goTo = (path: string) => {
     navigate(path);
@@ -35,14 +39,21 @@ export default function Footer() {
   };
 
   useEffect(() => {
+    if (locationCount === 0) return;
     const interval = setInterval(() => {
-      setCurrentLocationIdx((prev) => (prev + 1) % LOCATIONS.length);
+      setCurrentLocationIdx((prev) => (prev + 1) % locationCount);
     }, 4000);
     return () => clearInterval(interval);
-  }, []);
+  }, [locationCount]);
 
-  const nextLocation = () => setCurrentLocationIdx((prev) => (prev + 1) % LOCATIONS.length);
-  const prevLocation = () => setCurrentLocationIdx((prev) => (prev - 1 + LOCATIONS.length) % LOCATIONS.length);
+  const nextLocation = () => {
+    if (locationCount === 0) return;
+    setCurrentLocationIdx((prev) => (prev + 1) % locationCount);
+  };
+  const prevLocation = () => {
+    if (locationCount === 0) return;
+    setCurrentLocationIdx((prev) => (prev - 1 + locationCount) % locationCount);
+  };
 
   const socialLinks = [
     { Icon: Facebook, url: BUSINESS_INFO.social.facebook },
@@ -52,7 +63,7 @@ export default function Footer() {
     { Icon: Youtube, url: BUSINESS_INFO.social.youtube },
   ];
 
-  const loc = LOCATIONS[currentLocationIdx];
+  const loc = centers[currentLocationIdx];
 
   return (
     <footer className="bg-neutral-50 border-t border-border pt-16 pb-10">
@@ -139,7 +150,7 @@ export default function Footer() {
                   <ChevronLeft className="w-3.5 h-3.5 text-neutral-600" />
                 </button>
                 <div className="text-[10px] font-bold tracking-widest text-neutral-500 w-10 text-center">
-                  {currentLocationIdx + 1} / {LOCATIONS.length}
+                  {locationCount > 0 ? `${currentLocationIdx + 1} / ${locationCount}` : "—"}
                 </div>
                 <button onClick={nextLocation} className="p-1 border border-border hover:bg-white transition-colors">
                   <ChevronRight className="w-3.5 h-3.5 text-neutral-600" />
@@ -148,21 +159,31 @@ export default function Footer() {
             </div>
             
             <div className="mb-4 text-[11px] font-bold uppercase tracking-widest text-primary">
-              {loc.name} Center
+              {loc ? `${loc.name} Center` : "Service Centers"}
             </div>
 
             <ul className="space-y-4">
               <li className="flex items-start gap-3.5">
                 <MapPin className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-                <a href={loc.url} target="_blank" rel="noopener noreferrer" className="text-muted hover:text-primary transition-colors text-[13px] leading-relaxed">
-                  {loc.address}
-                </a>
+                {loc ? (
+                  <a href={loc.google_maps_url ?? "#"} target="_blank" rel="noopener noreferrer" className="text-muted hover:text-primary transition-colors text-[13px] leading-relaxed">
+                    {loc.address}
+                  </a>
+                ) : (
+                  <span className="text-muted text-[13px] leading-relaxed">Delhi NCR</span>
+                )}
               </li>
               <li className="flex items-center gap-3.5">
                 <Phone className="w-4 h-4 text-primary shrink-0" />
-                <a href={`tel:+91${loc.phone}`} className="text-muted hover:text-primary transition-colors text-[13px] font-medium">
-                  +91 {loc.phone}
-                </a>
+                {loc ? (
+                  <a href={`tel:+91${loc.phone}`} className="text-muted hover:text-primary transition-colors text-[13px] font-medium">
+                    +91 {loc.phone}
+                  </a>
+                ) : (
+                  <a href={`tel:+91${BUSINESS_INFO.phone}`} className="text-muted hover:text-primary transition-colors text-[13px] font-medium">
+                    +91 {BUSINESS_INFO.phone}
+                  </a>
+                )}
               </li>
               <li className="flex items-center gap-3.5">
                 <Mail className="w-4 h-4 text-primary shrink-0" />

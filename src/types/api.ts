@@ -238,6 +238,12 @@ export interface ServiceCenterResource {
   pincode: string;
   latitude: number | null;
   longitude: number | null;
+  // B5-partial — frontend-parity fields migrated from businessData.ts LOCATIONS.
+  rating: number | null;
+  reviews_count: string | null;
+  features: string[];
+  image: string | null;
+  google_maps_url: string | null;
 }
 
 /**

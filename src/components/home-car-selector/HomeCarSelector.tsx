@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronDown, MapPin, ArrowRight, AlertCircle, Star } from "lucide-react";
 import { useBookingContext } from "../../hooks/useBookingContext";
-import { LOCATIONS } from "../../data/businessData";
+import { useServiceCenters } from "../../hooks/useServiceCenters";
 import { VehicleSelector } from "../vehicle-selector";
 
 /**
@@ -25,12 +25,17 @@ export default function HomeCarSelector() {
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [phone, setPhone] = useState(state.phone || "");
   const [errors, setErrors] = useState<{ car?: string; phone?: string }>({});
+  // B5-partial — service centers from the API (was static LOCATIONS).
+  const { centers: serviceCenters } = useServiceCenters();
 
-  // First-time hydration: default a location if none chosen yet.
+  // First-time hydration: default a location if none chosen yet. Waits
+  // until the API list arrives so we don't lock in an empty default.
   useEffect(() => {
-    if (!state.location && LOCATIONS[0]?.id) update({ location: LOCATIONS[0].id });
+    if (!state.location && serviceCenters[0]?.slug) {
+      update({ location: serviceCenters[0].slug });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [serviceCenters]);
 
   const car = state.car;
   // Car summary. Manual entries append the typed year (D-MAN-2), e.g.
@@ -44,7 +49,7 @@ export default function HomeCarSelector() {
         .filter(Boolean)
         .join(" · ")
     : "";
-  const locName = LOCATIONS.find((l) => l.id === state.location)?.name || "your area";
+  const locName = serviceCenters.find((l) => l.slug === state.location)?.name || "your area";
 
   // D-MAN-4 — Check Price is enabled only when all three fields are filled:
   // Location + Car (structured or manual) + a valid 10-digit phone.
@@ -112,8 +117,8 @@ export default function HomeCarSelector() {
                 onChange={(e) => update({ location: e.target.value })}
                 className={`${inputBase} pl-9 appearance-none cursor-pointer pr-9`}
               >
-                {LOCATIONS.map((l) => (
-                  <option key={l.id} value={l.id}>
+                {serviceCenters.map((l) => (
+                  <option key={l.slug} value={l.slug}>
                     {l.name.toUpperCase()}
                   </option>
                 ))}

@@ -1,7 +1,7 @@
 import { ArrowRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import PageBanner from "../components/PageBanner";
-import { LOCATIONS } from "../data/businessData";
+import { useServiceCenters } from "../hooks/useServiceCenters";
 import {
   fetchHome,
   type ServiceCategory as ApiCategory,
@@ -38,6 +38,8 @@ export default function Sitemap(_props: SitemapProps) {
   // the response (Phase 1.6) — no per-category round trips.
   const home = useApiQuery(["home"], (signal) => fetchHome(signal));
   const categories: ApiCategory[] = home.data?.service_categories ?? [];
+  // B5-partial — service centers from the API (was static LOCATIONS const).
+  const { centers, isLoading: centersLoading } = useServiceCenters();
 
   // Flatten the nested sub-services for the "All Services" column.
   const subs: Array<CategorySubService & { _categorySlug: string }> = [];
@@ -136,22 +138,30 @@ export default function Sitemap(_props: SitemapProps) {
               )}
             </div>
 
-            {/* Service Centers — still static (LOCATIONS); separate task to API-back. */}
+            {/* Service Centers — API-driven since B5-partial. */}
             <div>
               <h2 className="section-heading mb-6 border-b border-border pb-4">SERVICE <span className="section-heading-accent">CENTERS.</span></h2>
-              <ul className="space-y-4">
-                {LOCATIONS.map(location => (
-                  <li key={location.id}>
-                    <button
-                      onClick={() => navigate(`/center/${location.id}`)}
-                      className="text-muted hover:text-primary transition-colors text-sm font-medium flex items-center gap-2 group text-left"
-                    >
-                      <ArrowRight className="w-3 h-3 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
-                      {location.name}
-                    </button>
-                  </li>
-                ))}
-              </ul>
+              {centersLoading ? (
+                <ul className="space-y-4">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <li key={i} className="h-4 w-32 bg-neutral-200 animate-pulse rounded" />
+                  ))}
+                </ul>
+              ) : (
+                <ul className="space-y-4">
+                  {centers.map((center) => (
+                    <li key={center.id}>
+                      <button
+                        onClick={() => navigate(`/center/${center.slug}`)}
+                        className="text-muted hover:text-primary transition-colors text-sm font-medium flex items-center gap-2 group text-left"
+                      >
+                        <ArrowRight className="w-3 h-3 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        {center.name}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
 
           </div>

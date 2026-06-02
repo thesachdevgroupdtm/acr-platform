@@ -6,7 +6,8 @@ import {
   MessageCircle, Star, CheckCircle2, Play, Shield, Loader2,
   Users, Wrench, IndianRupee, FileText, Phone, MapPin, Search, Quote
 } from "lucide-react";
-import { BUSINESS_INFO, LOCATIONS, TESTIMONIALS } from "../data/businessData";
+import { BUSINESS_INFO, TESTIMONIALS } from "../data/businessData";
+import { useServiceCenters } from "../hooks/useServiceCenters";
 import {
   fetchHome,
   type ServiceCategory as ApiCategory,
@@ -76,6 +77,9 @@ export default function Home({ openEstimate }: HomeProps) {
   const [isLocationHovered, setIsLocationHovered] = useState(false);
   const [activeLocationIndex, setActiveLocationIndex] = useState(0);
   const [expandedLocationIndex, setExpandedLocationIndex] = useState<number | null>(null);
+  // B5-partial — service centers from the API (was static LOCATIONS).
+  const { centers: serviceCenters } = useServiceCenters();
+  const locationCount = serviceCenters.length;
 
   const categories = ["All Services", ...serviceCategories.map(c => c.title)];
 
@@ -150,8 +154,8 @@ export default function Home({ openEstimate }: HomeProps) {
     }, 3500);
 
     const locationInterval = setInterval(() => {
-      if (!isLocationHovered) {
-        setActiveLocationIndex((prev) => (prev + 1) % LOCATIONS.length);
+      if (!isLocationHovered && locationCount > 0) {
+        setActiveLocationIndex((prev) => (prev + 1) % locationCount);
       }
     }, 4000);
 
@@ -161,7 +165,7 @@ export default function Home({ openEstimate }: HomeProps) {
       clearInterval(testimonialInterval);
       clearInterval(locationInterval);
     };
-  }, [isExpertiseHovered, isTransformHovered, isTestimonialHovered, isLocationHovered, scroll]);
+  }, [isExpertiseHovered, isTransformHovered, isTestimonialHovered, isLocationHovered, locationCount, scroll]);
 
   const validate = () => {
     const newErrors: Record<string, string> = {};
@@ -246,7 +250,7 @@ export default function Home({ openEstimate }: HomeProps) {
                 </div>
                 <div className="w-px h-8 bg-border" />
                 <div>
-                  <div className="text-2xl font-bold text-primary-dark">{LOCATIONS.length}</div>
+                  <div className="text-2xl font-bold text-primary-dark">{locationCount || 4}</div>
                   <div className="text-[10px] uppercase tracking-widest font-medium text-muted">Centres in NCR</div>
                 </div>
                 <div className="w-px h-8 bg-border" />
@@ -673,12 +677,12 @@ export default function Home({ openEstimate }: HomeProps) {
             className="hidden lg:flex h-[70vh] w-full gap-0 items-stretch px-12 skew-x-[-12deg] overflow-hidden group/accordion pb-10"
             onMouseLeave={() => setExpandedLocationIndex(null)}
           >
-            {LOCATIONS.map((loc, index) => {
+            {serviceCenters.map((loc, index) => {
               const isExpanded = expandedLocationIndex === index;
 
               return (
                 <motion.div
-                  key={loc.id}
+                  key={loc.slug}
                   onMouseEnter={() => setExpandedLocationIndex(index)}
                   animate={{
                     flex: isExpanded ? 8 : 1,
@@ -721,7 +725,7 @@ export default function Home({ openEstimate }: HomeProps) {
                       duration: 0.6,
                       ease: [0.22, 1, 0.36, 1]
                     }}
-                    src={loc.image}
+                    src={loc.image ?? "https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?auto=format&fit=crop&q=80&w=1200"}
                     alt={loc.name}
                     className="absolute inset-0 w-full h-full object-cover skew-x-[12deg] scale-110"
                     referrerPolicy="no-referrer"
@@ -751,7 +755,7 @@ export default function Home({ openEstimate }: HomeProps) {
                           </p>
                           <div className="flex gap-4 pointer-events-auto">
                             <a
-                              href={loc.url}
+                              href={loc.google_maps_url ?? "#"}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="bg-primary text-white px-10 py-4 text-[11px] font-black uppercase tracking-widest hover:bg-white hover:text-primary transition-all shadow-2xl shadow-primary/40"
@@ -779,14 +783,14 @@ export default function Home({ openEstimate }: HomeProps) {
               onMouseLeave={() => setIsLocationHovered(false)}
             >
               <div className="flex gap-4 overflow-x-auto no-scrollbar snap-x snap-mandatory pb-4">
-                {LOCATIONS.map((loc, index) => (
+                {serviceCenters.map((loc, index) => (
                   <div
-                    key={loc.id}
+                    key={loc.slug}
                     className="min-w-full snap-start relative h-[400px] overflow-hidden border border-white/10"
                     onClick={() => setActiveLocationIndex(index)}
                   >
                     <img
-                      src={loc.image}
+                      src={loc.image ?? "https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?auto=format&fit=crop&q=80&w=1200"}
                       alt={loc.name}
                       className="absolute inset-0 w-full h-full object-cover"
                       referrerPolicy="no-referrer"
@@ -797,7 +801,7 @@ export default function Home({ openEstimate }: HomeProps) {
                       <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest mb-4">{loc.address}</p>
                       <div className="flex gap-2">
                         <a
-                          href={loc.url}
+                          href={loc.google_maps_url ?? "#"}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="bg-primary text-white px-4 py-2 text-[9px] font-black uppercase tracking-widest"
@@ -815,7 +819,7 @@ export default function Home({ openEstimate }: HomeProps) {
 
               {/* Mobile Navigation Dots */}
               <div className="flex justify-center gap-2 mt-6">
-                {LOCATIONS.map((_, i) => (
+                {serviceCenters.map((_, i) => (
                   <div
                     key={i}
                     className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${activeLocationIndex === i ? 'bg-primary w-4' : 'bg-neutral-800'}`}

@@ -3,7 +3,7 @@ import type * as React from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useNavigate, useParams } from "react-router-dom";
 import { MapPin, Phone, Star, Clock, Shield, CheckCircle2, MessageCircle, Send, Camera, Info, ChevronDown } from "lucide-react";
-import { LOCATIONS } from "../data/businessData";
+import { useServiceCenters } from "../hooks/useServiceCenters";
 import PageBanner from "../components/PageBanner";
 
 interface ServiceCenterDetailProps {
@@ -12,8 +12,9 @@ interface ServiceCenterDetailProps {
 
 export default function ServiceCenterDetail(_props: ServiceCenterDetailProps) {
   const navigate = useNavigate();
-  // /center/:id route — id maps to LOCATIONS[].id (string).
+  // /center/:id route — :id is the slug (was LOCATIONS[].id, now service_centers.slug).
   const { id: centerId = "" } = useParams<{ id: string }>();
+  const { centers, isLoading } = useServiceCenters();
   const [openServiceIdx, setOpenServiceIdx] = useState<number | null>(null);
   const [openAmenityIdx, setOpenAmenityIdx] = useState<number | null>(null);
 
@@ -44,7 +45,25 @@ export default function ServiceCenterDetail(_props: ServiceCenterDetailProps) {
     }
   };
 
-  const center = LOCATIONS.find(l => l.id === centerId) || LOCATIONS[0];
+  const center = centers.find((c) => c.slug === centerId) ?? centers[0];
+
+  if (isLoading || !center) {
+    return (
+      <>
+        <PageBanner
+          title="Loading…"
+          breadcrumbs={[
+            { label: "Home", href: "/" },
+            { label: "Centers", href: "/service-centers" },
+          ]}
+        />
+        <div className="site-container py-16">
+          <div className="h-6 w-48 bg-neutral-200 animate-pulse" />
+          <div className="mt-3 h-4 w-96 bg-neutral-100 animate-pulse" />
+        </div>
+      </>
+    );
+  }
 
   const stats = [
     { label: "Workshop Size", value: "15,000+ Sq Ft" },

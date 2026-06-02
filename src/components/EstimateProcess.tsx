@@ -12,7 +12,7 @@ import {
   Check,
   AlertCircle,
 } from "lucide-react";
-import { LOCATIONS } from "../data/businessData";
+import { useServiceCenters } from "../hooks/useServiceCenters";
 import { useBrands, useModels } from "../hooks/useVehicle";
 
 interface EstimateProcessProps {
@@ -171,6 +171,8 @@ export default function EstimateProcess({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [bookingId, setBookingId] = useState("");
+  // B5-partial — service centers from the API (was static LOCATIONS).
+  const { centers: serviceCenters } = useServiceCenters();
 
   const SERVICE_OPTIONS = [
     "Accident Repair",
@@ -584,8 +586,8 @@ export default function EstimateProcess({
                       className={`${inputBase} ${inputBorder(errors.location)}`}
                     >
                       <option value="">Select a Service Center</option>
-                      {LOCATIONS.map((loc) => (
-                        <option key={loc.id} value={loc.id}>
+                      {serviceCenters.map((loc) => (
+                        <option key={loc.slug} value={loc.slug}>
                           {loc.name}
                         </option>
                       ))}
